@@ -1,4 +1,4 @@
-# smt-kit
+# SMT Kit
 
 SMT Kit is a C++11 domain-specific language to create [SMT-LIB][smt-lib] 2.0
 formulas that are automatically typed-checked at compile-time.
@@ -20,8 +20,8 @@ with any of the following compilers: Visual Studio, g++ or clang++.
 
 ## Installation
 
-To build smt-kit on a (mostly) POSIX-compliant operating system,
-execute the following commands from the smt-kit folder:
+To build SMT Kit on a (mostly) POSIX-compliant operating system,
+execute the following commands from the `smt-kit` folder:
 
     $ ./autogen.sh
     $ ./configure
@@ -48,6 +48,6 @@ For advanced usage information on other configure options refer to the
 
 ## Troubleshooting
 
-Since smt-kit uses advanced C++11 language features, older compiler
+Since SMT Kit uses advanced C++11 language features, older compiler
 versions are likely to be troublesome. To date, we have successfully
 compiled and tested the code on OS X with g++ v4.8.1 and clang++ v4.2.
