@@ -1,0 +1,10 @@
+Z3 is a theorem prover developed by Microsoft Research:
+
+  http://z3.codeplex.com/
+
+The source code is available under the Microsoft Research License Agreement:
+
+  git clone https://git01.codeplex.com/z3
+
+See the z3/README file for instructions on how to compile the Z3 source code
+with any of the following compilers: Visual Studio, g++ or clang++.
