@@ -29,11 +29,9 @@ execute the following commands from the `smt-kit` folder:
     $ make test
     $ make install
 
-If `./configure` fails, you may have to set the environment
-variables `CXX` and `CXXFLAGS`. For example, to set the clang++
-compiler execute the following command:
-
-    $ ./configure CXX=clang++ CXXFLAGS=-stdlib=libc++
+If `./configure` fails, you may have to set environment variables
+such as `CXX` and `CXXFLAGS`. For example, the compiler can
+be set with the command `./configure CXX=clang++`.
 
 If `make test` fails, you can still install, but it is likely that some
 features of this library will not work correctly on your system.
