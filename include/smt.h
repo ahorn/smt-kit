@@ -701,6 +701,13 @@ public:
   }
 };
 
+template<typename T, typename U,
+  typename Enable = typename std::enable_if<std::is_integral<U>::value>::type>
+inline ExprPtr<T> literal(const U literal)
+{
+  return ExprPtr<T>(new BuiltinLiteralExpr<T, U>(literal));
+}
+
 // unary function application
 template<typename Domain, typename Range, typename T,
   typename Enable = typename std::enable_if<std::is_integral<T>::value>::type>
@@ -708,8 +715,7 @@ ExprPtr<Range> apply(
   ExprPtr<sort::Func<Domain, Range>> func_ptr,
   const T arg)
 {
-  return apply(func_ptr, std::make_tuple(ExprPtr<Domain>(
-    new BuiltinLiteralExpr<Domain, T>(arg))));
+  return apply(func_ptr, literal<Domain, T>(arg));
 }
 
 // unary function application
@@ -911,13 +917,6 @@ ExprPtr<sort::Array<Domain, Range>> store(
 {
   return ExprPtr<sort::Array<Domain, Range>>(
     new ArrayStoreExpr<Domain, Range>(array_ptr, index_ptr, value_ptr));
-}
-
-template<typename T, typename U,
-  typename Enable = typename std::enable_if<std::is_integral<U>::value>::type>
-inline ExprPtr<T> literal(const U literal)
-{
-  return ExprPtr<T>(new BuiltinLiteralExpr<T, U>(literal));
 }
 
 #define SMT_BUILTIN_UNARY_OP(op, opcode)                                   \
