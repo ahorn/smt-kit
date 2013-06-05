@@ -1,7 +1,7 @@
 # SMT Kit
 
-SMT Kit is a C++11 domain-specific language to create [SMT-LIB][smt-lib] 2.0
-formulas that are automatically typed-checked at compile-time.
+SMT Kit is a type-safe C++11 domain-specific language to
+create [SMT-LIB][smt-lib] 2.0 formulas.
 
 [smt-lib]: http://www.smt-lib.org/
 
