@@ -18,7 +18,7 @@ namespace smt
 
 enum Opcode : unsigned char
 {
-  LNOT,  // !
+  LNOT, // !
   NOT,  // ~
   SUB,  // -
   AND,  // &
@@ -71,21 +71,15 @@ namespace sort
   };
 }
 
-class Sort;
-class UnsafeExpr;
-typedef std::shared_ptr<const UnsafeExpr> UnsafeExprPtr;
-
-template<typename T>
-class Expr;
-
-template<typename T>
-using ExprPtr = std::shared_ptr<const Expr<T>>;
-
+// Contingencies that a caller of the API must always consider
 enum Error : unsigned {
+  // No error, OK equals zero
   OK = 0,
-  OP_ERROR,
-  DECL_ERROR,
-  LITERAL_ERROR,
+
+  // Unexpected operator encountered
+  OPCODE_ERROR,
+
+  // Unsupported SMT-LIB feature
   UNSUPPORT_ERROR
 };
 
@@ -96,172 +90,20 @@ enum CheckResult
   unknown
 };
 
-class Solver
-{
-#define SMT_ENCODE_BUILTIN_LITERAL(type)    \
-private:                                    \
-  virtual Error __encode_builtin(           \
-    const Sort& sort,                       \
-    type literal)                           \
-  {                                         \
-    return UNSUPPORT_ERROR;                 \
-  }                                         \
-                                            \
-public:                                     \
-  Error encode_builtin(                     \
-    const Sort& sort,                       \
-    type literal)                           \
-  {                                         \
-    return __encode_builtin(sort, literal); \
-  }                                         \
-
-SMT_ENCODE_BUILTIN_LITERAL(bool)
-SMT_ENCODE_BUILTIN_LITERAL(char)
-SMT_ENCODE_BUILTIN_LITERAL(signed char)
-SMT_ENCODE_BUILTIN_LITERAL(unsigned char)
-SMT_ENCODE_BUILTIN_LITERAL(wchar_t)
-SMT_ENCODE_BUILTIN_LITERAL(char16_t)
-SMT_ENCODE_BUILTIN_LITERAL(char32_t)
-SMT_ENCODE_BUILTIN_LITERAL(short)
-SMT_ENCODE_BUILTIN_LITERAL(unsigned short)
-SMT_ENCODE_BUILTIN_LITERAL(int)
-SMT_ENCODE_BUILTIN_LITERAL(unsigned int)
-SMT_ENCODE_BUILTIN_LITERAL(long)
-SMT_ENCODE_BUILTIN_LITERAL(unsigned long)
-SMT_ENCODE_BUILTIN_LITERAL(long long)
-SMT_ENCODE_BUILTIN_LITERAL(unsigned long long)
-
-private:
-  virtual Error __encode_decl(
-    const std::string& symbol,
-    const Sort& sort) = 0;
-
-  virtual Error __encode_func_app(
-    const UnsafeExprPtr func_ptr,
-    const size_t arity,
-    const UnsafeExprPtr* const arg_ptrs) = 0;
-
-  virtual Error __encode_const_array(
-    const Sort& sort,
-    UnsafeExprPtr init_ptr) = 0;
-
-  virtual Error __encode_array_select(
-    UnsafeExprPtr array_ptr,
-    UnsafeExprPtr index_ptr) = 0;
-
-  virtual Error __encode_array_store(
-    UnsafeExprPtr array_ptr,
-    UnsafeExprPtr index_ptr,
-    UnsafeExprPtr value_ptr) = 0;
-
-  virtual Error __encode_builtin(
-    Opcode opcode,
-    const Sort& sort,
-    UnsafeExprPtr expr_ptr) = 0;
-
-  virtual Error __encode_builtin(
-    Opcode opcode,
-    const Sort& sort,
-    UnsafeExprPtr lptr,
-    UnsafeExprPtr rptr) = 0;
-
-  virtual void __push() = 0;
-  virtual void __pop() = 0;
-  virtual Error __add(ExprPtr<sort::Bool> condition) = 0;
-  virtual CheckResult __check() = 0;
-
-public:
-  Error encode_decl(
-    const std::string& symbol,
-    const Sort& sort)
-  {
-    return __encode_decl(symbol, sort);
-  }
-
-  Error encode_func_app(
-    const UnsafeExprPtr func_ptr,
-    const size_t arity,
-    const UnsafeExprPtr* const arg_ptrs)
-  {
-    return __encode_func_app(func_ptr, arity, arg_ptrs);
-  }
-
-  Error encode_const_array(
-    const Sort& sort,
-    UnsafeExprPtr init_ptr)
-  {
-    return __encode_const_array(sort, init_ptr);
-  }
-
-  Error encode_array_select(
-    UnsafeExprPtr array_ptr,
-    UnsafeExprPtr index_ptr)
-  {
-    return __encode_array_select(array_ptr, index_ptr);
-  }
-
-  Error encode_array_store(
-    UnsafeExprPtr array_ptr,
-    UnsafeExprPtr index_ptr,
-    UnsafeExprPtr value_ptr)
-  {
-    return __encode_array_store(array_ptr, index_ptr, value_ptr);
-  }
-
-  Error encode_builtin(
-    Opcode opcode,
-    const Sort& sort,
-    UnsafeExprPtr expr_ptr)
-  {
-    return __encode_builtin(opcode, sort, expr_ptr);
-  }
-
-  Error encode_builtin(
-    Opcode opcode,
-    const Sort& sort,
-    UnsafeExprPtr lptr,
-    UnsafeExprPtr rptr)
-  {
-    return __encode_builtin(opcode, sort, lptr, rptr);
-  }
-
-  void push()
-  {
-    return __push();
-  }
-
-  void pop()
-  {
-    return __pop();
-  }
-
-  Error add(ExprPtr<sort::Bool> condition)
-  {
-    return __add(condition);
-  }
-
-  CheckResult check()
-  {
-    return __check();
-  }
-};
-
 enum ExprKind : unsigned
 {
   LITERAL_EXPR_KIND,
-  DECL_EXPR_KIND,
   UNARY_EXPR_KIND,
   BINARY_EXPR_KIND,
   CONST_ARRAY_EXPR_KIND,
   ARRAY_SELECT_EXPR_KIND,
   ARRAY_STORE_EXPR_KIND,
+  CONSTANT_EXPR_KIND,
   FUNC_APP_EXPR_KIND,
 };
 
 class Sort {
 private:
-  static constexpr size_t MAX_SORTS_SIZE = 32;
-
   const bool m_is_bool;
   const bool m_is_int;
   const bool m_is_real;
@@ -316,10 +158,22 @@ public:
     m_is_array(is_array),
     m_is_tuple(is_tuple),
     m_sorts{sorts},
-    m_sorts_size(N)
-  {
-    static_assert(N <= MAX_SORTS_SIZE, "N must be less than or equal to 32");
-  }
+    m_sorts_size(N) {}
+
+  Sort(const Sort&) = delete;
+
+  constexpr Sort(Sort&& other)
+  : m_is_bool(other.m_is_bool),
+    m_is_int(other.m_is_int),
+    m_is_real(other.m_is_real),
+    m_is_bv(other.m_is_bv),
+    m_is_signed(other.m_is_signed),
+    m_bv_size(other.m_bv_size),
+    m_is_func(other.m_is_func),
+    m_is_array(other.m_is_array),
+    m_is_tuple(other.m_is_tuple),
+    m_sorts(std::move(other.m_sorts)),
+    m_sorts_size(other.m_sorts_size) {} 
 
   constexpr bool is_bool()   const { return m_is_bool;   }
   constexpr bool is_int()    const { return m_is_int;    }
@@ -393,7 +247,7 @@ namespace internal {
     typedef __Math<sort::Real> Type;
   };
 
-  /* Array */
+  /* Array sort */
   template<typename Domain, typename Range>
   struct __SortSwitch<sort::Array<Domain, Range>>
   {
@@ -403,17 +257,12 @@ namespace internal {
   template<typename Domain, typename Range>
   struct __Math<sort::Array<Domain, Range>>
   {
-    static constexpr Sort s_domain_sort = __SortSwitch<Domain>::Type::s_sort;
-    static constexpr Sort s_range_sort = __SortSwitch<Range>::Type::s_sort;
-    static constexpr Sort const * const s_sorts[2] = { &s_domain_sort, &s_range_sort };
+    static constexpr Sort const * const s_sorts[2] = {
+      &__SortSwitch<Domain>::Type::s_sort,
+      &__SortSwitch<Range>::Type::s_sort };
+
     static constexpr Sort s_sort = Sort(false, true, false, s_sorts);
   };
-
-  template<typename Domain, typename Range>
-  constexpr Sort __Math<sort::Array<Domain, Range>>::s_domain_sort;
-
-  template<typename Domain, typename Range>
-  constexpr Sort __Math<sort::Array<Domain, Range>>::s_range_sort;
 
   template<typename Domain, typename Range>
   constexpr Sort const * const __Math<sort::Array<Domain, Range>>::s_sorts[2];
@@ -421,7 +270,7 @@ namespace internal {
   template<typename Domain, typename Range>
   constexpr Sort __Math<sort::Array<Domain, Range>>::s_sort;
 
-  /* Function */
+  /* Function sort */
   template<typename... T>
   struct __SortSwitch<sort::Func<T...>>
   {
@@ -438,7 +287,7 @@ namespace internal {
   {
   };
 
-  // base case
+  // Function sort: base case
   template<size_t N, Sort const * const... sorts>
   struct __FuncSort<__SortArray<N, sorts...>>
   {
@@ -452,7 +301,7 @@ namespace internal {
   template<typename T, typename... U, size_t N, Sort const * const... sorts>
   struct __FuncSort<__SortArray<N, sorts...>, T, U...>
   {
-    // prepend sort for T and then recurse on U...
+    // Function sort: prepend sort for T and then recurse on U...
     typedef __FuncSort<__SortArray<N, sorts...,
       &__SortSwitch<T>::Type::s_sort>, U...> Build;
 
@@ -462,11 +311,11 @@ namespace internal {
     }
   };
 
-  // allocate memory for sort array at compile-time
+  // Function sort: allocate memory for sort array at compile-time
   template<size_t N, Sort const * const... sorts>
   constexpr Sort const * const __FuncSort<__SortArray<N, sorts...>>::s_sorts[N];
 
-  // T is head, U is tail
+  // Function sort: T is first function argument, U are additional ones
   template<typename T, typename... U>
   struct __Math<sort::Func<T, U...>>
   {
@@ -478,7 +327,7 @@ namespace internal {
   template<typename T, typename... U>
   constexpr Sort __Math<sort::Func<T, U...>>::s_sort;
 
-  // Only for Expr class
+  // Return statically allocated type information about T
   template<typename T>
   static constexpr const Sort& sort()
   {
@@ -486,15 +335,250 @@ namespace internal {
   }
 };
 
+class UnsafeDecl
+{
+private:
+  const std::string m_symbol;
+  const Sort& m_sort;
+
+protected:
+  // sort must be statically allocated
+  UnsafeDecl(
+    const std::string& symbol,
+    const Sort& sort)
+  : m_symbol(symbol),
+    m_sort(sort) {}
+
+  // sort must be statically allocated
+  UnsafeDecl(
+    std::string&& symbol,
+    const Sort& sort)
+  : m_symbol(std::move(symbol)),
+    m_sort(sort) {}
+
+public:
+  UnsafeDecl(const UnsafeDecl& other)
+  : m_symbol(other.m_symbol),
+    m_sort(other.m_sort) {}
+
+  UnsafeDecl(UnsafeDecl&& other)
+  : m_symbol(std::move(other.m_symbol)),
+    m_sort(other.m_sort) {}
+
+  virtual ~UnsafeDecl() {}
+
+  const std::string& symbol() const
+  {
+    return m_symbol;
+  }
+
+  const Sort& sort() const
+  {
+    return m_sort;
+  }
+};
+
+template<typename T>
+class Decl : public UnsafeDecl 
+{
+public:
+  Decl(const std::string& symbol)
+  : UnsafeDecl(symbol, internal::sort<T>()) {}
+
+  Decl(std::string&& symbol)
+  : UnsafeDecl(std::move(symbol), internal::sort<T>()) {}
+
+  Decl(const Decl& other)
+  : UnsafeDecl(other) {}
+
+  Decl(Decl&& other)
+  : UnsafeDecl(std::move(other)) {}
+};
+
+class UnsafeExpr;
+typedef std::shared_ptr<const UnsafeExpr> UnsafeExprPtr;
+
+template<typename T>
+class Expr;
+
+template<typename T>
+using ExprPtr = std::shared_ptr<const Expr<T>>;
+
+class Solver
+{
+#define SMT_ENCODE_BUILTIN_LITERAL(type)    \
+private:                                    \
+  virtual Error __encode_builtin(           \
+    const Sort& sort,                       \
+    type literal)                           \
+  {                                         \
+    return UNSUPPORT_ERROR;                 \
+  }                                         \
+                                            \
+public:                                     \
+  Error encode_builtin(                     \
+    const Sort& sort,                       \
+    type literal)                           \
+  {                                         \
+    return __encode_builtin(sort, literal); \
+  }                                         \
+
+SMT_ENCODE_BUILTIN_LITERAL(bool)
+SMT_ENCODE_BUILTIN_LITERAL(char)
+SMT_ENCODE_BUILTIN_LITERAL(signed char)
+SMT_ENCODE_BUILTIN_LITERAL(unsigned char)
+SMT_ENCODE_BUILTIN_LITERAL(wchar_t)
+SMT_ENCODE_BUILTIN_LITERAL(char16_t)
+SMT_ENCODE_BUILTIN_LITERAL(char32_t)
+SMT_ENCODE_BUILTIN_LITERAL(short)
+SMT_ENCODE_BUILTIN_LITERAL(unsigned short)
+SMT_ENCODE_BUILTIN_LITERAL(int)
+SMT_ENCODE_BUILTIN_LITERAL(unsigned int)
+SMT_ENCODE_BUILTIN_LITERAL(long)
+SMT_ENCODE_BUILTIN_LITERAL(unsigned long)
+SMT_ENCODE_BUILTIN_LITERAL(long long)
+SMT_ENCODE_BUILTIN_LITERAL(unsigned long long)
+
+private:
+  virtual Error __encode_constant(
+    const UnsafeDecl& decl) = 0;
+
+  virtual Error __encode_func_app(
+    const UnsafeDecl& func_decl,
+    const size_t arity,
+    const UnsafeExprPtr* const arg_ptrs) = 0;
+
+  virtual Error __encode_const_array(
+    const Sort& sort,
+    UnsafeExprPtr init_ptr) = 0;
+
+  virtual Error __encode_array_select(
+    UnsafeExprPtr array_ptr,
+    UnsafeExprPtr index_ptr) = 0;
+
+  virtual Error __encode_array_store(
+    UnsafeExprPtr array_ptr,
+    UnsafeExprPtr index_ptr,
+    UnsafeExprPtr value_ptr) = 0;
+
+  virtual Error __encode_builtin(
+    Opcode opcode,
+    const Sort& sort,
+    UnsafeExprPtr expr_ptr) = 0;
+
+  virtual Error __encode_builtin(
+    Opcode opcode,
+    const Sort& sort,
+    UnsafeExprPtr lptr,
+    UnsafeExprPtr rptr) = 0;
+
+  virtual void __push() = 0;
+  virtual void __pop() = 0;
+  virtual Error __add(ExprPtr<sort::Bool> condition) = 0;
+  virtual CheckResult __check() = 0;
+
+public:
+  Error encode_constant(
+    const UnsafeDecl& decl)
+  {
+    return __encode_constant(decl);
+  }
+
+  Error encode_func_app(
+    const UnsafeDecl& func_decl,
+    const size_t arity,
+    const UnsafeExprPtr* const arg_ptrs)
+  {
+    assert(0 < arity);
+    assert(arg_ptrs != nullptr);
+
+    return __encode_func_app(func_decl, arity, arg_ptrs);
+  }
+
+  Error encode_const_array(
+    const Sort& sort,
+    UnsafeExprPtr init_ptr)
+  {
+    assert(init_ptr != nullptr);
+
+    return __encode_const_array(sort, init_ptr);
+  }
+
+  Error encode_array_select(
+    UnsafeExprPtr array_ptr,
+    UnsafeExprPtr index_ptr)
+  {
+    assert(array_ptr != nullptr);
+    assert(index_ptr != nullptr);
+
+    return __encode_array_select(array_ptr, index_ptr);
+  }
+
+  Error encode_array_store(
+    UnsafeExprPtr array_ptr,
+    UnsafeExprPtr index_ptr,
+    UnsafeExprPtr value_ptr)
+  {
+    assert(array_ptr != nullptr);
+    assert(index_ptr != nullptr);
+    assert(value_ptr != nullptr);
+
+    return __encode_array_store(array_ptr, index_ptr, value_ptr);
+  }
+
+  Error encode_builtin(
+    Opcode opcode,
+    const Sort& sort,
+    UnsafeExprPtr expr_ptr)
+  {
+    assert(expr_ptr != nullptr);
+
+    return __encode_builtin(opcode, sort, expr_ptr);
+  }
+
+  Error encode_builtin(
+    Opcode opcode,
+    const Sort& sort,
+    UnsafeExprPtr lptr,
+    UnsafeExprPtr rptr)
+  {
+    assert(lptr != nullptr);
+    assert(rptr != nullptr);
+
+    return __encode_builtin(opcode, sort, lptr, rptr);
+  }
+
+  void push()
+  {
+    return __push();
+  }
+
+  void pop()
+  {
+    return __pop();
+  }
+
+  Error add(ExprPtr<sort::Bool> condition)
+  {
+    return __add(condition);
+  }
+
+  CheckResult check()
+  {
+    return __check();
+  }
+};
+
 class UnsafeExpr
 {
 private:
   const ExprKind m_expr_kind;
-  const Sort m_sort;
+  const Sort& m_sort;
 
   virtual Error __encode(Solver&) const = 0;
 
 protected:
+  // sort must be statically allocated
   UnsafeExpr(ExprKind expr_kind, const Sort& sort)
   : m_expr_kind(expr_kind), m_sort(sort) {}
 
@@ -559,42 +643,30 @@ public:
 };
 
 template<typename T>
-class DeclExpr : public Expr<T>
+class ConstantExpr : public Expr<T>
 {
 private:
-  const std::string m_symbol;
+  const Decl<T> m_decl;
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_decl(m_symbol, UnsafeExpr::sort());
+    return solver.encode_constant(m_decl);
   }
 
 public:
-  DeclExpr(const std::string& symbol)
-  : Expr<T>(DECL_EXPR_KIND),
-    m_symbol(symbol) {}
+  ConstantExpr(const Decl<T>& decl)
+  : Expr<T>(CONSTANT_EXPR_KIND),
+    m_decl(decl) {}
 
-  DeclExpr(std::string&& symbol)
-  : Expr<T>(DECL_EXPR_KIND),
-    m_symbol(std::move(symbol)) {}
+  ConstantExpr(Decl<T>&& decl)
+  : Expr<T>(CONSTANT_EXPR_KIND),
+    m_decl(std::move(decl)) {}
 
-  const std::string& symbol() const
+  const Decl<T>& decl() const
   {
-    return m_symbol;
+    return m_decl;
   }
 };
-
-template<typename T>
-ExprPtr<T> any(const std::string& symbol)
-{
-  return ExprPtr<T>(new DeclExpr<T>(symbol));
-}
-
-template<typename T>
-ExprPtr<T> any(std::string&& symbol)
-{
-  return ExprPtr<T>(new DeclExpr<T>(std::move(symbol)));
-}
 
 namespace internal
 {
@@ -672,27 +744,27 @@ public:
 private:
   static constexpr size_t s_arity = std::tuple_size<DomainPtrs>::value;
 
-  const ExprPtr<sort::Func<T...>> m_func_ptr;
+  const Decl<sort::Func<T...>> m_func_decl;
   const DomainPtrs m_arg_ptrs;
 
   virtual Error __encode(Solver& solver) const override
   {
     const std::array<UnsafeExprPtr, s_arity> arg_ptrs(
       internal::to_array<UnsafeExprPtr, DomainPtrs>(m_arg_ptrs));
-    return solver.encode_func_app(m_func_ptr, s_arity, arg_ptrs.data());
+    return solver.encode_func_app(m_func_decl, s_arity, arg_ptrs.data());
   }
 
 public:
   FuncAppExpr(
-    ExprPtr<sort::Func<T...>> func_ptr,
+    Decl<sort::Func<T...>> func_decl,
     DomainPtrs arg_ptrs)
   : Expr<typename sort::Func<T...>::Range>(FUNC_APP_EXPR_KIND),
-    m_func_ptr(func_ptr),
+    m_func_decl(func_decl),
     m_arg_ptrs(arg_ptrs) {}
 
-  ExprPtr<sort::Func<T...>> func_ptr() const
+  const Decl<sort::Func<T...>>& func_decl() const
   {
-    return m_func_ptr;
+    return m_func_decl;
   }
 
   const DomainPtrs& arg_ptrs() const
@@ -708,43 +780,67 @@ inline ExprPtr<T> literal(const U literal)
   return ExprPtr<T>(new BuiltinLiteralExpr<T, U>(literal));
 }
 
+template<typename T>
+ExprPtr<T> constant(const Decl<T>& decl)
+{
+  return ExprPtr<T>(new ConstantExpr<T>(decl));
+}
+
+template<typename T>
+ExprPtr<T> constant(Decl<T>&& decl)
+{
+  return ExprPtr<T>(new ConstantExpr<T>(std::move(decl)));
+}
+
 // unary function application
 template<typename Domain, typename Range, typename T,
   typename Enable = typename std::enable_if<std::is_integral<T>::value>::type>
 ExprPtr<Range> apply(
-  ExprPtr<sort::Func<Domain, Range>> func_ptr,
+  Decl<sort::Func<Domain, Range>> func_decl,
   const T arg)
 {
-  return apply(func_ptr, literal<Domain, T>(arg));
+  return apply(func_decl, literal<Domain, T>(arg));
 }
 
 // unary function application
 template<typename Domain, typename Range>
 ExprPtr<Range> apply(
-  ExprPtr<sort::Func<Domain, Range>> func_ptr,
+  Decl<sort::Func<Domain, Range>> func_decl,
   ExprPtr<Domain> arg_ptr)
 {
-  return apply(func_ptr, std::make_tuple(arg_ptr));
+  return apply(func_decl, std::make_tuple(arg_ptr));
 }
 
 // binary function application
 template<typename T, typename U, typename Range>
 ExprPtr<Range> apply(
-  ExprPtr<sort::Func<T, U, Range>> func_ptr,
+  Decl<sort::Func<T, U, Range>> func_decl,
   ExprPtr<T> larg_ptr,
   ExprPtr<U> rarg_ptr)
 {
-  return apply(func_ptr, std::make_tuple(larg_ptr, rarg_ptr));
+  return apply(func_decl, std::make_tuple(larg_ptr, rarg_ptr));
+}
+
+template<typename T>
+ExprPtr<T> any(const std::string& symbol)
+{
+  return constant(Decl<T>(symbol));
+}
+
+template<typename T>
+ExprPtr<T> any(std::string&& symbol)
+{
+  return constant(Decl<T>(std::move(symbol)));
 }
 
 // nary function application
 template<typename... T>
 ExprPtr<typename sort::Func<T...>::Range> apply(
-  ExprPtr<sort::Func<T...>> func_ptr,
+  Decl<sort::Func<T...>> func_decl,
   typename FuncAppExpr<T...>::DomainPtrs arg_ptrs)
 {
   return ExprPtr<typename sort::Func<T...>::Range>(
-    new FuncAppExpr<T...>(func_ptr, arg_ptrs));
+    new FuncAppExpr<T...>(func_decl, arg_ptrs));
 }
 
 template<Opcode opcode, typename T, typename U = T>

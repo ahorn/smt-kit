@@ -163,13 +163,14 @@ TEST(SmtZ3Test, RealBuiltinLiteralExpr)
   solver.pop();
 }
 
-TEST(SmtZ3Test, DeclExpr)
+TEST(SmtZ3Test, Decl)
 {
   Z3Solver s;
   constexpr size_t bv_size = sizeof(long) * 8;
 
-  const DeclExpr<long> e0("x");
-  EXPECT_EQ(OK, e0.encode(s));
+  const Decl<long> d0("x");
+  ExprPtr<long> e0_ptr = constant(d0);
+  EXPECT_EQ(OK, e0_ptr->encode(s));
 
   const z3::expr expr(s.expr());
   EXPECT_TRUE(expr.is_bv());
@@ -301,8 +302,10 @@ TEST(SmtZ3Test, LogicalImplication)
   Z3Solver s;
   z3::expr expr(s.context());
 
-  const ExprPtr<sort::Bool> e0_ptr(new DeclExpr<sort::Bool>("x"));
-  const ExprPtr<sort::Bool> e1_ptr(new DeclExpr<sort::Bool>("y"));
+  const Decl<sort::Bool> d0("x");
+  const Decl<sort::Bool> d1("y");
+  const ExprPtr<sort::Bool> e0_ptr = constant(d0);
+  const ExprPtr<sort::Bool> e1_ptr = constant(d1);
   const BuiltinBinaryExpr<IMP, sort::Bool> e2(e0_ptr, e1_ptr);
 
   EXPECT_EQ(OK, e2.encode(s));
@@ -330,29 +333,13 @@ TEST(SmtZ3Test, LogicalImplication)
   solver.pop();
 }
 
-TEST(SmtZ3Test, FuncDeclExpr)
-{
-  Z3Solver s;
-
-  const DeclExpr<sort::Func<sort::Int, long>> e0("f");
-  EXPECT_EQ(OK, e0.encode(s));
-
-  const z3::func_decl f_decl(s.context(),
-    (Z3_func_decl)(static_cast<Z3_ast>(s.ast())));
-  EXPECT_EQ("f", f_decl.name().str());
-  EXPECT_EQ(1, f_decl.arity());
-  EXPECT_TRUE(f_decl.domain(0).is_int());
-  EXPECT_TRUE(f_decl.range().is_bv());
-  EXPECT_EQ(sizeof(long) * 8, f_decl.range().bv_size());
-}
-
 TEST(SmtZ3Test, UnaryFuncAppExpr)
 {
   Z3Solver s;
 
-  const ExprPtr<sort::Func<sort::Int, long>> e0_ptr(new DeclExpr<sort::Func<sort::Int, long>>("f"));
+  Decl<sort::Func<sort::Int, long>> d0("f");
   const ExprPtr<sort::Int> e1_ptr(new BuiltinLiteralExpr<sort::Int, int>(7));
-  const FuncAppExpr<sort::Int, long> e2(e0_ptr, std::make_tuple(e1_ptr));
+  const FuncAppExpr<sort::Int, long> e2(d0, std::make_tuple(e1_ptr));
 
   EXPECT_EQ(OK, e2.encode(s));
   const z3::expr app_expr(s.expr());
@@ -396,10 +383,11 @@ TEST(SmtZ3Test, BinaryFuncAppExpr)
 {
   Z3Solver s;
 
-  const ExprPtr<sort::Func<sort::Int, bool, long>> e0_ptr(new DeclExpr<sort::Func<sort::Int, bool, long>>("f"));
+  const Decl<sort::Func<sort::Int, bool, long>> d0("f");
+  const Decl<bool> d2("x");
   const ExprPtr<sort::Int> e1_ptr(new BuiltinLiteralExpr<sort::Int, int>(7));
-  const ExprPtr<bool> e2_ptr(new DeclExpr<bool>("x"));
-  const FuncAppExpr<sort::Int, bool, long> e3(e0_ptr, std::make_tuple(e1_ptr, e2_ptr));
+  const ExprPtr<bool> e2_ptr = constant(d2);
+  const FuncAppExpr<sort::Int, bool, long> e3(d0, std::make_tuple(e1_ptr, e2_ptr));
 
   EXPECT_EQ(OK, e3.encode(s));
   const z3::expr app_expr(s.expr());
@@ -487,10 +475,11 @@ TEST(SmtZ3Test, ArraySelectExpr)
 {
   Z3Solver s;
 
-  const ExprPtr<sort::Array<sort::Int, sort::Bool>> array_ptr(
-    new DeclExpr<sort::Array<sort::Int, sort::Bool>>("x"));
-
-  const ExprPtr<sort::Int> index_ptr(new DeclExpr<sort::Int>("i"));
+  constexpr char const array_name[] = "array";
+  const Decl<sort::Array<sort::Int, sort::Bool>> array_decl(array_name);
+  const Decl<sort::Int> index_decl("i");
+  const ExprPtr<sort::Array<sort::Int, sort::Bool>> array_ptr = constant(array_decl);
+  const ExprPtr<sort::Int> index_ptr = constant(index_decl);
   const ArraySelectExpr<sort::Int, sort::Bool> e0(array_ptr, index_ptr);
 
   EXPECT_EQ(OK, e0.encode(s));
@@ -506,7 +495,7 @@ TEST(SmtZ3Test, ArraySelectExpr)
   EXPECT_EQ(z3::sat, solver.check());
 
   const z3::sort array_sort = context.array_sort(context.int_sort(), context.bool_sort());
-  const z3::expr array_expr = context.constant("x", array_sort);
+  const z3::expr array_expr = context.constant(array_name, array_sort);
   const z3::expr i_expr(context.int_const("i"));
   const z3::expr j_expr(context.int_const("j"));
   const z3::expr store_expr = z3::store(array_expr, j_expr, context.bool_val(false));
@@ -521,10 +510,10 @@ TEST(SmtZ3Test, ArrayStoreExpr)
 {
   Z3Solver s;
 
-  const ExprPtr<sort::Array<sort::Int, sort::Int>> array_ptr(
-    new DeclExpr<sort::Array<sort::Int, sort::Int>>("x"));
-
-  const ExprPtr<sort::Int> index_ptr(new DeclExpr<sort::Int>("i"));
+  const Decl<sort::Array<sort::Int, sort::Int>> array_decl("array");
+  const Decl<sort::Int> index_decl("i");
+  const ExprPtr<sort::Array<sort::Int, sort::Int>> array_ptr = constant(array_decl);
+  const ExprPtr<sort::Int> index_ptr = constant(index_decl);
   const ExprPtr<sort::Int> value_ptr(new BuiltinLiteralExpr<sort::Int, int>(7));
   const ArrayStoreExpr<sort::Int, sort::Int> e0(array_ptr, index_ptr, value_ptr);
 

@@ -18,7 +18,7 @@ class Z3Solver : public Solver
 private:
   z3::context m_z3_context;
   z3::solver m_z3_solver;
-  z3::ast m_z3_ast;
+  z3::expr m_z3_expr;
 
   template<typename T>
   Error nocast_encode_builtin(
@@ -26,13 +26,13 @@ private:
      T literal)
   {
     if (sort.is_bool()) {
-      m_z3_ast = m_z3_context.bool_val(literal);
+      m_z3_expr = m_z3_context.bool_val(literal);
     } else if (sort.is_int()) {
-      m_z3_ast = m_z3_context.int_val(literal);
+      m_z3_expr = m_z3_context.int_val(literal);
     } else if (sort.is_real()) {
-      m_z3_ast = m_z3_context.real_val(literal);
+      m_z3_expr = m_z3_context.real_val(literal);
     } else if (sort.is_bv()) {
-      m_z3_ast = m_z3_context.bv_val(literal, sort.bv_size());
+      m_z3_expr = m_z3_context.bv_val(literal, sort.bv_size());
     } else {
       return UNSUPPORT_ERROR;
     }
@@ -85,8 +85,10 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned short)
 SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(long)
 SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
-  Error __build_sort(const Sort& sort, z3::sort& z3_sort)
+  Error build_sort(const Sort& sort, z3::sort& z3_sort)
   {
+    assert(!sort.is_func());
+
     if (sort.is_bool()) {
       z3_sort = m_z3_context.bool_sort();
     } else if (sort.is_int()) {
@@ -95,18 +97,16 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
       z3_sort = m_z3_context.int_sort();
     } else if (sort.is_bv()) {
       z3_sort = m_z3_context.bv_sort(sort.bv_size());
-    } else if (sort.is_func()) {
-      return DECL_ERROR;
     } else if (sort.is_array()) {
       z3::sort z3_domain_sort(m_z3_context);
       z3::sort z3_range_sort(m_z3_context);
 
       Error err;
-      err = __build_sort(sort.sorts(0), z3_domain_sort);
+      err = build_sort(sort.sorts(0), z3_domain_sort);
       if (err) {
         return err;
       }
-      err = __build_sort(sort.sorts(1), z3_range_sort);
+      err = build_sort(sort.sorts(1), z3_range_sort);
       if (err) {
         return err;
       }
@@ -118,57 +118,58 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     return OK;
   }
 
-  virtual Error __encode_decl(
+  Error decl_func(
     const std::string& symbol,
-    const Sort& sort) override
+    const Sort& sort,
+    z3::func_decl& z3_func_decl)
   {
+    assert(sort.is_func());
+
     Error err;
-    if (sort.is_func()) {
-      const z3::sort z3_arch_sort(m_z3_context);
-      const size_t arity = sort.sorts_size() - 1;
-      std::vector<z3::sort> z3_domain_sorts(arity, z3_arch_sort);
-      for (int i = 0; i < arity; i++) {
-        err = __build_sort(sort.sorts(i), z3_domain_sorts[i]);
-        if (err) {
-          return err;
-        }
-      }
-
-      z3::sort z3_range_sort(m_z3_context);
-      err = __build_sort(sort.sorts(arity), z3_range_sort);
+    const z3::sort z3_arch_sort(m_z3_context);
+    const size_t arity = sort.sorts_size() - 1;
+    std::vector<z3::sort> z3_domain_sorts(arity, z3_arch_sort);
+    for (int i = 0; i < arity; i++) {
+      err = build_sort(sort.sorts(i), z3_domain_sorts[i]);
       if (err) {
         return err;
       }
-
-      m_z3_ast = m_z3_context.function(symbol.c_str(), arity,
-        z3_domain_sorts.data(), z3_range_sort);
-    } else {
-      z3::sort z3_sort(m_z3_context);
-      err = __build_sort(sort, z3_sort);
-      if (err) {
-        return err;
-      }
-
-      m_z3_ast = m_z3_context.constant(symbol.c_str(), z3_sort);
     }
+
+    z3::sort z3_range_sort(m_z3_context);
+    err = build_sort(sort.sorts(arity), z3_range_sort);
+    if (err) {
+      return err;
+    }
+
+    z3_func_decl = m_z3_context.function(symbol.c_str(), arity,
+      z3_domain_sorts.data(), z3_range_sort);
+    return OK;
+  }
+
+  virtual Error __encode_constant(
+    const UnsafeDecl& decl) override
+  {
+    z3::sort z3_sort(m_z3_context);
+    const Error err = build_sort(decl.sort(), z3_sort);
+    if (err) {
+      return err;
+    }
+    m_z3_expr = m_z3_context.constant(decl.symbol().c_str(), z3_sort);
     return OK;
   }
 
   virtual Error __encode_func_app(
-    const UnsafeExprPtr func_ptr,
+    const UnsafeDecl& func_decl,
     const size_t arity,
     const UnsafeExprPtr* const arg_ptrs) override
   {
-    assert(func_ptr->sort().is_func());
-    assert(0 < arity);
-
     Error err;
-    err = func_ptr->encode(*this);
+    z3::func_decl z3_func_decl(m_z3_context);
+    err = decl_func(func_decl.symbol(), func_decl.sort(), z3_func_decl);
     if (err) {
       return err;
     }
-    const z3::func_decl z3_func_decl(m_z3_context,
-      (Z3_func_decl)(static_cast<Z3_ast>(m_z3_ast)));
 
     const z3::expr z3_arch_expr(m_z3_context);
     std::vector<z3::expr> z3_args(arity, z3_arch_expr);
@@ -177,9 +178,9 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
       if (err) {
         return err;
       }
-      z3_args[i] = z3::expr(m_z3_context, m_z3_ast);
+      z3_args[i] = m_z3_expr;
     }
-    m_z3_ast = z3_func_decl(z3_args.size(), z3_args.data());
+    m_z3_expr = z3_func_decl(z3_args.size(), z3_args.data());
 
     return OK;
   }
@@ -192,7 +193,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
     Error err;
     z3::sort z3_domain_sort(m_z3_context);
-    err = __build_sort(sort.sorts(0), z3_domain_sort);
+    err = build_sort(sort.sorts(0), z3_domain_sort);
     if (err) {
       return err;
     }
@@ -201,8 +202,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     if (err) {
       return err;
     }
-    const z3::expr z3_init_expr(m_z3_context, m_z3_ast);
-    m_z3_ast = z3::const_array(z3_domain_sort, z3_init_expr);
+    m_z3_expr = z3::const_array(z3_domain_sort, m_z3_expr);
     return OK;
   }
 
@@ -216,15 +216,15 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     if (err) {
       return err;
     }
-    const z3::expr z3_array_expr(m_z3_context, m_z3_ast);
+    const z3::expr z3_array_expr(m_z3_expr);
 
     err = index_ptr->encode(*this);
     if (err) {
       return err;
     }
-    const z3::expr z3_index_expr(m_z3_context, m_z3_ast);
+    const z3::expr z3_index_expr(m_z3_expr);
 
-    m_z3_ast = z3::select(z3_array_expr, z3_index_expr);
+    m_z3_expr = z3::select(z3_array_expr, z3_index_expr);
     return OK;
   }
 
@@ -239,21 +239,21 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     if (err) {
       return err;
     }
-    const z3::expr z3_array_expr(m_z3_context, m_z3_ast);
+    const z3::expr z3_array_expr(m_z3_expr);
 
     err = index_ptr->encode(*this);
     if (err) {
       return err;
     }
-    const z3::expr z3_index_expr(m_z3_context, m_z3_ast);
+    const z3::expr z3_index_expr(m_z3_expr);
 
     err = value_ptr->encode(*this);
     if (err) {
       return err;
     }
-    const z3::expr z3_value_expr(m_z3_context, m_z3_ast);
+    const z3::expr z3_value_expr(m_z3_expr);
 
-    m_z3_ast = z3::store(z3_array_expr, z3_index_expr, z3_value_expr);
+    m_z3_expr = z3::store(z3_array_expr, z3_index_expr, z3_value_expr);
     return OK;
   }
 
@@ -266,19 +266,18 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     if (err) {
       return err;
     }
-    const z3::expr expr(m_z3_context, m_z3_ast);
     switch (opcode) {
     case LNOT:
-      m_z3_ast = !expr;
+      m_z3_expr = !m_z3_expr;
       break;
     case NOT:
-      m_z3_ast = ~expr;
+      m_z3_expr = ~m_z3_expr;
       break;
     case SUB:
-      m_z3_ast = -expr;
+      m_z3_expr = -m_z3_expr;
       break;
     default:
-      return OP_ERROR;
+      return OPCODE_ERROR;
     }
 
     return OK;
@@ -295,87 +294,87 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     if (err) {
       return err;
     }
-    const z3::expr lexpr(m_z3_context, m_z3_ast);
+    const z3::expr lexpr(m_z3_expr);
 
     err = rptr->encode(*this);
     if (err) {
       return err;
     }
-    const z3::expr rexpr(m_z3_context, m_z3_ast);
+    const z3::expr rexpr(m_z3_expr);
 
     switch (opcode) {
     case SUB:
-      m_z3_ast = lexpr - rexpr;
+      m_z3_expr = lexpr - rexpr;
       break;
     case AND:
-      m_z3_ast = lexpr & rexpr;
+      m_z3_expr = lexpr & rexpr;
       break;
     case OR:
-      m_z3_ast = lexpr | rexpr;
+      m_z3_expr = lexpr | rexpr;
       break;
     case XOR:
-      m_z3_ast = lexpr ^ rexpr;
+      m_z3_expr = lexpr ^ rexpr;
       break;
     case LAND:
-      m_z3_ast = lexpr && rexpr;
+      m_z3_expr = lexpr && rexpr;
       break;
     case LOR:
-      m_z3_ast = lexpr || rexpr;
+      m_z3_expr = lexpr || rexpr;
       break;
     case IMP:
-      m_z3_ast = implies(lexpr, rexpr);
+      m_z3_expr = implies(lexpr, rexpr);
       break;
     case EQL:
-      m_z3_ast = lexpr == rexpr;
+      m_z3_expr = lexpr == rexpr;
       break;
     case ADD:
-      m_z3_ast = lexpr + rexpr;
+      m_z3_expr = lexpr + rexpr;
       break;
     case MUL:
-      m_z3_ast = lexpr * rexpr;
+      m_z3_expr = lexpr * rexpr;
       break;
     case QUO:
       if (sort.is_bv() && !sort.is_signed()) {
-        m_z3_ast = udiv(lexpr, rexpr);
+        m_z3_expr = udiv(lexpr, rexpr);
       } else {
-        m_z3_ast = lexpr / rexpr;
+        m_z3_expr = lexpr / rexpr;
       }
       break;
     case REM:
       return UNSUPPORT_ERROR;
     case LSS:
       if (sort.is_bv() && !sort.is_signed()) {
-        m_z3_ast = ult(lexpr, rexpr);
+        m_z3_expr = ult(lexpr, rexpr);
       } else {
-        m_z3_ast = lexpr < rexpr;
+        m_z3_expr = lexpr < rexpr;
       }
       break;
     case GTR:
       if (sort.is_bv() && !sort.is_signed()) {
-        m_z3_ast = ugt(lexpr, rexpr);
+        m_z3_expr = ugt(lexpr, rexpr);
       } else {
-        m_z3_ast = lexpr > rexpr;
+        m_z3_expr = lexpr > rexpr;
       }
       break;
     case NEQ:
-      m_z3_ast = lexpr != rexpr;
+      m_z3_expr = lexpr != rexpr;
       break;
     case LEQ:
       if (sort.is_bv() && !sort.is_signed()) {
-        m_z3_ast = ule(lexpr, rexpr);
+        m_z3_expr = ule(lexpr, rexpr);
       } else {
-        m_z3_ast = lexpr <= rexpr;
+        m_z3_expr = lexpr <= rexpr;
       }
       break;
     case GEQ:
       if (sort.is_bv() && !sort.is_signed()) {
-        m_z3_ast = uge(lexpr, rexpr);
+        m_z3_expr = uge(lexpr, rexpr);
       } else {
-        m_z3_ast = lexpr >= rexpr;
+        m_z3_expr = lexpr >= rexpr;
       }
       break;
     default:
-      return OP_ERROR;
+      return OPCODE_ERROR;
     }
 
     return OK;
@@ -417,7 +416,7 @@ public:
   Z3Solver()
   : m_z3_context(),
     m_z3_solver(m_z3_context),
-    m_z3_ast(m_z3_context) {}
+    m_z3_expr(m_z3_context) {}
 
   z3::context& context()
   {
@@ -429,14 +428,9 @@ public:
     return m_z3_solver;
   }
 
-  const z3::ast& ast() const
+  const z3::expr& expr() const
   {
-    return m_z3_ast;
-  }
-
-  z3::expr expr()
-  {
-    return z3::expr(m_z3_context, m_z3_ast);
+    return m_z3_expr;
   }
 };
 
