@@ -267,7 +267,7 @@ TEST(SmtTest, UnaryFuncAppExpr)
   const FuncAppExpr<long, sort::Int> app(func_decl, std::make_tuple(arg_ptr));
 
   EXPECT_EQ(FUNC_APP_EXPR_KIND, app.expr_kind());
-  //EXPECT_EQ(func_decl, app.func_decl());
+  EXPECT_EQ(func_decl, app.func_decl());
 
   STATIC_EXPECT_TRUE((std::tuple_size<FuncAppExpr<long, sort::Int>::DomainPtrs>::value == 1));
   const FuncAppExpr<long, sort::Int>::DomainPtrs& arg_ptrs = app.arg_ptrs();
@@ -292,7 +292,7 @@ TEST(SmtTest, BinaryFuncAppExpr)
     std::make_tuple(larg_ptr, rarg_ptr));
 
   EXPECT_EQ(FUNC_APP_EXPR_KIND, app.expr_kind());
-  //EXPECT_EQ(func_decl, app.func_decl());
+  EXPECT_EQ(func_decl, app.func_decl());
 
   STATIC_EXPECT_TRUE((std::tuple_size<FuncAppExpr<long, sort::Int, sort::Real>::DomainPtrs>::value == 2));
   const FuncAppExpr<long, sort::Int, sort::Real>::DomainPtrs& arg_ptrs = app.arg_ptrs();
@@ -457,40 +457,6 @@ TEST(SmtTest, Any)
   EXPECT_FALSE(d2.sort().sorts(1).is_array());
   EXPECT_FALSE(d2.sort().sorts(1).is_func());
 }
-
-/*
-TEST(SmtTest, AnyFunc)
-{
-  const ExprPtr<sort::Func<long, sort::Int>> e0_ptr =
-    any<sort::Func<long, sort::Int>>("f");
-  const DeclExpr<sort::Func<long, sort::Int>>& e0 =
-    static_cast<const DeclExpr<sort::Func<long, sort::Int>>&>(*e0_ptr);
-
-  EXPECT_EQ(DECL_EXPR_KIND, e0.expr_kind());
-  EXPECT_FALSE(e0.sort().is_bool());
-  EXPECT_FALSE(e0.sort().is_int());
-  EXPECT_FALSE(e0.sort().is_real());
-  EXPECT_FALSE(e0.sort().is_bv());
-  EXPECT_TRUE(e0.sort().is_func());
-  EXPECT_FALSE(e0.sort().is_array());
-
-  EXPECT_EQ(2, e0.sort().sorts_size());
-
-  EXPECT_FALSE(e0.sort().sorts(0).is_bool());
-  EXPECT_FALSE(e0.sort().sorts(0).is_int());
-  EXPECT_FALSE(e0.sort().sorts(0).is_real());
-  EXPECT_TRUE(e0.sort().sorts(0).is_bv());
-  EXPECT_FALSE(e0.sort().sorts(0).is_func());
-  EXPECT_FALSE(e0.sort().sorts(0).is_array());
-
-  EXPECT_FALSE(e0.sort().sorts(1).is_bool());
-  EXPECT_TRUE(e0.sort().sorts(1).is_int());
-  EXPECT_FALSE(e0.sort().sorts(1).is_real());
-  EXPECT_FALSE(e0.sort().sorts(1).is_bv());
-  EXPECT_FALSE(e0.sort().sorts(1).is_array());
-  EXPECT_FALSE(e0.sort().sorts(1).is_func());
-}
-*/
 
 TEST(SmtTest, BuiltinUnaryExpr)
 {

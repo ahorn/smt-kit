@@ -376,6 +376,15 @@ public:
   {
     return m_sort;
   }
+
+  bool operator==(const UnsafeDecl& other) const
+  {
+    if (this == &other) {
+      return true;
+    }
+
+    return m_symbol == other.m_symbol and &m_sort == &other.m_sort;
+  }
 };
 
 template<typename T>
