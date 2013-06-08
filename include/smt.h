@@ -488,94 +488,44 @@ private:
 
 public:
   Error encode_constant(
-    const UnsafeDecl& decl)
-  {
-    return __encode_constant(decl);
-  }
+    const UnsafeDecl& decl);
 
   Error encode_func_app(
     const UnsafeDecl& func_decl,
     const size_t arity,
-    const UnsafeExprPtr* const arg_ptrs)
-  {
-    assert(0 < arity);
-    assert(arg_ptrs != nullptr);
-
-    return __encode_func_app(func_decl, arity, arg_ptrs);
-  }
+    const UnsafeExprPtr* const arg_ptrs);
 
   Error encode_const_array(
     const Sort& sort,
-    UnsafeExprPtr init_ptr)
-  {
-    assert(init_ptr != nullptr);
-
-    return __encode_const_array(sort, init_ptr);
-  }
+    UnsafeExprPtr init_ptr);
 
   Error encode_array_select(
     UnsafeExprPtr array_ptr,
-    UnsafeExprPtr index_ptr)
-  {
-    assert(array_ptr != nullptr);
-    assert(index_ptr != nullptr);
-
-    return __encode_array_select(array_ptr, index_ptr);
-  }
+    UnsafeExprPtr index_ptr);
 
   Error encode_array_store(
     UnsafeExprPtr array_ptr,
     UnsafeExprPtr index_ptr,
-    UnsafeExprPtr value_ptr)
-  {
-    assert(array_ptr != nullptr);
-    assert(index_ptr != nullptr);
-    assert(value_ptr != nullptr);
-
-    return __encode_array_store(array_ptr, index_ptr, value_ptr);
-  }
+    UnsafeExprPtr value_ptr);
 
   Error encode_builtin(
     Opcode opcode,
     const Sort& sort,
-    UnsafeExprPtr expr_ptr)
-  {
-    assert(expr_ptr != nullptr);
-
-    return __encode_builtin(opcode, sort, expr_ptr);
-  }
+    UnsafeExprPtr expr_ptr);
 
   Error encode_builtin(
     Opcode opcode,
     const Sort& sort,
     UnsafeExprPtr lptr,
-    UnsafeExprPtr rptr)
-  {
-    assert(lptr != nullptr);
-    assert(rptr != nullptr);
+    UnsafeExprPtr rptr);
 
-    return __encode_builtin(opcode, sort, lptr, rptr);
-  }
+  void push();
 
-  void push()
-  {
-    return __push();
-  }
+  void pop();
 
-  void pop()
-  {
-    return __pop();
-  }
+  Error add(ExprPtr<sort::Bool> condition);
 
-  Error add(ExprPtr<sort::Bool> condition)
-  {
-    return __add(condition);
-  }
-
-  CheckResult check()
-  {
-    return __check();
-  }
+  CheckResult check();
 };
 
 class UnsafeExpr
