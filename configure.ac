@@ -26,13 +26,33 @@ AX_CXX_COMPILE_STDCXX_11([noext])
 AC_PROG_LIBTOOL
 
 # Work around for internal/gtest-port.h dependency on tr1/tuple
-AC_CHECK_DEFINED(__APPLE__, [CXXFLAGS="$CXXFLAGS -DGTEST_USE_OWN_TR1_TUPLE=1"])
+AC_CHECK_DEFINED(__APPLE__, )
+
+# If we compile with clang++, we'll use LLVM's C++11 standard library
+AC_COMPILE_IFELSE(
+[AC_LANG_PROGRAM([], [[
+#ifndef __clang__
+  not clang
+#endif
+]])],
+[CLANG=yes], [CLANG=no])
+AC_MSG_RESULT([$CLANG])
+
+AS_IF([test x$CLANG = xyes], [CXXFLAGS="$CXXFLAGS -stdlib=libc++"])
+
+Z3_DIR="solvers/z3"
+MSAT_DIR="solvers/msat"
+GMP_DIR="/opt/local"
 
 # Search for SMT and SAT solver libraries
-CXXFLAGS="$CXXFLAGS -Isolvers/z3/src/api -Isolvers/z3/src/api/c++"
-LDFLAGS="$LDFLAGS -Lsolvers/z3/build"
+CXXFLAGS="$CXXFLAGS -I$Z3_DIR/src/api -I$Z3_DIR/src/api/c++ -I$MSAT_DIR/include"
+LDFLAGS="$LDFLAGS -L$Z3_DIR/build -L$MSAT_DIR/lib -L$GMP_DIR/lib"
 
 AC_SEARCH_LIBS([Z3_mk_config], [z3], , AC_MSG_ERROR([Unable to find Z3 theorem prover]))
+
+AC_CHECK_LIB(stdc++, main, ,[AC_MSG_ERROR([Unable to find stdc++])])
+AC_CHECK_LIB(gmp, __gmpz_init, ,[AC_MSG_ERROR([Unable to find gmp])])
+AC_SEARCH_LIBS([msat_create_config], [mathsat], , AC_MSG_ERROR([Unable to find MathSAT5]), [-lstdc++ -lgmp])
 
 # Output the generated files. No further autoconf macros may be used.
 AC_OUTPUT

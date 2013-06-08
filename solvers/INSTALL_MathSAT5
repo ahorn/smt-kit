@@ -1,0 +1,13 @@
+MathSAT5 is developed by FBK-IRST and the University of Trento:
+
+  http://mathsat.fbk.eu/
+
+Binaries can be downloaded from above for noncommercial use only.
+Extract the files to the directory "solvers/msat" because Autoconf
+looks there to link the SMT Kit source code.
+
+Note that currently the MathSAT5 binaries cannot be linked with LLVM's
+C++11 standard library (libc++). This prevents compiling SMT Kit with
+clang++ on OS X. As a workaround, g++ from Mac Ports works fine.
+
+This compiler portability issue has been reported to mathsat@fbk.eu.
