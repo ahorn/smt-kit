@@ -46,4 +46,9 @@ For advanced usage information on other configure options refer to the
 
 Since SMT Kit uses advanced C++11 language features, older compiler
 versions are likely to be troublesome. To date, we have successfully
-compiled and tested the code on OS X with g++ v4.8.1 and clang++ v4.2.
+compiled and tested the code on OS X with g++ 4.8.1 and clang++ 4.2.
+But the choice of compiler also depends on the underlying SMT solvers.
+In particular, MathSAT5 on OS X does not currently link with clang++
+and LLVM's C++11 standard library (libc++). As a workaround, g++ from
+Mac Ports works fine. This compiler portability issue has been reported
+to mathsat@fbk.eu.
