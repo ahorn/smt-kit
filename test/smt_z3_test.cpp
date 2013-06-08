@@ -3,6 +3,9 @@
 #include "smt.h"
 #include "smt_z3.h"
 
+#include <sstream>
+#include <cstdint>
+
 using namespace smt;
 
 TEST(SmtZ3Test, BvNoCastBuiltinLiteralExpr)
@@ -604,6 +607,186 @@ TEST(SmtZ3Test, Add)
     EXPECT_EQ(z3::unsat, solver.check());
   }
   solver.pop();
+}
+
+TEST(SmtZ3Test, BinaryBvSignedOperatorLSS)
+{
+  Z3Solver solver;
+
+  ExprPtr<int8_t> x = any<int8_t>("x");
+  EXPECT_EQ(OK, solver.add('\0' < x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(bvslt #x00 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryBvUnsignedOperatorLSS)
+{
+  Z3Solver solver;
+
+  ExprPtr<uint8_t> x = any<uint8_t>("x");
+  EXPECT_EQ(OK, solver.add('\0' < x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(bvult #x00 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryBvSignedOperatorGTR)
+{
+  Z3Solver solver;
+
+  ExprPtr<int8_t> x = any<int8_t>("x");
+  EXPECT_EQ(OK, solver.add('\0' > x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(bvsgt #x00 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryBvUnsignedOperatorGTR)
+{
+  Z3Solver solver;
+
+  ExprPtr<uint8_t> x = any<uint8_t>("x");
+  EXPECT_EQ(OK, solver.add('\0' > x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(bvugt #x00 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryBvSignedOperatorNEQ)
+{
+  Z3Solver solver;
+
+  ExprPtr<int8_t> x = any<int8_t>("x");
+  EXPECT_EQ(OK, solver.add('\0' != x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(distinct #x00 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryBvUnsignedOperatorNEQ)
+{
+  Z3Solver solver;
+
+  ExprPtr<uint8_t> x = any<uint8_t>("x");
+  EXPECT_EQ(OK, solver.add('\0' != x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(distinct #x00 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryBvSignedOperatorLEQ)
+{
+  Z3Solver solver;
+
+  ExprPtr<int8_t> x = any<int8_t>("x");
+  EXPECT_EQ(OK, solver.add('\0' <= x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(bvsle #x00 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryBvUnsignedOperatorLEQ)
+{
+  Z3Solver solver;
+
+  ExprPtr<uint8_t> x = any<uint8_t>("x");
+  EXPECT_EQ(OK, solver.add('\0' <= x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(bvule #x00 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryBvSignedOperatorGEQ)
+{
+  Z3Solver solver;
+
+  ExprPtr<int8_t> x = any<int8_t>("x");
+  EXPECT_EQ(OK, solver.add('\0' >= x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(bvsge #x00 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryBvUnsignedOperatorGEQ)
+{
+  Z3Solver solver;
+
+  ExprPtr<uint8_t> x = any<uint8_t>("x");
+  EXPECT_EQ(OK, solver.add('\0' >= x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(bvuge #x00 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryIntOperatorLSS)
+{
+  Z3Solver solver;
+
+  ExprPtr<sort::Int> x = any<sort::Int>("x");
+  EXPECT_EQ(OK, solver.add(0 < x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(< 0 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryIntOperatorGTR)
+{
+  Z3Solver solver;
+
+  ExprPtr<sort::Int> x = any<sort::Int>("x");
+  EXPECT_EQ(OK, solver.add(0 > x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(> 0 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryIntOperatorNEQ)
+{
+  Z3Solver solver;
+
+  ExprPtr<sort::Int> x = any<sort::Int>("x");
+  EXPECT_EQ(OK, solver.add(0 != x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(distinct 0 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryIntOperatorLEQ)
+{
+  Z3Solver solver;
+
+  ExprPtr<sort::Int> x = any<sort::Int>("x");
+  EXPECT_EQ(OK, solver.add(0 <= x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(<= 0 x)", out.str());
+}
+
+TEST(SmtZ3Test, BinaryIntOperatorGEQ)
+{
+  Z3Solver solver;
+
+  ExprPtr<sort::Int> x = any<sort::Int>("x");
+  EXPECT_EQ(OK, solver.add(0 >= x));
+
+  std::stringstream out;
+  out << solver.expr();
+  EXPECT_EQ("(>= 0 x)", out.str());
 }
 
 TEST(SmtZ3Test, Functional)

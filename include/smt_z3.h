@@ -343,34 +343,46 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     case REM:
       return UNSUPPORT_ERROR;
     case LSS:
-      if (sort.is_bv() && !sort.is_signed()) {
-        m_z3_expr = ult(lexpr, rexpr);
-      } else {
-        m_z3_expr = lexpr < rexpr;
+      {
+        const Sort& lptr_sort = lptr->sort();
+        if (lptr_sort.is_bv() && !lptr_sort.is_signed()) {
+          m_z3_expr = ult(lexpr, rexpr);
+        } else {
+          m_z3_expr = lexpr < rexpr;
+        }
       }
       break;
     case GTR:
-      if (sort.is_bv() && !sort.is_signed()) {
-        m_z3_expr = ugt(lexpr, rexpr);
-      } else {
-        m_z3_expr = lexpr > rexpr;
+      {
+        const Sort& lptr_sort = lptr->sort();
+        if (lptr_sort.is_bv() && !lptr_sort.is_signed()) {
+          m_z3_expr = ugt(lexpr, rexpr);
+        } else {
+          m_z3_expr = lexpr > rexpr;
+        }
       }
       break;
     case NEQ:
       m_z3_expr = lexpr != rexpr;
       break;
     case LEQ:
-      if (sort.is_bv() && !sort.is_signed()) {
-        m_z3_expr = ule(lexpr, rexpr);
-      } else {
-        m_z3_expr = lexpr <= rexpr;
+      {
+        const Sort& lptr_sort = lptr->sort();
+        if (lptr_sort.is_bv() && !lptr_sort.is_signed()) {
+          m_z3_expr = ule(lexpr, rexpr);
+        } else {
+          m_z3_expr = lexpr <= rexpr;
+        }
       }
       break;
     case GEQ:
-      if (sort.is_bv() && !sort.is_signed()) {
-        m_z3_expr = uge(lexpr, rexpr);
-      } else {
-        m_z3_expr = lexpr >= rexpr;
+      {
+        const Sort& lptr_sort = lptr->sort();
+        if (lptr_sort.is_bv() && !lptr_sort.is_signed()) {
+          m_z3_expr = uge(lexpr, rexpr);
+        } else {
+          m_z3_expr = lexpr >= rexpr;
+        }
       }
       break;
     default:
