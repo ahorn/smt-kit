@@ -7,16 +7,14 @@ create [SMT-LIB][smt-lib] 2.0 formulas.
 
 ## Prerequisite
 
-You need to compile the [Z3 theorem prover][z3]. Its source code is available
-under the [Microsoft Research License Agreement][msr-la]:
+SMT Kit is an API to SMT solvers that must be installed separately.
+Read their software licences carefully.
 
-    $ git clone https://git01.codeplex.com/z3
-
-See the `z3/README` file for instructions on how to compile the Z3 source code
-with any of the following compilers: Visual Studio, g++ or clang++.
+Currently, SMT Kit supports [Z3][z3] and [MathSAT5][msat]. Installation
+instructions can be found in the `solvers/` directory.
 
 [z3]: http://z3.codeplex.com/
-[msr-la]: http://z3.codeplex.com/license
+[msat]: http://mathsat.fbk.eu/
 
 ## Installation
 
