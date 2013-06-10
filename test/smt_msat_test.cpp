@@ -1094,6 +1094,17 @@ TEST(SmtMsatTest, LogicalImplication)
   EXPECT_EQ("(`or` y (`not` x))", std::string(str));
 }
 
+TEST(SmtMsatTest, Reset)
+{
+  MsatSolver s;
+
+  EXPECT_EQ(sat, s.check());
+  s.add(literal<sort::Bool>(false));
+  EXPECT_EQ(unsat, s.check());
+  s.reset();
+  EXPECT_EQ(sat, s.check());
+}
+
 TEST(SmtMsatTest, Distinct)
 {
   MsatSolver s;

@@ -88,6 +88,11 @@ Error Solver::encode_builtin(
   return __encode_builtin(opcode, sort, lptr, rptr);
 }
 
+void Solver::reset()
+{
+  return __reset();
+}
+
 void Solver::push()
 {
   return __push();

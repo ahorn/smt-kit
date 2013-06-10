@@ -489,6 +489,7 @@ private:
     const Sort& sort,
     const UnsafeExprPtrs& ptrs) = 0;
 
+  virtual void __reset() = 0;
   virtual void __push() = 0;
   virtual void __pop() = 0;
   virtual Error __add(ExprPtr<sort::Bool> condition) = 0;
@@ -531,6 +532,8 @@ public:
     Opcode opcode,
     const Sort& sort,
     const UnsafeExprPtrs& ptrs);
+
+  void reset();
 
   void push();
 

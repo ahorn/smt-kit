@@ -489,6 +489,11 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     }
   }
 
+  virtual void __reset() override
+  {
+    msat_reset_env(m_env);
+  }
+
   virtual void __push() override
   {
     msat_push_backtrack_point(m_env);

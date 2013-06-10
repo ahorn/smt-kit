@@ -906,3 +906,14 @@ TEST(SmtZ3Test, Functional)
 
   EXPECT_EQ(smt::sat, solver.check());
 }
+
+TEST(SmtZ3Test, Reset)
+{
+  Z3Solver s;
+
+  EXPECT_EQ(sat, s.check());
+  s.add(literal<sort::Bool>(false));
+  EXPECT_EQ(unsat, s.check());
+  s.reset();
+  EXPECT_EQ(sat, s.check());
+}

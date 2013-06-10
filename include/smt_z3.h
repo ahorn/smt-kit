@@ -423,6 +423,11 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     return OK;
   }
 
+  virtual void __reset() override
+  {
+    m_z3_solver.reset();
+  }
+
   virtual void __push() override
   {
     m_z3_solver.push();
