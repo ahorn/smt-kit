@@ -300,6 +300,74 @@ TEST(SmtZ3Test, BuiltinBinaryExpr)
   solver.pop();
 }
 
+TEST(SmtZ3Test, Distinct)
+{
+  Z3Solver s;
+
+  const ExprPtr<long> x = any<long>("x");
+  const ExprPtr<long> y = any<long>("y");
+  const ExprPtr<long> z = any<long>("z");
+  const ExprPtr<long> w = any<long>("w");
+
+  ExprPtrs<long> operand_ptrs(3);
+  operand_ptrs.push_back(x);
+  operand_ptrs.push_back(y);
+  operand_ptrs.push_back(z);
+
+  ExprPtr<sort::Bool> d(distinct(std::move(operand_ptrs)));
+
+  EXPECT_EQ(OK, d->encode(s));
+  std::stringstream out;
+  out << s.expr();
+  EXPECT_EQ("(distinct x y z)", out.str());
+
+  s.add(d);
+
+  EXPECT_EQ(sat, s.check());
+
+  s.push();
+  {
+    s.add(x == y);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == z);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(y == z);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == w);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(y == w);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(z == w);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+}
+
 TEST(SmtZ3Test, LogicalImplication)
 {
   Z3Solver s;

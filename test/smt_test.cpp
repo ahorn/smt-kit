@@ -530,6 +530,76 @@ TEST(SmtTest, BuiltinBinaryExpr)
   EXPECT_FALSE(e6.sort().is_func());
 }
 
+TEST(SmtTest, ExprPtrs)
+{
+  const ExprPtr<long> e0_ptr(literal<long>(42L));
+  const ExprPtr<long> e1_ptr(literal<long>(7L));
+  const ExprPtr<long> e2_ptr(any<long>("x"));
+
+  ExprPtrs<long> operand_ptrs(3);
+  operand_ptrs.push_back(e0_ptr);
+  operand_ptrs.push_back(e1_ptr);
+  operand_ptrs.push_back(e2_ptr);
+
+  EXPECT_EQ(3, operand_ptrs.size());
+  EXPECT_EQ(e0_ptr.get(), operand_ptrs.at(0).get());
+  EXPECT_EQ(e1_ptr.get(), operand_ptrs.at(1).get());
+  EXPECT_EQ(e2_ptr.get(), operand_ptrs.at(2).get());
+}
+
+TEST(SmtTest, BuiltinNaryExpr)
+{
+  const ExprPtr<long> e0_ptr(literal<long>(42L));
+  const ExprPtr<long> e1_ptr(literal<long>(7L));
+  const ExprPtr<long> e2_ptr(any<long>("x"));
+
+  ExprPtrs<long> operand_ptrs(3);
+  operand_ptrs.push_back(e0_ptr);
+  operand_ptrs.push_back(e1_ptr);
+  operand_ptrs.push_back(e2_ptr);
+
+  const BuiltinNaryExpr<ADD, long> e3(operand_ptrs);
+
+  EXPECT_EQ(3, e3.size());
+  EXPECT_EQ(e0_ptr.get(), e3.operand_ptr(0).get());
+  EXPECT_EQ(e1_ptr.get(), e3.operand_ptr(1).get());
+  EXPECT_EQ(e2_ptr.get(), e3.operand_ptr(2).get());
+
+  EXPECT_EQ(NARY_EXPR_KIND, e3.expr_kind());
+  EXPECT_FALSE(e3.sort().is_bool());
+  EXPECT_FALSE(e3.sort().is_int());
+  EXPECT_FALSE(e3.sort().is_real());
+  EXPECT_TRUE(e3.sort().is_bv());
+  EXPECT_FALSE(e3.sort().is_array());
+  EXPECT_FALSE(e3.sort().is_func());
+  EXPECT_EQ(sizeof(long) * 8, e3.sort().bv_size());
+}
+
+TEST(SmtTest, Distinct)
+{
+  const ExprPtr<long> e0_ptr(literal<long>(42L));
+  const ExprPtr<long> e1_ptr(literal<long>(7L));
+  const ExprPtr<long> e2_ptr(any<long>("x"));
+
+  ExprPtrs<long> operand_ptrs(3);
+  operand_ptrs.push_back(e0_ptr);
+  operand_ptrs.push_back(e1_ptr);
+  operand_ptrs.push_back(e2_ptr);
+
+  ExprPtr<sort::Bool> e3_ptr(distinct(std::move(operand_ptrs)));
+
+  const BuiltinNaryExpr<NEQ, long, sort::Bool>& e3 =
+    static_cast<const BuiltinNaryExpr<NEQ, long, sort::Bool>&>(*e3_ptr);
+  EXPECT_EQ(3, e3.size());
+  EXPECT_EQ(NARY_EXPR_KIND, e3.expr_kind());
+  EXPECT_TRUE(e3.sort().is_bool());
+  EXPECT_FALSE(e3.sort().is_int());
+  EXPECT_FALSE(e3.sort().is_real());
+  EXPECT_FALSE(e3.sort().is_bv());
+  EXPECT_FALSE(e3.sort().is_array());
+  EXPECT_FALSE(e3.sort().is_func());
+}
+
 TEST(SmtTest, ConstArrayExpr)
 {
   const ExprPtr<sort::Int> init_ptr(literal<sort::Int>(7));

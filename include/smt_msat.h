@@ -460,6 +460,35 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     return OK;
   }
 
+  virtual Error __encode_builtin(
+    Opcode opcode,
+    const Sort& sort,
+    const UnsafeExprPtrs& ptrs) override
+  {
+    if (opcode == NEQ) {
+      // pair-wise disequality, formula size O(N^2)
+      const Sort& bool_sort = internal::sort<sort::Bool>();
+      msat_term distinct_term = msat_make_true(m_env);
+      assert(!MSAT_ERROR_TERM(distinct_term));
+      for (UnsafeExprPtrs::const_iterator outer = ptrs.cbegin();
+           outer != ptrs.cend(); outer++) {
+
+        for (UnsafeExprPtrs::const_iterator inner = outer + 1;
+             inner != ptrs.cend(); inner++) {
+
+          encode_builtin(NEQ, bool_sort, *outer, *inner);
+          distinct_term = msat_make_and(m_env, distinct_term, m_term);
+          assert(!MSAT_ERROR_TERM(distinct_term));
+        }
+
+      }
+      m_term = distinct_term;
+      return OK;
+    } else {
+      return UNSUPPORT_ERROR;
+    }
+  }
+
   virtual void __push() override
   {
     msat_push_backtrack_point(m_env);

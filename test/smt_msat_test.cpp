@@ -1093,3 +1093,72 @@ TEST(SmtMsatTest, LogicalImplication)
   char *str = msat_term_repr(t0);
   EXPECT_EQ("(`or` y (`not` x))", std::string(str));
 }
+
+TEST(SmtMsatTest, Distinct)
+{
+  MsatSolver s;
+
+  const ExprPtr<long> x = any<long>("x");
+  const ExprPtr<long> y = any<long>("y");
+  const ExprPtr<long> z = any<long>("z");
+  const ExprPtr<long> w = any<long>("w");
+
+  ExprPtrs<long> operand_ptrs(3);
+  operand_ptrs.push_back(x);
+  operand_ptrs.push_back(y);
+  operand_ptrs.push_back(z);
+
+  ExprPtr<sort::Bool> d(distinct(std::move(operand_ptrs)));
+
+  d->encode(s);
+  char *str = msat_term_repr(s.term());
+  EXPECT_EQ("(`and` (`and` (`not` (`=_<BitVec, 64, >` x y))"
+            " (`not` (`=_<BitVec, 64, >` x z)))"
+            " (`not` (`=_<BitVec, 64, >` y z)))", std::string(str));
+
+  s.add(d);
+
+  EXPECT_EQ(sat, s.check());
+
+  s.push();
+  {
+    s.add(x == y);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == z);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(y == z);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == w);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(y == w);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(z == w);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+}

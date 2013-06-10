@@ -68,6 +68,16 @@ Error Solver::encode_builtin(
 Error Solver::encode_builtin(
   Opcode opcode,
   const Sort& sort,
+  const UnsafeExprPtrs& ptrs)
+{
+  assert(!ptrs.empty());
+
+  return __encode_builtin(opcode, sort, ptrs);
+}
+
+Error Solver::encode_builtin(
+  Opcode opcode,
+  const Sort& sort,
   UnsafeExprPtr lptr,
   UnsafeExprPtr rptr)
 {

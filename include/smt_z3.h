@@ -392,6 +392,37 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     return OK;
   }
 
+  virtual Error __encode_builtin(
+    Opcode opcode,
+    const Sort& sort,
+    const UnsafeExprPtrs& ptrs) override
+  {
+    if (opcode == NEQ) {
+      // SMT-LIB 2.0 distinct variadic function, formula size O(N)
+      size_t i = 0, ptrs_size = ptrs.size();
+      Z3_ast asts[ptrs_size];
+      for (const UnsafeExprPtr ptr : ptrs) {
+        ptr->encode(*this);
+        asts[i] = m_z3_expr;
+        Z3_inc_ref(m_z3_context, asts[i]);
+
+        assert(i < ptrs_size);
+        i++;
+      }
+
+      m_z3_expr = z3::expr(m_z3_context,
+        Z3_mk_distinct(m_z3_context, ptrs_size, asts));
+
+      for (i = 0; i < ptrs_size; i++) {
+        Z3_dec_ref(m_z3_context, asts[i]);
+      }
+    } else {
+      return UNSUPPORT_ERROR;
+    }
+
+    return OK;
+  }
+
   virtual void __push() override
   {
     m_z3_solver.push();

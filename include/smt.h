@@ -7,6 +7,7 @@
 
 #include <tuple>
 #include <array>
+#include <vector>
 #include <string>
 #include <memory>
 #include <cassert>
@@ -95,6 +96,7 @@ enum ExprKind : unsigned
   LITERAL_EXPR_KIND,
   UNARY_EXPR_KIND,
   BINARY_EXPR_KIND,
+  NARY_EXPR_KIND,
   CONST_ARRAY_EXPR_KIND,
   ARRAY_SELECT_EXPR_KIND,
   ARRAY_STORE_EXPR_KIND,
@@ -406,6 +408,7 @@ public:
 
 class UnsafeExpr;
 typedef std::shared_ptr<const UnsafeExpr> UnsafeExprPtr;
+typedef std::vector<UnsafeExprPtr> UnsafeExprPtrs;
 
 template<typename T>
 class Expr;
@@ -481,6 +484,11 @@ private:
     UnsafeExprPtr lptr,
     UnsafeExprPtr rptr) = 0;
 
+  virtual Error __encode_builtin(
+    Opcode opcode,
+    const Sort& sort,
+    const UnsafeExprPtrs& ptrs) = 0;
+
   virtual void __push() = 0;
   virtual void __pop() = 0;
   virtual Error __add(ExprPtr<sort::Bool> condition) = 0;
@@ -518,6 +526,11 @@ public:
     const Sort& sort,
     UnsafeExprPtr lptr,
     UnsafeExprPtr rptr);
+
+  Error encode_builtin(
+    Opcode opcode,
+    const Sort& sort,
+    const UnsafeExprPtrs& ptrs);
 
   void push();
 
@@ -860,6 +873,88 @@ public:
     return m_roperand_ptr;
   }
 };
+
+template<typename T>
+class ExprPtrs
+{
+private:
+  template<Opcode opcode, typename U, typename V>
+  friend class BuiltinNaryExpr;
+
+  UnsafeExprPtrs m_ptrs;
+
+public:
+  ExprPtrs(size_t count)
+  : m_ptrs()
+  {
+    m_ptrs.reserve(count);
+  }
+
+  ExprPtrs(ExprPtrs&& other)
+  : m_ptrs(std::move(other.m_ptrs)) {}
+
+  void push_back(ExprPtr<T> ptr)
+  {
+    m_ptrs.push_back(ptr);
+  }
+
+  size_t size() const
+  {
+    return m_ptrs.size();
+  }
+
+  ExprPtr<T> at(size_t pos) const
+  {
+    return std::dynamic_pointer_cast<const Expr<T>>(m_ptrs.at(pos));
+  }
+};
+
+template<Opcode opcode, typename T, typename U = T>
+class BuiltinNaryExpr : public Expr<U>
+{
+private:
+  const UnsafeExprPtrs m_operand_ptrs;
+
+  virtual Error __encode(Solver& solver) const override
+  {
+    return solver.encode_builtin(opcode, UnsafeExpr::sort(),
+      m_operand_ptrs);
+  }
+
+public:
+  // There must be at least one operand
+  BuiltinNaryExpr(ExprPtrs<T>&& operand_ptrs)
+  : Expr<U>(NARY_EXPR_KIND),
+    m_operand_ptrs(std::move(operand_ptrs.m_ptrs))
+  {
+    assert(!m_operand_ptrs.empty());
+  }
+
+  // There must be at least one operand
+  BuiltinNaryExpr(const ExprPtrs<T>& operand_ptrs)
+  : Expr<U>(NARY_EXPR_KIND),
+    m_operand_ptrs(operand_ptrs.m_ptrs)
+  {
+    assert(!m_operand_ptrs.empty());
+  }
+
+  size_t size() const
+  {
+    return m_operand_ptrs.size();
+  }
+
+  ExprPtr<T> operand_ptr(size_t pos) const
+  {
+    return std::dynamic_pointer_cast<const Expr<T>>(m_operand_ptrs.at(pos));
+  }
+};
+
+template<typename T>
+ExprPtr<sort::Bool> distinct(ExprPtrs<T>&& ptrs)
+{
+  return ExprPtr<sort::Bool>(new BuiltinNaryExpr<NEQ, T, sort::Bool>(
+    std::move(ptrs)));
+}
 
 template<typename Domain, typename Range>
 class ConstArrayExpr : public Expr<sort::Array<Domain, Range>>
