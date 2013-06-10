@@ -26,7 +26,7 @@ AX_CXX_COMPILE_STDCXX_11([noext])
 AC_PROG_LIBTOOL
 
 # Work around for internal/gtest-port.h dependency on tr1/tuple
-AC_CHECK_DEFINED(__APPLE__, )
+AC_CHECK_DEFINED(__APPLE__, [CXXFLAGS="$CXXFLAGS -DGTEST_USE_OWN_TR1_TUPLE=1"])
 
 # If we compile with clang++, we'll use LLVM's C++11 standard library
 AC_COMPILE_IFELSE(
