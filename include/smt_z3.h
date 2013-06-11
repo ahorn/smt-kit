@@ -21,7 +21,7 @@ private:
   z3::expr m_z3_expr;
 
   template<typename T>
-  Error nocast_encode_builtin(
+  Error nocast_encode_literal(
      const Sort& sort,
      T literal)
   {
@@ -41,31 +41,31 @@ private:
   }
 
   template<typename T>
-  Error cast_encode_builtin(
+  Error cast_encode_literal(
      const Sort& sort,
      T literal)
   {
     if (std::is_signed<T>::value) {
-      return nocast_encode_builtin<long long>(sort, literal);
+      return nocast_encode_literal<long long>(sort, literal);
     } else {
-      return nocast_encode_builtin<unsigned long long>(sort, literal);
+      return nocast_encode_literal<unsigned long long>(sort, literal);
     }
   }
 
 #define SMT_Z3_NOCAST_ENCODE_BUILTIN_LITERAL(type)\
-  virtual Error __encode_builtin(                 \
+  virtual Error __encode_literal(                 \
      const Sort& sort,                            \
      type literal) override                       \
   {                                               \
-    return nocast_encode_builtin(sort, literal);  \
+    return nocast_encode_literal(sort, literal);  \
   }                                               \
 
 #define SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(type)  \
-  virtual Error __encode_builtin(                 \
+  virtual Error __encode_literal(                 \
      const Sort& sort,                            \
      type literal) override                       \
   {                                               \
-    return cast_encode_builtin(sort, literal);    \
+    return cast_encode_literal(sort, literal);    \
   }                                               \
 
 SMT_Z3_NOCAST_ENCODE_BUILTIN_LITERAL(bool)
@@ -257,7 +257,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     return OK;
   }
 
-  virtual Error __encode_builtin(
+  virtual Error __encode_unary(
     Opcode opcode,
     const Sort& sort,
     UnsafeExprPtr ptr) override
@@ -283,7 +283,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     return OK;
   }
 
-  virtual Error __encode_builtin(
+  virtual Error __encode_binary(
     Opcode opcode,
     const Sort& sort,
     UnsafeExprPtr lptr,
@@ -392,7 +392,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     return OK;
   }
 
-  virtual Error __encode_builtin(
+  virtual Error __encode_nary(
     Opcode opcode,
     const Sort& sort,
     const UnsafeExprPtrs& ptrs) override

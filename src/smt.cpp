@@ -55,27 +55,17 @@ Error Solver::encode_array_store(
   return __encode_array_store(array_ptr, index_ptr, value_ptr);
 }
 
-Error Solver::encode_builtin(
+Error Solver::encode_unary(
   Opcode opcode,
   const Sort& sort,
   UnsafeExprPtr expr_ptr)
 {
   assert(expr_ptr != nullptr);
 
-  return __encode_builtin(opcode, sort, expr_ptr);
+  return __encode_unary(opcode, sort, expr_ptr);
 }
 
-Error Solver::encode_builtin(
-  Opcode opcode,
-  const Sort& sort,
-  const UnsafeExprPtrs& ptrs)
-{
-  assert(!ptrs.empty());
-
-  return __encode_builtin(opcode, sort, ptrs);
-}
-
-Error Solver::encode_builtin(
+Error Solver::encode_binary(
   Opcode opcode,
   const Sort& sort,
   UnsafeExprPtr lptr,
@@ -85,7 +75,17 @@ Error Solver::encode_builtin(
   assert(rptr != nullptr);
   assert(&lptr->sort() == &rptr->sort());
 
-  return __encode_builtin(opcode, sort, lptr, rptr);
+  return __encode_binary(opcode, sort, lptr, rptr);
+}
+
+Error Solver::encode_nary(
+  Opcode opcode,
+  const Sort& sort,
+  const UnsafeExprPtrs& ptrs)
+{
+  assert(!ptrs.empty());
+
+  return __encode_nary(opcode, sort, ptrs);
 }
 
 void Solver::reset()
@@ -115,7 +115,7 @@ CheckResult Solver::check()
 
 ExprPtr<sort::Bool> implies(ExprPtr<sort::Bool> lptr, ExprPtr<sort::Bool> rptr)
 {
-  return ExprPtr<sort::Bool>(new BuiltinBinaryExpr<IMP, sort::Bool>(lptr, rptr));
+  return ExprPtr<sort::Bool>(new BinaryExpr<IMP, sort::Bool>(lptr, rptr));
 }
 
 ExprPtr<sort::Bool> Identity<LAND, sort::Bool>::expr_ptr(literal<sort::Bool>(true));

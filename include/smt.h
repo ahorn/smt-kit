@@ -419,7 +419,7 @@ class Solver
 {
 #define SMT_ENCODE_BUILTIN_LITERAL(type)    \
 private:                                    \
-  virtual Error __encode_builtin(           \
+  virtual Error __encode_literal(           \
     const Sort& sort,                       \
     type literal)                           \
   {                                         \
@@ -427,11 +427,11 @@ private:                                    \
   }                                         \
                                             \
 public:                                     \
-  Error encode_builtin(                     \
+  Error encode_literal(                     \
     const Sort& sort,                       \
     type literal)                           \
   {                                         \
-    return __encode_builtin(sort, literal); \
+    return __encode_literal(sort, literal); \
   }                                         \
 
 SMT_ENCODE_BUILTIN_LITERAL(bool)
@@ -472,18 +472,18 @@ private:
     UnsafeExprPtr index_ptr,
     UnsafeExprPtr value_ptr) = 0;
 
-  virtual Error __encode_builtin(
+  virtual Error __encode_unary(
     Opcode opcode,
     const Sort& sort,
     UnsafeExprPtr expr_ptr) = 0;
 
-  virtual Error __encode_builtin(
+  virtual Error __encode_binary(
     Opcode opcode,
     const Sort& sort,
     UnsafeExprPtr lptr,
     UnsafeExprPtr rptr) = 0;
 
-  virtual Error __encode_builtin(
+  virtual Error __encode_nary(
     Opcode opcode,
     const Sort& sort,
     const UnsafeExprPtrs& ptrs) = 0;
@@ -516,18 +516,18 @@ public:
     UnsafeExprPtr index_ptr,
     UnsafeExprPtr value_ptr);
 
-  Error encode_builtin(
+  Error encode_unary(
     Opcode opcode,
     const Sort& sort,
     UnsafeExprPtr expr_ptr);
 
-  Error encode_builtin(
+  Error encode_binary(
     Opcode opcode,
     const Sort& sort,
     UnsafeExprPtr lptr,
     UnsafeExprPtr rptr);
 
-  Error encode_builtin(
+  Error encode_nary(
     Opcode opcode,
     const Sort& sort,
     const UnsafeExprPtrs& ptrs);
@@ -604,7 +604,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_builtin(UnsafeExpr::sort(), m_literal);
+    return solver.encode_literal(UnsafeExpr::sort(), m_literal);
   }
 
 public:
@@ -621,12 +621,12 @@ public:
 
 template<typename T, typename U = T,
   typename Enable = typename std::enable_if<internal::IsPrimitive<T>::value>::type>
-class BuiltinLiteralExpr : public UnsafeLiteralExpr<U>, public Expr<T>
+class LiteralExpr : public UnsafeLiteralExpr<U>, public Expr<T>
 {
 public:
   using UnsafeLiteralExpr<U>::literal;
 
-  BuiltinLiteralExpr(U literal)
+  LiteralExpr(U literal)
   : UnsafeExpr(LITERAL_EXPR_KIND, internal::sort<T>()),
     UnsafeLiteralExpr<U>(internal::sort<T>(), literal),
     Expr<T>(LITERAL_EXPR_KIND) {}
@@ -797,7 +797,7 @@ template<typename T, typename U,
   typename Enable = typename std::enable_if<std::is_integral<U>::value>::type>
 inline ExprPtr<T> literal(const U literal)
 {
-  return ExprPtr<T>(new BuiltinLiteralExpr<T, U>(literal));
+  return ExprPtr<T>(new LiteralExpr<T, U>(literal));
 }
 
 template<typename T>
@@ -871,7 +871,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_builtin(m_opcode, UnsafeExpr::sort(), m_operand_ptr);
+    return solver.encode_unary(m_opcode, UnsafeExpr::sort(), m_operand_ptr);
   }
 
 public:
@@ -889,13 +889,13 @@ public:
 };
 
 template<Opcode opcode, typename T, typename U = T>
-class BuiltinUnaryExpr : public UnsafeUnaryExpr, public Expr<U>
+class UnaryExpr : public UnsafeUnaryExpr, public Expr<U>
 {
 private:
   const ExprPtr<T> m_operand_ptr;
 
 public:
-  BuiltinUnaryExpr(ExprPtr<T> operand_ptr)
+  UnaryExpr(ExprPtr<T> operand_ptr)
   : UnsafeExpr(UNARY_EXPR_KIND, internal::sort<U>()),
     UnsafeUnaryExpr(internal::sort<U>(), opcode, operand_ptr),
     Expr<U>(UNARY_EXPR_KIND),
@@ -916,7 +916,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_builtin(m_opcode, UnsafeExpr::sort(),
+    return solver.encode_binary(m_opcode, UnsafeExpr::sort(),
       m_loperand_ptr, m_roperand_ptr);
   }
 
@@ -938,14 +938,14 @@ public:
 };
 
 template<Opcode opcode, typename T, typename U = T>
-class BuiltinBinaryExpr : public UnsafeBinaryExpr, public Expr<U>
+class BinaryExpr : public UnsafeBinaryExpr, public Expr<U>
 {
 private:
   const ExprPtr<T> m_loperand_ptr;
   const ExprPtr<T> m_roperand_ptr;
 
 public:
-  BuiltinBinaryExpr(ExprPtr<T> loperand_ptr, ExprPtr<T> roperand_ptr)
+  BinaryExpr(ExprPtr<T> loperand_ptr, ExprPtr<T> roperand_ptr)
   : UnsafeExpr(BINARY_EXPR_KIND, internal::sort<U>()),
     UnsafeBinaryExpr(internal::sort<U>(), opcode, loperand_ptr, roperand_ptr),
     Expr<U>(BINARY_EXPR_KIND),
@@ -968,7 +968,7 @@ class ExprPtrs
 {
 private:
   template<Opcode opcode, typename U, typename V>
-  friend class BuiltinNaryExpr;
+  friend class NaryExpr;
 
   UnsafeExprPtrs m_ptrs;
 
@@ -1006,7 +1006,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_builtin(m_opcode, UnsafeExpr::sort(),
+    return solver.encode_nary(m_opcode, UnsafeExpr::sort(),
       m_operand_ptrs);
   }
 
@@ -1045,18 +1045,18 @@ public:
 };
 
 template<Opcode opcode, typename T, typename U = T>
-class BuiltinNaryExpr : public UnsafeNaryExpr, public Expr<U>
+class NaryExpr : public UnsafeNaryExpr, public Expr<U>
 {
 public:
   // There must be at least one operand.
-  BuiltinNaryExpr(ExprPtrs<T>&& operand_ptrs)
+  NaryExpr(ExprPtrs<T>&& operand_ptrs)
   : UnsafeExpr(NARY_EXPR_KIND, internal::sort<U>()),
     UnsafeNaryExpr(internal::sort<U>(), opcode,
       std::move(operand_ptrs.m_ptrs)),
     Expr<U>(NARY_EXPR_KIND) {}
 
   // There must be at least one operand.
-  BuiltinNaryExpr(const ExprPtrs<T>& operand_ptrs)
+  NaryExpr(const ExprPtrs<T>& operand_ptrs)
   : UnsafeExpr(NARY_EXPR_KIND, internal::sort<U>()),
     UnsafeNaryExpr(internal::sort<U>(), opcode, operand_ptrs.m_ptrs),
     Expr<U>(NARY_EXPR_KIND) {}
@@ -1076,7 +1076,7 @@ public:
 template<typename T>
 ExprPtr<sort::Bool> distinct(ExprPtrs<T>&& ptrs)
 {
-  return ExprPtr<sort::Bool>(new BuiltinNaryExpr<NEQ, T, sort::Bool>(
+  return ExprPtr<sort::Bool>(new NaryExpr<NEQ, T, sort::Bool>(
     std::move(ptrs)));
 }
 
@@ -1270,14 +1270,14 @@ ExprPtr<sort::Array<Domain, Range>> store(
   template<typename T>                                                     \
   inline ExprPtr<T> operator op(ExprPtr<T> ptr)                            \
   {                                                                        \
-    return ExprPtr<T>(new BuiltinUnaryExpr<opcode, T>(ptr));               \
+    return ExprPtr<T>(new UnaryExpr<opcode, T>(ptr));                      \
   }                                                                        \
 
 #define SMT_BUILTIN_BINARY_OP(op, opcode)                                  \
   template<typename T>                                                     \
   inline ExprPtr<T> operator op(ExprPtr<T> lptr, ExprPtr<T> rptr)          \
   {                                                                        \
-    return ExprPtr<T>(new BuiltinBinaryExpr<opcode, T>(lptr, rptr));       \
+    return ExprPtr<T>(new BinaryExpr<opcode, T>(lptr, rptr));              \
   }                                                                        \
   template<typename T, typename U>                                         \
   inline ExprPtr<T> operator op(ExprPtr<T> lptr, const U rarg)             \
@@ -1295,7 +1295,7 @@ ExprPtr<sort::Array<Domain, Range>> store(
   inline ExprPtr<sort::Bool> operator op(ExprPtr<T> lptr, ExprPtr<T> rptr) \
   {                                                                        \
     return ExprPtr<sort::Bool>(                                            \
-      new BuiltinBinaryExpr<opcode, T, sort::Bool>(lptr, rptr));           \
+      new BinaryExpr<opcode, T, sort::Bool>(lptr, rptr));                  \
   }                                                                        \
   template<typename T, typename U>                                         \
   inline ExprPtr<sort::Bool> operator op(ExprPtr<T> lptr, const U rarg)    \
@@ -1327,14 +1327,14 @@ SMT_BUILTIN_BINARY_REL(==, EQL)
   template<typename T>                                                     \
   inline ExprPtr<T> operator op(ExprPtr<T> ptr)                            \
   {                                                                        \
-    return ExprPtr<T>(new BuiltinUnaryExpr<opcode, T>(ptr));               \
+    return ExprPtr<T>(new UnaryExpr<opcode, T>(ptr));                      \
   }                                                                        \
 
 #define SMT_BUILTIN_BV_BINARY_OP(op, opcode)                               \
   template<typename T>                                                     \
   inline ExprPtr<T> operator op(ExprPtr<T> lptr, ExprPtr<T> rptr)          \
   {                                                                        \
-    return ExprPtr<T>(new BuiltinBinaryExpr<opcode, T>(lptr, rptr));       \
+    return ExprPtr<T>(new BinaryExpr<opcode, T>(lptr, rptr));              \
   }                                                                        \
   template<typename T>                                                     \
   inline ExprPtr<T> operator op(ExprPtr<T> lptr, const T rarg)             \
@@ -1353,29 +1353,29 @@ SMT_BUILTIN_BV_BINARY_OP(&, AND)
 SMT_BUILTIN_BV_BINARY_OP(|, OR)
 SMT_BUILTIN_BV_BINARY_OP(^, XOR)
 
-#define SMT_BUILTIN_BOOL_UNARY_OP(op, opcode)                                  \
-  inline ExprPtr<sort::Bool> operator op(ExprPtr<sort::Bool> ptr)              \
-  {                                                                            \
-    return ExprPtr<sort::Bool>(new BuiltinUnaryExpr<opcode, sort::Bool>(ptr)); \
-  }                                                                            \
+#define SMT_BUILTIN_BOOL_UNARY_OP(op, opcode)                              \
+  inline ExprPtr<sort::Bool> operator op(ExprPtr<sort::Bool> ptr)          \
+  {                                                                        \
+    return ExprPtr<sort::Bool>(new UnaryExpr<opcode, sort::Bool>(ptr));    \
+  }                                                                        \
 
-#define SMT_BUILTIN_BOOL_BINARY_OP(op, opcode)                                 \
-  inline ExprPtr<sort::Bool> operator op(ExprPtr<sort::Bool> lptr,             \
-    ExprPtr<sort::Bool> rptr)                                                  \
-  {                                                                            \
-    return ExprPtr<sort::Bool>(                                                \
-      new BuiltinBinaryExpr<opcode, sort::Bool>(lptr, rptr));                  \
-  }                                                                            \
-  inline ExprPtr<sort::Bool> operator op(ExprPtr<sort::Bool> lptr,             \
-    const bool rarg)                                                           \
-  {                                                                            \
-    return lptr op literal<sort::Bool>(rarg);                                  \
-  }                                                                            \
-  inline ExprPtr<sort::Bool> operator op(const bool larg,                      \
-    ExprPtr<sort::Bool> rptr)                                                  \
-  {                                                                            \
-    return literal<sort::Bool>(larg) op rptr;                                  \
-  }                                                                            \
+#define SMT_BUILTIN_BOOL_BINARY_OP(op, opcode)                             \
+  inline ExprPtr<sort::Bool> operator op(ExprPtr<sort::Bool> lptr,         \
+    ExprPtr<sort::Bool> rptr)                                              \
+  {                                                                        \
+    return ExprPtr<sort::Bool>(                                            \
+      new BinaryExpr<opcode, sort::Bool>(lptr, rptr));                     \
+  }                                                                        \
+  inline ExprPtr<sort::Bool> operator op(ExprPtr<sort::Bool> lptr,         \
+    const bool rarg)                                                       \
+  {                                                                        \
+    return lptr op literal<sort::Bool>(rarg);                              \
+  }                                                                        \
+  inline ExprPtr<sort::Bool> operator op(const bool larg,                  \
+    ExprPtr<sort::Bool> rptr)                                              \
+  {                                                                        \
+    return literal<sort::Bool>(larg) op rptr;                              \
+  }                                                                        \
 
 SMT_BUILTIN_BOOL_UNARY_OP(!, LNOT)
 

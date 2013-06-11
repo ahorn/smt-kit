@@ -86,7 +86,7 @@ private:
   }
 
 #define SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(type) \
-  virtual Error __encode_builtin(                  \
+  virtual Error __encode_literal(                  \
      const Sort& sort,                             \
      type literal) override                        \
   {                                                \
@@ -262,7 +262,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     return OK;
   }
 
-  virtual Error __encode_builtin(
+  virtual Error __encode_unary(
     Opcode opcode,
     const Sort& sort,
     UnsafeExprPtr ptr) override
@@ -293,7 +293,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     return OK;
   }
 
-  virtual Error __encode_builtin(
+  virtual Error __encode_binary(
     Opcode opcode,
     const Sort& sort,
     UnsafeExprPtr lptr,
@@ -460,7 +460,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     return OK;
   }
 
-  virtual Error __encode_builtin(
+  virtual Error __encode_nary(
     Opcode opcode,
     const Sort& sort,
     const UnsafeExprPtrs& ptrs) override
@@ -476,7 +476,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
         for (UnsafeExprPtrs::const_iterator inner = outer + 1;
              inner != ptrs.cend(); inner++) {
 
-          encode_builtin(NEQ, bool_sort, *outer, *inner);
+          encode_binary(NEQ, bool_sort, *outer, *inner);
           distinct_term = msat_make_and(m_env, distinct_term, m_term);
           assert(!MSAT_ERROR_TERM(distinct_term));
         }
