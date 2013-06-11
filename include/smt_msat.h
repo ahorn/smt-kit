@@ -504,7 +504,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     msat_pop_backtrack_point(m_env);
   }
 
-  virtual Error __add(ExprPtr<sort::Bool> condition) override
+  virtual Error __unsafe_add(UnsafeExprPtr condition) override
   {
     const Error err = condition->encode(*this);
     if (err) {
@@ -513,6 +513,11 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const int status = msat_assert_formula(m_env, m_term);
     assert(status == 0);
     return OK;
+  }
+
+  virtual Error __add(ExprPtr<sort::Bool> condition) override
+  {
+    return __unsafe_add(condition);
   }
 
   virtual CheckResult __check() override

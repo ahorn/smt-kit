@@ -7,6 +7,56 @@
 namespace smt
 {
 
+UnsafeExprPtr constant(const UnsafeDecl& decl)
+{
+  return UnsafeExprPtr(new UnsafeConstantExpr(decl));
+}
+
+UnsafeExprPtr apply(UnsafeDecl func_decl, UnsafeExprPtr arg_ptr)
+{
+  return UnsafeExprPtr(new UnsafeFuncAppExpr<1>(func_decl, { arg_ptr }));
+}
+
+UnsafeExprPtr apply(
+  UnsafeDecl func_decl,
+  UnsafeExprPtr larg_ptr,
+  UnsafeExprPtr rarg_ptr)
+{
+  return UnsafeExprPtr(new UnsafeFuncAppExpr<2>(func_decl,
+    { larg_ptr, rarg_ptr }));
+}
+
+UnsafeExprPtr distinct(UnsafeExprPtrs&& ptrs)
+{
+  return UnsafeExprPtr(new UnsafeNaryExpr(
+    internal::sort<sort::Bool>(), NEQ, std::move(ptrs)));
+}
+
+UnsafeExprPtr select(UnsafeExprPtr array_ptr, UnsafeExprPtr index_ptr)
+{
+  return UnsafeExprPtr(new UnsafeArraySelectExpr(array_ptr, index_ptr));
+}
+
+UnsafeExprPtr implies(UnsafeExprPtr lptr, UnsafeExprPtr rptr)
+{
+  return UnsafeExprPtr(new UnsafeBinaryExpr(
+    internal::sort<sort::Bool>(), IMP, lptr, rptr));
+}
+
+ExprPtr<sort::Bool> implies(ExprPtr<sort::Bool> lptr, ExprPtr<sort::Bool> rptr)
+{
+  return ExprPtr<sort::Bool>(new BinaryExpr<IMP, sort::Bool>(lptr, rptr));
+}
+
+UnsafeExprPtr store(
+  UnsafeExprPtr array_ptr,
+  UnsafeExprPtr index_ptr,
+  UnsafeExprPtr value_ptr)
+{
+  return UnsafeExprPtr(new UnsafeArrayStoreExpr(
+    array_ptr, index_ptr, value_ptr));
+}
+
 Error Solver::encode_constant(
   const UnsafeDecl& decl)
 {
@@ -103,6 +153,11 @@ void Solver::pop()
   return __pop();
 }
 
+Error Solver::unsafe_add(UnsafeExprPtr condition)
+{
+  return __unsafe_add(condition);
+}
+
 Error Solver::add(ExprPtr<sort::Bool> condition)
 {
   return __add(condition);
@@ -111,11 +166,6 @@ Error Solver::add(ExprPtr<sort::Bool> condition)
 CheckResult Solver::check()
 {
   return __check();
-}
-
-ExprPtr<sort::Bool> implies(ExprPtr<sort::Bool> lptr, ExprPtr<sort::Bool> rptr)
-{
-  return ExprPtr<sort::Bool>(new BinaryExpr<IMP, sort::Bool>(lptr, rptr));
 }
 
 ExprPtr<sort::Bool> Identity<LAND, sort::Bool>::expr_ptr(literal<sort::Bool>(true));

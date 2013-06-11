@@ -946,3 +946,64 @@ TEST(SmtTest, Identity)
     static_cast<const LiteralExpr<sort::Bool, bool>&>(*ttexpr_ptr);
   EXPECT_TRUE(ttexpr.literal());
 }
+
+TEST(SmtTest, UnsafeExpr)
+{
+  constexpr size_t bv_long_size = sizeof(long) * 8;
+  const Sort& bv_sort = internal::sort<long>();
+  const Sort& func_sort = internal::sort<sort::Func<long, long>>();
+  const UnsafeDecl const_decl("x", bv_sort);
+  const UnsafeDecl func_decl("f", func_sort);
+
+  const UnsafeExprPtr seven_ptr(literal(bv_sort, 7));
+  EXPECT_TRUE(seven_ptr->sort().is_bv());
+  EXPECT_EQ(bv_long_size, seven_ptr->sort().bv_size());
+
+  const UnsafeExprPtr x_ptr(constant(const_decl));
+  EXPECT_TRUE(x_ptr->sort().is_bv());
+  EXPECT_EQ(bv_long_size, x_ptr->sort().bv_size());
+
+  const UnsafeExprPtr app_ptr(apply(func_decl, seven_ptr));
+  EXPECT_TRUE(app_ptr->sort().is_bv());
+  EXPECT_EQ(bv_long_size, app_ptr->sort().bv_size());
+
+  UnsafeExprPtrs ptrs;
+  ptrs.push_back(seven_ptr);
+  ptrs.push_back(x_ptr);
+  ptrs.push_back(app_ptr);
+
+  const UnsafeExprPtr distinct_ptr(distinct(std::move(ptrs)));
+  EXPECT_TRUE(distinct_ptr->sort().is_bool());
+
+  const Sort& array_sort = internal::sort<sort::Array<size_t, long>>();
+  const Sort& index_sort = internal::sort<size_t>();
+  const UnsafeDecl array_decl("array", array_sort);
+  const UnsafeDecl index_decl("index", index_sort);
+  const UnsafeExprPtr array_ptr(constant(array_decl));
+  EXPECT_TRUE(array_ptr->sort().is_array());
+  EXPECT_TRUE(array_ptr->sort().sorts(0).is_bv());
+  EXPECT_TRUE(array_ptr->sort().sorts(1).is_bv());
+  EXPECT_EQ(sizeof(size_t) * 8, array_ptr->sort().sorts(0).bv_size());
+  EXPECT_EQ(bv_long_size, array_ptr->sort().sorts(1).bv_size());
+
+  const UnsafeExprPtr index_ptr(constant(index_decl));
+  EXPECT_TRUE(index_ptr->sort().is_bv());
+  EXPECT_EQ(sizeof(size_t) * 8, index_ptr->sort().bv_size());
+
+  const UnsafeExprPtr store_ptr(store(array_ptr, index_ptr, app_ptr));
+  EXPECT_TRUE(store_ptr->sort().is_array());
+  EXPECT_TRUE(store_ptr->sort().sorts(0).is_bv());
+  EXPECT_TRUE(store_ptr->sort().sorts(1).is_bv());
+  EXPECT_EQ(sizeof(size_t) * 8, store_ptr->sort().sorts(0).bv_size());
+  EXPECT_EQ(bv_long_size, store_ptr->sort().sorts(1).bv_size());
+
+  const UnsafeExprPtr select_ptr(select(store_ptr, index_ptr));
+  EXPECT_TRUE(select_ptr->sort().is_bv());
+  EXPECT_EQ(bv_long_size, select_ptr->sort().bv_size());
+
+  const UnsafeExprPtr eq_ptr(select_ptr == x_ptr);
+  EXPECT_TRUE(eq_ptr->sort().is_bool());
+
+  const UnsafeExprPtr and_ptr(eq_ptr && distinct_ptr);
+  EXPECT_TRUE(and_ptr->sort().is_bool());
+}

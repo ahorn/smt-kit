@@ -917,3 +917,44 @@ TEST(SmtZ3Test, Reset)
   s.reset();
   EXPECT_EQ(sat, s.check());
 }
+
+TEST(SmtZ3Test, UnsafeAdd)
+{
+  Z3Solver s;
+
+  const Sort& bv_sort = internal::sort<int64_t>();
+  const Sort& func_sort = internal::sort<sort::Func<int64_t, int64_t>>();
+  const UnsafeDecl const_decl("x", bv_sort);
+  const UnsafeDecl func_decl("f", func_sort);
+  const UnsafeExprPtr seven_ptr(literal(bv_sort, 7));
+  const UnsafeExprPtr x_ptr(constant(const_decl));
+  const UnsafeExprPtr app_ptr(apply(func_decl, seven_ptr));
+
+  UnsafeExprPtrs ptrs;
+  ptrs.push_back(seven_ptr);
+  ptrs.push_back(x_ptr);
+  ptrs.push_back(app_ptr);
+
+  const UnsafeExprPtr distinct_ptr(distinct(std::move(ptrs)));
+
+  const Sort& array_sort = internal::sort<sort::Array<uint32_t, int64_t>>();
+  const Sort& index_sort = internal::sort<uint32_t>();
+  const UnsafeDecl array_decl("array", array_sort);
+  const UnsafeDecl index_decl("index", index_sort);
+  const UnsafeExprPtr array_ptr(constant(array_decl));
+  const UnsafeExprPtr index_ptr(constant(index_decl));
+  const UnsafeExprPtr store_ptr(store(array_ptr, index_ptr, app_ptr));
+  const UnsafeExprPtr select_ptr(select(store_ptr, index_ptr));
+
+  const UnsafeExprPtr eq_ptr(select_ptr == x_ptr);
+  const UnsafeExprPtr and_ptr(eq_ptr && distinct_ptr);
+
+  s.unsafe_add(and_ptr);
+  EXPECT_EQ(unsat, s.check());
+
+  std::stringstream out;
+  out << s.expr();
+  EXPECT_EQ("(let ((a!1 "
+               "(= (select (store array index (f #x0000000000000007)) index) x)))\n  "
+           "(and a!1 (distinct #x0000000000000007 x (f #x0000000000000007))))", out.str());
+}

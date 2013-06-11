@@ -438,7 +438,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     m_z3_solver.pop();
   }
 
-  virtual Error __add(ExprPtr<sort::Bool> condition) override
+  virtual Error __unsafe_add(UnsafeExprPtr condition) override
   {
     const Error err = condition->encode(*this);
     if (err) {
@@ -446,6 +446,11 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     }
     m_z3_solver.add(expr());
     return OK;
+  }
+
+  virtual Error __add(ExprPtr<sort::Bool> condition) override
+  {
+    return __unsafe_add(condition);
   }
 
   virtual CheckResult __check() override
