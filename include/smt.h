@@ -141,7 +141,7 @@ public:
     m_is_array(false),
     m_is_func(false),
     m_is_tuple(false),
-    m_sorts{},
+    m_sorts{ nullptr },
     m_sorts_size(0) {}
 
   template<size_t N>
@@ -175,7 +175,7 @@ public:
     m_is_array(other.m_is_array),
     m_is_tuple(other.m_is_tuple),
     m_sorts(std::move(other.m_sorts)),
-    m_sorts_size(other.m_sorts_size) {} 
+    m_sorts_size(other.m_sorts_size) {}
 
   constexpr bool is_bool()   const { return m_is_bool;   }
   constexpr bool is_int()    const { return m_is_int;    }
@@ -193,6 +193,23 @@ public:
   }
 
   constexpr size_t sorts_size() const { return m_sorts_size; }
+
+  bool operator==(const Sort& other) const
+  {
+    // Most often we expect to encounter statically allocated sorts.
+    return this == &other ? true :
+      m_is_bool    == other.m_is_bool   &&
+      m_is_int     == other.m_is_int    &&
+      m_is_real    == other.m_is_real   &&
+      m_is_bv      == other.m_is_bv     &&
+      m_is_signed  == other.m_is_signed &&
+      m_bv_size    == other.m_bv_size   &&
+      m_is_func    == other.m_is_func   &&
+      m_is_array   == other.m_is_array  &&
+      m_is_tuple   == other.m_is_tuple  &&
+      m_sorts      == other.m_sorts     &&
+      m_sorts_size == other.m_sorts_size;
+  }
 };
 
 namespace internal {

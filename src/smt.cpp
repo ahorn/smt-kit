@@ -139,7 +139,7 @@ Error Solver::encode_binary(
 {
   assert(lptr != nullptr);
   assert(rptr != nullptr);
-  assert(&lptr->sort() == &rptr->sort());
+  assert(lptr->sort() == rptr->sort());
 
   return __encode_binary(opcode, sort, lptr, rptr);
 }

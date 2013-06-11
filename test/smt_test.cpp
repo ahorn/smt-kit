@@ -123,15 +123,19 @@ TEST(SmtTest, Ok)
   STATIC_EXPECT_TRUE(OK == false);
 }
 
+// Sort::operator==(const Sort&) is not constexpr because it causes a g++ 4.8 bug
 TEST(SmtTest, BvSort)
 {
   const Sort& sbv_1 = bv_sort(true, 1);
   const Sort& ubv_1 = bv_sort(false, 1);
   const Sort& ubv_2 = bv_sort(false, 2);
+  const Sort& ubv_16 = bv_sort(false, 16);
 
   EXPECT_NE(&sbv_1, &ubv_1);
   EXPECT_NE(&sbv_1, &ubv_2);
   EXPECT_NE(&ubv_1, &ubv_2);
+  EXPECT_NE(&ubv_16, &internal::sort<uint16_t>());
+  EXPECT_EQ(ubv_16, internal::sort<uint16_t>());
 
   EXPECT_EQ(&sbv_1, &bv_sort(true, 1));
   EXPECT_EQ(&ubv_1, &bv_sort(false, 1));
