@@ -7,6 +7,22 @@
 namespace smt
 {
 
+static constexpr size_t MAX_BV_SIZE = 1024;
+static const Sort* bv_sorts[2][MAX_BV_SIZE] = { nullptr };
+
+const Sort& bv_sort(bool is_signed, size_t size)
+{
+  assert(size < MAX_BV_SIZE);
+
+  if (bv_sorts[is_signed][size] == nullptr) {
+    bv_sorts[is_signed][size] = new Sort(
+      false, false, false,
+      true, is_signed, size);
+  }
+
+  return *bv_sorts[is_signed][size];
+}
+
 UnsafeExprPtr constant(const UnsafeDecl& decl)
 {
   return UnsafeExprPtr(new UnsafeConstantExpr(decl));

@@ -123,6 +123,20 @@ TEST(SmtTest, Ok)
   STATIC_EXPECT_TRUE(OK == false);
 }
 
+TEST(SmtTest, BvSort)
+{
+  const Sort& sbv_1 = bv_sort(true, 1);
+  const Sort& ubv_1 = bv_sort(false, 1);
+  const Sort& ubv_2 = bv_sort(false, 2);
+
+  EXPECT_NE(&sbv_1, &ubv_1);
+  EXPECT_NE(&sbv_1, &ubv_2);
+  EXPECT_NE(&ubv_1, &ubv_2);
+
+  EXPECT_EQ(&sbv_1, &bv_sort(true, 1));
+  EXPECT_EQ(&ubv_1, &bv_sort(false, 1));
+}
+
 TEST(SmtTest, LiteralExpr)
 {
   const LiteralExpr<long> e0(42L);

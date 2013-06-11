@@ -337,6 +337,9 @@ namespace internal {
   }
 };
 
+// Return dynamically allocated sort, use at own risk
+const Sort& bv_sort(bool is_signed, size_t size);
+
 class UnsafeDecl
 {
 private:
