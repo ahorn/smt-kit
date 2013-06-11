@@ -343,22 +343,21 @@ private:
   const std::string m_symbol;
   const Sort& m_sort;
 
-protected:
-  // sort must be statically allocated
+public:
+  // Allocate sort statically!
   UnsafeDecl(
     const std::string& symbol,
     const Sort& sort)
   : m_symbol(symbol),
     m_sort(sort) {}
 
-  // sort must be statically allocated
+  // Allocate sort statically!
   UnsafeDecl(
     std::string&& symbol,
     const Sort& sort)
   : m_symbol(std::move(symbol)),
     m_sort(sort) {}
 
-public:
   UnsafeDecl(const UnsafeDecl& other)
   : m_symbol(other.m_symbol),
     m_sort(other.m_sort) {}
@@ -553,7 +552,7 @@ private:
   virtual Error __encode(Solver&) const = 0;
 
 protected:
-  // sort must be statically allocated
+  // Allocate sort statically!
   UnsafeExpr(ExprKind expr_kind, const Sort& sort)
   : m_expr_kind(expr_kind), m_sort(sort) {}
 
@@ -578,7 +577,7 @@ public:
 };
 
 template<typename T>
-class Expr : public UnsafeExpr
+class Expr : public virtual UnsafeExpr
 {
 protected:
   Expr(ExprKind expr_kind)
@@ -594,12 +593,11 @@ struct IsBuiltin :
     or std::is_same<sort::Real, T>::value>
 {};
 
-template<typename T, typename U = T,
-  typename Enable = typename std::enable_if<IsBuiltin<T>::value>::type>
-class BuiltinLiteralExpr : public Expr<T>
+template<typename T>
+class UnsafeLiteralExpr : public virtual UnsafeExpr
 {
 private:
-  const U m_literal;
+  const T m_literal;
 
   virtual Error __encode(Solver& solver) const override
   {
@@ -607,21 +605,34 @@ private:
   }
 
 public:
-  BuiltinLiteralExpr(U literal)
-  : Expr<T>(LITERAL_EXPR_KIND),
+  // Allocate sort statically!
+  UnsafeLiteralExpr(const Sort& sort, T literal)
+  : UnsafeExpr(LITERAL_EXPR_KIND, sort),
     m_literal(literal) {}
 
-  const U literal() const
+  const T literal() const
   {
     return m_literal;
   }
 };
 
-template<typename T>
-class ConstantExpr : public Expr<T>
+template<typename T, typename U = T,
+  typename Enable = typename std::enable_if<IsBuiltin<T>::value>::type>
+class BuiltinLiteralExpr : public UnsafeLiteralExpr<U>, public Expr<T>
+{
+public:
+  using UnsafeLiteralExpr<U>::literal;
+
+  BuiltinLiteralExpr(U literal)
+  : UnsafeExpr(LITERAL_EXPR_KIND, internal::sort<T>()),
+    UnsafeLiteralExpr<U>(internal::sort<T>(), literal),
+    Expr<T>(LITERAL_EXPR_KIND) {}
+};
+
+class UnsafeConstantExpr : public virtual UnsafeExpr
 {
 private:
-  const Decl<T> m_decl;
+  const UnsafeDecl m_decl;
 
   virtual Error __encode(Solver& solver) const override
   {
@@ -629,13 +640,23 @@ private:
   }
 
 public:
-  ConstantExpr(const Decl<T>& decl)
-  : Expr<T>(CONSTANT_EXPR_KIND),
+  UnsafeConstantExpr(const UnsafeDecl& decl)
+  : UnsafeExpr(CONSTANT_EXPR_KIND, decl.sort()),
     m_decl(decl) {}
+};
 
-  ConstantExpr(Decl<T>&& decl)
-  : Expr<T>(CONSTANT_EXPR_KIND),
-    m_decl(std::move(decl)) {}
+template<typename T>
+class ConstantExpr : public UnsafeConstantExpr, public Expr<T>
+{
+private:
+  const Decl<T> m_decl;
+
+public:
+  ConstantExpr(const Decl<T>& decl)
+  : UnsafeExpr(CONSTANT_EXPR_KIND, internal::sort<T>()),
+    UnsafeConstantExpr(decl),
+    Expr<T>(CONSTANT_EXPR_KIND),
+    m_decl(decl) {}
 
   const Decl<T>& decl() const
   {
@@ -710,30 +731,51 @@ namespace internal
   }
 }
 
+template<size_t arity>
+class UnsafeFuncAppExpr : public virtual UnsafeExpr
+{
+private:
+  const UnsafeDecl m_func_decl;
+  const std::array<UnsafeExprPtr, arity> m_arg_ptrs;
+
+  virtual Error __encode(Solver& solver) const override
+  {
+    return solver.encode_func_app(m_func_decl, arity, m_arg_ptrs.data());
+  }
+
+public:
+  UnsafeFuncAppExpr(
+    UnsafeDecl func_decl,
+    std::array<UnsafeExprPtr, arity>&& arg_ptrs)
+  : UnsafeExpr(FUNC_APP_EXPR_KIND, func_decl.sort()),
+    m_func_decl(func_decl),
+    m_arg_ptrs(std::move(arg_ptrs)) {}
+};
+
 template<typename... T>
-class FuncAppExpr : public Expr<typename sort::Func<T...>::Range>
+class FuncAppExpr
+: public UnsafeFuncAppExpr<std::tuple_size<
+    typename internal::ExprPtrFoldExceptLast<T...>::Type>::value>,
+  public Expr<typename sort::Func<T...>::Range>
 {
 public:
   typedef typename internal::ExprPtrFoldExceptLast<T...>::Type DomainPtrs;
 
 private:
-  static constexpr size_t s_arity = std::tuple_size<DomainPtrs>::value;
-
   const Decl<sort::Func<T...>> m_func_decl;
   const DomainPtrs m_arg_ptrs;
-
-  virtual Error __encode(Solver& solver) const override
-  {
-    const std::array<UnsafeExprPtr, s_arity> arg_ptrs(
-      internal::to_array<UnsafeExprPtr, DomainPtrs>(m_arg_ptrs));
-    return solver.encode_func_app(m_func_decl, s_arity, arg_ptrs.data());
-  }
 
 public:
   FuncAppExpr(
     Decl<sort::Func<T...>> func_decl,
     DomainPtrs arg_ptrs)
-  : Expr<typename sort::Func<T...>::Range>(FUNC_APP_EXPR_KIND),
+  : UnsafeExpr(FUNC_APP_EXPR_KIND,
+      internal::sort<typename sort::Func<T...>::Range>()),
+    UnsafeFuncAppExpr<std::tuple_size<typename
+        internal::ExprPtrFoldExceptLast<T...>::Type>::value>(
+      func_decl,
+      internal::to_array<UnsafeExprPtr, DomainPtrs>(arg_ptrs)),
+    Expr<typename sort::Func<T...>::Range>(FUNC_APP_EXPR_KIND),
     m_func_decl(func_decl),
     m_arg_ptrs(arg_ptrs) {}
 
@@ -818,24 +860,43 @@ ExprPtr<typename sort::Func<T...>::Range> apply(
     new FuncAppExpr<T...>(func_decl, arg_ptrs));
 }
 
-template<Opcode opcode, typename T, typename U = T>
-class BuiltinUnaryExpr : public Expr<U>
+class UnsafeUnaryExpr : public virtual UnsafeExpr
 {
 private:
-  const ExprPtr<T> m_operand_ptr;
+  const Opcode m_opcode;
+  const UnsafeExprPtr m_operand_ptr;
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_builtin(opcode, UnsafeExpr::sort(), m_operand_ptr);
+    return solver.encode_builtin(m_opcode, UnsafeExpr::sort(), m_operand_ptr);
   }
 
 public:
-  BuiltinUnaryExpr(ExprPtr<T> operand_ptr)
-  : Expr<U>(UNARY_EXPR_KIND),
+  // Allocate sort statically!
+  UnsafeUnaryExpr(
+    const Sort& sort,
+    Opcode opcode,
+    UnsafeExprPtr operand_ptr)
+  : UnsafeExpr(UNARY_EXPR_KIND, sort),
+    m_opcode(opcode),
     m_operand_ptr(operand_ptr)
   {
     assert(m_operand_ptr.get() != nullptr);
   }
+};
+
+template<Opcode opcode, typename T, typename U = T>
+class BuiltinUnaryExpr : public UnsafeUnaryExpr, public Expr<U>
+{
+private:
+  const ExprPtr<T> m_operand_ptr;
+
+public:
+  BuiltinUnaryExpr(ExprPtr<T> operand_ptr)
+  : UnsafeExpr(UNARY_EXPR_KIND, internal::sort<U>()),
+    UnsafeUnaryExpr(internal::sort<U>(), opcode, operand_ptr),
+    Expr<U>(UNARY_EXPR_KIND),
+    m_operand_ptr(operand_ptr) {}
 
   ExprPtr<T> operand_ptr() const
   {
@@ -843,28 +904,50 @@ public:
   }
 };
 
-template<Opcode opcode, typename T, typename U = T>
-class BuiltinBinaryExpr : public Expr<U>
+class UnsafeBinaryExpr : public virtual UnsafeExpr
 {
 private:
-  const ExprPtr<T> m_loperand_ptr;
-  const ExprPtr<T> m_roperand_ptr;
+  const Opcode m_opcode;
+  const UnsafeExprPtr m_loperand_ptr;
+  const UnsafeExprPtr m_roperand_ptr;
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_builtin(opcode, UnsafeExpr::sort(),
+    return solver.encode_builtin(m_opcode, UnsafeExpr::sort(),
       m_loperand_ptr, m_roperand_ptr);
   }
 
 public:
-  BuiltinBinaryExpr(ExprPtr<T> loperand_ptr, ExprPtr<T> roperand_ptr)
-  : Expr<U>(BINARY_EXPR_KIND),
+  // Allocate sort statically!
+  UnsafeBinaryExpr(
+    const Sort& sort,
+    Opcode opcode,
+    UnsafeExprPtr loperand_ptr,
+    UnsafeExprPtr roperand_ptr)
+  : UnsafeExpr(BINARY_EXPR_KIND, sort),
+    m_opcode(opcode),
     m_loperand_ptr(loperand_ptr),
     m_roperand_ptr(roperand_ptr)
   {
     assert(m_loperand_ptr.get() != nullptr);
     assert(m_roperand_ptr.get() != nullptr);
   }
+};
+
+template<Opcode opcode, typename T, typename U = T>
+class BuiltinBinaryExpr : public UnsafeBinaryExpr, public Expr<U>
+{
+private:
+  const ExprPtr<T> m_loperand_ptr;
+  const ExprPtr<T> m_roperand_ptr;
+
+public:
+  BuiltinBinaryExpr(ExprPtr<T> loperand_ptr, ExprPtr<T> roperand_ptr)
+  : UnsafeExpr(BINARY_EXPR_KIND, internal::sort<U>()),
+    UnsafeBinaryExpr(internal::sort<U>(), opcode, loperand_ptr, roperand_ptr),
+    Expr<U>(BINARY_EXPR_KIND),
+    m_loperand_ptr(loperand_ptr),
+    m_roperand_ptr(roperand_ptr) {}
 
   ExprPtr<T> loperand_ptr() const
   {
@@ -912,43 +995,78 @@ public:
   }
 };
 
-template<Opcode opcode, typename T, typename U = T>
-class BuiltinNaryExpr : public Expr<U>
+class UnsafeNaryExpr : public virtual UnsafeExpr
 {
 private:
+  const Opcode m_opcode;
   const UnsafeExprPtrs m_operand_ptrs;
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_builtin(opcode, UnsafeExpr::sort(),
+    return solver.encode_builtin(m_opcode, UnsafeExpr::sort(),
       m_operand_ptrs);
   }
 
+protected:
+  const UnsafeExprPtrs& operand_ptrs() const
+  {
+    return m_operand_ptrs;
+  }
+
 public:
-  // There must be at least one operand
-  BuiltinNaryExpr(ExprPtrs<T>&& operand_ptrs)
-  : Expr<U>(NARY_EXPR_KIND),
-    m_operand_ptrs(std::move(operand_ptrs.m_ptrs))
+  // Sort must be statically allocated and
+  // there must be at least one operand.
+  UnsafeNaryExpr(
+    const Sort& sort,
+    Opcode opcode,
+    UnsafeExprPtrs&& ptrs)
+  : UnsafeExpr(NARY_EXPR_KIND, sort),
+    m_opcode(opcode),
+    m_operand_ptrs(std::move(ptrs))
   {
     assert(!m_operand_ptrs.empty());
   }
 
-  // There must be at least one operand
-  BuiltinNaryExpr(const ExprPtrs<T>& operand_ptrs)
-  : Expr<U>(NARY_EXPR_KIND),
-    m_operand_ptrs(operand_ptrs.m_ptrs)
+  // Sort must be statically allocated and
+  // there must be at least one operand.
+  UnsafeNaryExpr(
+    const Sort& sort,
+    Opcode opcode,
+    const UnsafeExprPtrs& ptrs)
+  : UnsafeExpr(NARY_EXPR_KIND, sort),
+    m_opcode(opcode),
+    m_operand_ptrs(ptrs)
   {
     assert(!m_operand_ptrs.empty());
   }
+};
+
+template<Opcode opcode, typename T, typename U = T>
+class BuiltinNaryExpr : public UnsafeNaryExpr, public Expr<U>
+{
+public:
+  // There must be at least one operand.
+  BuiltinNaryExpr(ExprPtrs<T>&& operand_ptrs)
+  : UnsafeExpr(NARY_EXPR_KIND, internal::sort<U>()),
+    UnsafeNaryExpr(internal::sort<U>(), opcode,
+      std::move(operand_ptrs.m_ptrs)),
+    Expr<U>(NARY_EXPR_KIND) {}
+
+  // There must be at least one operand.
+  BuiltinNaryExpr(const ExprPtrs<T>& operand_ptrs)
+  : UnsafeExpr(NARY_EXPR_KIND, internal::sort<U>()),
+    UnsafeNaryExpr(internal::sort<U>(), opcode, operand_ptrs.m_ptrs),
+    Expr<U>(NARY_EXPR_KIND) {}
 
   size_t size() const
   {
-    return m_operand_ptrs.size();
+    return UnsafeNaryExpr::operand_ptrs().size();
   }
 
   ExprPtr<T> operand_ptr(size_t pos) const
   {
-    return std::dynamic_pointer_cast<const Expr<T>>(m_operand_ptrs.at(pos));
+    return std::dynamic_pointer_cast<const Expr<T>>(
+      UnsafeNaryExpr::operand_ptrs().at(pos));
   }
 };
 
@@ -959,11 +1077,10 @@ ExprPtr<sort::Bool> distinct(ExprPtrs<T>&& ptrs)
     std::move(ptrs)));
 }
 
-template<typename Domain, typename Range>
-class ConstArrayExpr : public Expr<sort::Array<Domain, Range>>
+class UnsafeConstArrayExpr : public virtual UnsafeExpr
 {
 private:
-  const ExprPtr<Range> m_init_ptr;
+  const UnsafeExprPtr m_init_ptr;
 
   virtual Error __encode(Solver& solver) const override
   {
@@ -971,8 +1088,28 @@ private:
   }
 
 public:
+  // Allocate sort statically!
+  UnsafeConstArrayExpr(const Sort& sort, UnsafeExprPtr init_ptr)
+  : UnsafeExpr(CONST_ARRAY_EXPR_KIND, sort),
+    m_init_ptr(init_ptr)
+  {
+    assert(m_init_ptr.get() != nullptr);
+  }
+};
+
+template<typename Domain, typename Range>
+class ConstArrayExpr
+: public UnsafeConstArrayExpr, public Expr<sort::Array<Domain, Range>>
+{
+private:
+  const ExprPtr<Range> m_init_ptr;
+
+public:
   ConstArrayExpr(ExprPtr<Range> init_ptr)
-  : Expr<sort::Array<Domain, Range>>(CONST_ARRAY_EXPR_KIND),
+  : UnsafeExpr(CONST_ARRAY_EXPR_KIND,
+      internal::sort<sort::Array<Domain, Range>>()),
+    UnsafeConstArrayExpr(internal::sort<sort::Array<Domain, Range>>(), init_ptr),
+    Expr<sort::Array<Domain, Range>>(CONST_ARRAY_EXPR_KIND),
     m_init_ptr(init_ptr) {}
 
   ExprPtr<Range> init_ptr() const
@@ -981,24 +1118,46 @@ public:
   }
 };
 
+class UnsafeArraySelectExpr : public virtual UnsafeExpr
+{
+private:
+  const UnsafeExprPtr m_array_ptr;
+  const UnsafeExprPtr m_index_ptr;
+
+  virtual Error __encode(Solver& solver) const override
+  {
+    return solver.encode_array_select(m_array_ptr, m_index_ptr);
+  }
+
+public:
+  // Allocate sort statically!
+  UnsafeArraySelectExpr(
+    const Sort& sort,
+    UnsafeExprPtr array_ptr,
+    UnsafeExprPtr index_ptr)
+  : UnsafeExpr(ARRAY_SELECT_EXPR_KIND, sort),
+    m_array_ptr(array_ptr),
+    m_index_ptr(index_ptr)
+  {
+    assert(m_array_ptr.get() != nullptr);
+    assert(m_index_ptr.get() != nullptr);
+  }
+};
+
 template<typename Domain, typename Range>
-class ArraySelectExpr : public Expr<Range>
+class ArraySelectExpr : public UnsafeArraySelectExpr, public Expr<Range>
 {
 private:
   const ExprPtr<sort::Array<Domain, Range>> m_array_ptr;
   const ExprPtr<Domain> m_index_ptr;
 
-  virtual Error __encode(Solver& solver) const override
-  {
-    return solver.encode_array_select(
-      m_array_ptr, m_index_ptr);
-  }
-
 public:
   ArraySelectExpr(
     ExprPtr<sort::Array<Domain, Range>> array_ptr,
     ExprPtr<Domain> index_ptr)
-  : Expr<Range>(ARRAY_SELECT_EXPR_KIND),
+  : UnsafeExpr(ARRAY_SELECT_EXPR_KIND, internal::sort<Range>()),
+    UnsafeArraySelectExpr(internal::sort<Range>(), array_ptr, index_ptr),
+    Expr<Range>(ARRAY_SELECT_EXPR_KIND),
     m_array_ptr(array_ptr),
     m_index_ptr(index_ptr) {}
 
@@ -1013,26 +1172,58 @@ public:
   }
 };
 
+class UnsafeArrayStoreExpr : public virtual UnsafeExpr
+{
+private:
+  const UnsafeExprPtr m_array_ptr;
+  const UnsafeExprPtr m_index_ptr;
+  const UnsafeExprPtr m_value_ptr;
+
+  virtual Error __encode(Solver& solver) const override
+  {
+    return solver.encode_array_store(m_array_ptr, m_index_ptr, m_value_ptr);
+  }
+
+public:
+  // Allocate sort statically!
+  UnsafeArrayStoreExpr(
+    const Sort& sort,
+    UnsafeExprPtr array_ptr,
+    UnsafeExprPtr index_ptr,
+    UnsafeExprPtr value_ptr)
+  : UnsafeExpr(ARRAY_STORE_EXPR_KIND, sort),
+    m_array_ptr(array_ptr),
+    m_index_ptr(index_ptr),
+    m_value_ptr(value_ptr)
+  {
+    assert(m_array_ptr.get() != nullptr);
+    assert(m_index_ptr.get() != nullptr);
+    assert(m_value_ptr.get() != nullptr);
+  }
+};
+
 template<typename Domain, typename Range>
-class ArrayStoreExpr : public Expr<sort::Array<Domain, Range>>
+class ArrayStoreExpr
+: public UnsafeArrayStoreExpr, public Expr<sort::Array<Domain, Range>>
 {
 private:
   const ExprPtr<sort::Array<Domain, Range>> m_array_ptr;
   const ExprPtr<Domain> m_index_ptr;
   const ExprPtr<Range> m_value_ptr;
 
-  virtual Error __encode(Solver& solver) const override
-  {
-    return solver.encode_array_store(
-      m_array_ptr, m_index_ptr, m_value_ptr);
-  }
-
 public:
   ArrayStoreExpr(
     ExprPtr<sort::Array<Domain, Range>> array_ptr,
     ExprPtr<Domain> index_ptr,
     ExprPtr<Range> value_ptr)
-  : Expr<sort::Array<Domain, Range>>(ARRAY_STORE_EXPR_KIND),
+  : UnsafeExpr(ARRAY_STORE_EXPR_KIND,
+      internal::sort<sort::Array<Domain, Range>>()),
+    UnsafeArrayStoreExpr(
+      internal::sort<sort::Array<Domain, Range>>(),
+      array_ptr,
+      index_ptr,
+      value_ptr),
+    Expr<sort::Array<Domain, Range>>(ARRAY_STORE_EXPR_KIND),
     m_array_ptr(array_ptr),
     m_index_ptr(index_ptr),
     m_value_ptr(value_ptr) {}
