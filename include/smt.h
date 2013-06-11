@@ -584,14 +584,17 @@ protected:
   : UnsafeExpr(expr_kind, internal::sort<T>()) {}
 };
 
-template<typename T>
-struct IsBuiltin :
-  std::integral_constant<bool,
-    std::is_integral<T>::value
-    or std::is_same<sort::Bool, T>::value
-    or std::is_same<sort::Int, T>::value
-    or std::is_same<sort::Real, T>::value>
-{};
+namespace internal
+{
+  template<typename T>
+  struct IsPrimitive :
+    std::integral_constant<bool,
+      std::is_integral<T>::value
+      or std::is_same<sort::Bool, T>::value
+      or std::is_same<sort::Int, T>::value
+      or std::is_same<sort::Real, T>::value>
+  {};
+}
 
 template<typename T>
 class UnsafeLiteralExpr : public virtual UnsafeExpr
@@ -617,7 +620,7 @@ public:
 };
 
 template<typename T, typename U = T,
-  typename Enable = typename std::enable_if<IsBuiltin<T>::value>::type>
+  typename Enable = typename std::enable_if<internal::IsPrimitive<T>::value>::type>
 class BuiltinLiteralExpr : public UnsafeLiteralExpr<U>, public Expr<T>
 {
 public:

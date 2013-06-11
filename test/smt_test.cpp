@@ -88,33 +88,33 @@ TEST(SmtTest, ExprPtrFold)
 
 struct SomethingElse {};
 
-TEST(SmtTest, IsBuiltin)
+TEST(SmtTest, IsPrimitive)
 {
-  STATIC_EXPECT_TRUE(IsBuiltin<bool>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<char>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<signed char>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<unsigned char>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<wchar_t>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<char16_t>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<char32_t>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<short>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<unsigned short>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<int>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<unsigned int>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<long>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<unsigned long>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<long long>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<unsigned long long>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<bool>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<char>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<signed char>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<unsigned char>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<wchar_t>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<char16_t>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<char32_t>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<short>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<unsigned short>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<int>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<unsigned int>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<long>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<unsigned long>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<long long>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<unsigned long long>::value);
 
-  STATIC_EXPECT_TRUE(IsBuiltin<sort::Bool>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<sort::Int>::value);
-  STATIC_EXPECT_TRUE(IsBuiltin<sort::Real>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<sort::Bool>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<sort::Int>::value);
+  STATIC_EXPECT_TRUE(internal::IsPrimitive<sort::Real>::value);
 
-  STATIC_EXPECT_FALSE(IsBuiltin<SomethingElse>::value);
-  STATIC_EXPECT_FALSE(IsBuiltin<float>::value);
-  STATIC_EXPECT_FALSE(IsBuiltin<double>::value);
-  STATIC_EXPECT_FALSE(IsBuiltin<int*>::value);
-  STATIC_EXPECT_FALSE(IsBuiltin<void>::value);
+  STATIC_EXPECT_FALSE(internal::IsPrimitive<SomethingElse>::value);
+  STATIC_EXPECT_FALSE(internal::IsPrimitive<float>::value);
+  STATIC_EXPECT_FALSE(internal::IsPrimitive<double>::value);
+  STATIC_EXPECT_FALSE(internal::IsPrimitive<int*>::value);
+  STATIC_EXPECT_FALSE(internal::IsPrimitive<void>::value);
 }
 
 TEST(SmtTest, Ok)
