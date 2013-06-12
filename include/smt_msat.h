@@ -5,6 +5,7 @@
 #ifndef __SMT_MSAT_H_
 #define __SMT_MSAT_H_
 
+#include <limits>
 #include <cinttypes>
 #include <mathsat.h>
 
