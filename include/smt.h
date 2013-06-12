@@ -1311,47 +1311,62 @@ ExprPtr<sort::Array<Domain, Range>> store(
 UnsafeExprPtr implies(UnsafeExprPtr lptr, UnsafeExprPtr rptr);
 ExprPtr<sort::Bool> implies(ExprPtr<sort::Bool> lptr, ExprPtr<sort::Bool> rptr);
 
-#define SMT_BUILTIN_UNARY_OP(op, opcode)                                   \
-  template<typename T>                                                     \
-  inline ExprPtr<T> operator op(ExprPtr<T> ptr)                            \
-  {                                                                        \
-    return ExprPtr<T>(new UnaryExpr<opcode, T>(ptr));                      \
-  }                                                                        \
+template<Opcode opcode, typename T>
+struct Identity;
 
-#define SMT_BUILTIN_BINARY_OP(op, opcode)                                  \
-  template<typename T>                                                     \
-  inline ExprPtr<T> operator op(ExprPtr<T> lptr, ExprPtr<T> rptr)          \
-  {                                                                        \
-    return ExprPtr<T>(new BinaryExpr<opcode, T>(lptr, rptr));              \
-  }                                                                        \
-  template<typename T, typename U>                                         \
-  inline ExprPtr<T> operator op(ExprPtr<T> lptr, const U rarg)             \
-  {                                                                        \
-    return lptr op literal<T, U>(rarg);                                    \
-  }                                                                        \
-  template<typename T, typename U>                                         \
-  inline ExprPtr<T> operator op(const U larg, ExprPtr<T> rptr)             \
-  {                                                                        \
-    return literal<T, U>(larg) op rptr;                                    \
-  }                                                                        \
+template<>
+struct Identity<LAND, sort::Bool>
+{
+  static ExprPtr<sort::Bool> expr_ptr;
+};
 
-#define SMT_BUILTIN_BINARY_REL(op, opcode)                                 \
-  template<typename T>                                                     \
-  inline ExprPtr<sort::Bool> operator op(ExprPtr<T> lptr, ExprPtr<T> rptr) \
-  {                                                                        \
-    return ExprPtr<sort::Bool>(                                            \
-      new BinaryExpr<opcode, T, sort::Bool>(lptr, rptr));                  \
-  }                                                                        \
-  template<typename T, typename U>                                         \
-  inline ExprPtr<sort::Bool> operator op(ExprPtr<T> lptr, const U rarg)    \
-  {                                                                        \
-    return lptr op literal<T, U>(rarg);                                    \
-  }                                                                        \
-  template<typename T, typename U>                                         \
-  inline ExprPtr<sort::Bool> operator op(const U larg, ExprPtr<T> rptr)    \
-  {                                                                        \
-    return literal<T, U>(larg) op rptr;                                    \
-  }                                                                        \
+}
+
+#define SMT_BUILTIN_UNARY_OP(op, opcode)                                       \
+  template<typename T>                                                         \
+  inline smt::ExprPtr<T> operator op(smt::ExprPtr<T> ptr)                      \
+  {                                                                            \
+    return smt::ExprPtr<T>(new smt::UnaryExpr<smt::opcode, T>(ptr));           \
+  }                                                                            \
+
+#define SMT_BUILTIN_BINARY_OP(op, opcode)                                      \
+  template<typename T>                                                         \
+  inline smt::ExprPtr<T> operator op(smt::ExprPtr<T> lptr,                     \
+    smt::ExprPtr<T> rptr)                                                      \
+  {                                                                            \
+    return smt::ExprPtr<T>(new smt::BinaryExpr<smt::opcode, T>(lptr, rptr));   \
+  }                                                                            \
+  template<typename T, typename U>                                             \
+  inline smt::ExprPtr<T> operator op(smt::ExprPtr<T> lptr, const U rarg)       \
+  {                                                                            \
+    return lptr op smt::literal<T, U>(rarg);                                   \
+  }                                                                            \
+  template<typename T, typename U>                                             \
+  inline smt::ExprPtr<T> operator op(const U larg, smt::ExprPtr<T> rptr)\
+  {                                                                            \
+    return smt::literal<T, U>(larg) op rptr;                                   \
+  }                                                                            \
+
+#define SMT_BUILTIN_BINARY_REL(op, opcode)                                     \
+  template<typename T>                                                         \
+  inline smt::ExprPtr<smt::sort::Bool> operator op(smt::ExprPtr<T> lptr,       \
+    smt::ExprPtr<T> rptr)                                                      \
+  {                                                                            \
+    return smt::ExprPtr<smt::sort::Bool>(                                      \
+      new smt::BinaryExpr<smt::opcode, T, smt::sort::Bool>(lptr, rptr));       \
+  }                                                                            \
+  template<typename T, typename U>                                             \
+  inline smt::ExprPtr<smt::sort::Bool> operator op(smt::ExprPtr<T> lptr,\
+    const U rarg)                                                              \
+  {                                                                            \
+    return lptr op smt::literal<T, U>(rarg);                                   \
+  }                                                                            \
+  template<typename T, typename U>                                             \
+  inline smt::ExprPtr<smt::sort::Bool> operator op(const U larg,               \
+    smt::ExprPtr<T> rptr)                                                      \
+  {                                                                            \
+    return smt::literal<T, U>(larg) op rptr;                                   \
+  }                                                                            \
 
 SMT_BUILTIN_UNARY_OP(-, SUB)
 
@@ -1368,29 +1383,30 @@ SMT_BUILTIN_BINARY_REL(<=, LEQ)
 SMT_BUILTIN_BINARY_REL(>=, GEQ)
 SMT_BUILTIN_BINARY_REL(==, EQL)
 
-#define SMT_BUILTIN_BV_UNARY_OP(op, opcode)                                \
-  template<typename T>                                                     \
-  inline ExprPtr<T> operator op(ExprPtr<T> ptr)                            \
-  {                                                                        \
-    return ExprPtr<T>(new UnaryExpr<opcode, T>(ptr));                      \
-  }                                                                        \
+#define SMT_BUILTIN_BV_UNARY_OP(op, opcode)                                    \
+  template<typename T>                                                         \
+  inline smt::ExprPtr<T> operator op(smt::ExprPtr<T> ptr)                      \
+  {                                                                            \
+    return smt::ExprPtr<T>(new smt::UnaryExpr<smt::opcode, T>(ptr));           \
+  }                                                                            \
 
-#define SMT_BUILTIN_BV_BINARY_OP(op, opcode)                               \
-  template<typename T>                                                     \
-  inline ExprPtr<T> operator op(ExprPtr<T> lptr, ExprPtr<T> rptr)          \
-  {                                                                        \
-    return ExprPtr<T>(new BinaryExpr<opcode, T>(lptr, rptr));              \
-  }                                                                        \
-  template<typename T>                                                     \
-  inline ExprPtr<T> operator op(ExprPtr<T> lptr, const T rarg)             \
-  {                                                                        \
-    return lptr op literal<T>(rarg);                                       \
-  }                                                                        \
-  template<typename T>                                                     \
-  inline ExprPtr<T> operator op(const T larg, ExprPtr<T> rptr)             \
-  {                                                                        \
-    return literal<T>(larg) op rptr;                                       \
-  }                                                                        \
+#define SMT_BUILTIN_BV_BINARY_OP(op, opcode)                                   \
+  template<typename T>                                                         \
+  inline smt::ExprPtr<T> operator op(smt::ExprPtr<T> lptr,                     \
+    smt::ExprPtr<T> rptr)                                                      \
+  {                                                                            \
+    return smt::ExprPtr<T>(new smt::BinaryExpr<smt::opcode, T>(lptr, rptr));   \
+  }                                                                            \
+  template<typename T>                                                         \
+  inline smt::ExprPtr<T> operator op(smt::ExprPtr<T> lptr, const T rarg)       \
+  {                                                                            \
+    return lptr op smt::literal<T>(rarg);                                      \
+  }                                                                            \
+  template<typename T>                                                         \
+  inline smt::ExprPtr<T> operator op(const T larg, smt::ExprPtr<T> rptr)       \
+  {                                                                            \
+    return smt::literal<T>(larg) op rptr;                                      \
+  }                                                                            \
 
 SMT_BUILTIN_BV_UNARY_OP(~, NOT)
 
@@ -1398,29 +1414,31 @@ SMT_BUILTIN_BV_BINARY_OP(&, AND)
 SMT_BUILTIN_BV_BINARY_OP(|, OR)
 SMT_BUILTIN_BV_BINARY_OP(^, XOR)
 
-#define SMT_BUILTIN_BOOL_UNARY_OP(op, opcode)                              \
-  inline ExprPtr<sort::Bool> operator op(ExprPtr<sort::Bool> ptr)          \
-  {                                                                        \
-    return ExprPtr<sort::Bool>(new UnaryExpr<opcode, sort::Bool>(ptr));    \
-  }                                                                        \
+#define SMT_BUILTIN_BOOL_UNARY_OP(op, opcode)                                  \
+  inline smt::ExprPtr<smt::sort::Bool> operator op(                            \
+    smt::ExprPtr<smt::sort::Bool> ptr)                                         \
+  {                                                                            \
+    return smt::ExprPtr<smt::sort::Bool>(                                      \
+      new smt::UnaryExpr<smt::opcode, smt::sort::Bool>(ptr));                  \
+  }                                                                            \
 
-#define SMT_BUILTIN_BOOL_BINARY_OP(op, opcode)                             \
-  inline ExprPtr<sort::Bool> operator op(ExprPtr<sort::Bool> lptr,         \
-    ExprPtr<sort::Bool> rptr)                                              \
-  {                                                                        \
-    return ExprPtr<sort::Bool>(                                            \
-      new BinaryExpr<opcode, sort::Bool>(lptr, rptr));                     \
-  }                                                                        \
-  inline ExprPtr<sort::Bool> operator op(ExprPtr<sort::Bool> lptr,         \
-    const bool rarg)                                                       \
-  {                                                                        \
-    return lptr op literal<sort::Bool>(rarg);                              \
-  }                                                                        \
-  inline ExprPtr<sort::Bool> operator op(const bool larg,                  \
-    ExprPtr<sort::Bool> rptr)                                              \
-  {                                                                        \
-    return literal<sort::Bool>(larg) op rptr;                              \
-  }                                                                        \
+#define SMT_BUILTIN_BOOL_BINARY_OP(op, opcode)                                 \
+  inline smt::ExprPtr<smt::sort::Bool> operator op(                            \
+    smt::ExprPtr<smt::sort::Bool> lptr, smt::ExprPtr<smt::sort::Bool> rptr)    \
+  {                                                                            \
+    return smt::ExprPtr<smt::sort::Bool>(                                      \
+      new smt::BinaryExpr<smt::opcode, smt::sort::Bool>(lptr, rptr));          \
+  }                                                                            \
+  inline smt::ExprPtr<smt::sort::Bool> operator op(                            \
+    smt::ExprPtr<smt::sort::Bool> lptr, const bool rarg)                       \
+  {                                                                            \
+    return lptr op smt::literal<smt::sort::Bool>(rarg);                        \
+  }                                                                            \
+  inline smt::ExprPtr<smt::sort::Bool> operator op(const bool larg,            \
+    smt::ExprPtr<smt::sort::Bool> rptr)                                        \
+  {                                                                            \
+    return smt::literal<smt::sort::Bool>(larg) op rptr;                        \
+  }                                                                            \
 
 SMT_BUILTIN_BOOL_UNARY_OP(!, LNOT)
 
@@ -1429,25 +1447,28 @@ SMT_BUILTIN_BOOL_BINARY_OP(||, LOR)
 SMT_BUILTIN_BOOL_BINARY_OP(==, EQL)
 SMT_BUILTIN_BOOL_BINARY_OP(!=, NEQ)
 
-#define SMT_UNSAFE_UNARY_OP(op, opcode)                                    \
-  inline UnsafeExprPtr operator op(UnsafeExprPtr ptr)                      \
-  {                                                                        \
-    return UnsafeExprPtr(new UnsafeUnaryExpr(ptr->sort(), opcode, ptr));   \
-  }                                                                        \
+#define SMT_UNSAFE_UNARY_OP(op, opcode)                                        \
+  inline smt::UnsafeExprPtr operator op(smt::UnsafeExprPtr ptr)                \
+  {                                                                            \
+    return smt::UnsafeExprPtr(                                                 \
+      new smt::UnsafeUnaryExpr(ptr->sort(), smt::opcode, ptr));                \
+  }                                                                            \
 
-#define SMT_UNSAFE_BINARY_OP(op, opcode)                                   \
-  inline UnsafeExprPtr operator op(UnsafeExprPtr lptr, UnsafeExprPtr rptr) \
-  {                                                                        \
-    return UnsafeExprPtr(new UnsafeBinaryExpr(                             \
-      lptr->sort(), opcode, lptr, rptr));                                  \
-  }                                                                        \
+#define SMT_UNSAFE_BINARY_OP(op, opcode)                                       \
+  inline smt::UnsafeExprPtr operator op(smt::UnsafeExprPtr lptr,               \
+    smt::UnsafeExprPtr rptr)                                                   \
+  {                                                                            \
+    return smt::UnsafeExprPtr(new smt::UnsafeBinaryExpr(                       \
+      lptr->sort(), smt::opcode, lptr, rptr));                                 \
+  }                                                                            \
 
-#define SMT_UNSAFE_BINARY_REL(op, opcode)                                  \
-  inline UnsafeExprPtr operator op(UnsafeExprPtr lptr, UnsafeExprPtr rptr) \
-  {                                                                        \
-    return UnsafeExprPtr(new UnsafeBinaryExpr(                             \
-      internal::sort<sort::Bool>(), opcode, lptr, rptr));                  \
-  }                                                                        \
+#define SMT_UNSAFE_BINARY_REL(op, opcode)                                      \
+  inline smt::UnsafeExprPtr operator op(smt::UnsafeExprPtr lptr,               \
+    smt::UnsafeExprPtr rptr)                                                   \
+  {                                                                            \
+    return smt::UnsafeExprPtr(new smt::UnsafeBinaryExpr(                       \
+      smt::internal::sort<smt::sort::Bool>(), smt::opcode, lptr, rptr));       \
+  }                                                                            \
 
 SMT_UNSAFE_UNARY_OP(-, SUB)
 SMT_UNSAFE_UNARY_OP(~, NOT)
@@ -1472,16 +1493,5 @@ SMT_UNSAFE_BINARY_REL(!=, NEQ)
 SMT_UNSAFE_BINARY_REL(<=, LEQ)
 SMT_UNSAFE_BINARY_REL(>=, GEQ)
 SMT_UNSAFE_BINARY_REL(==, EQL)
-
-template<Opcode opcode, typename T>
-struct Identity;
-
-template<>
-struct Identity<LAND, sort::Bool>
-{
-  static ExprPtr<sort::Bool> expr_ptr;
-};
-
-}
 
 #endif

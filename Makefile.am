@@ -56,6 +56,7 @@ lib_libsmt_la_SOURCES = \
   src/smt.cpp
 
 pkginclude_HEADERS = \
+  include/smt \
   include/smt.h \
   include/smt_z3.h \
   include/smt_msat.h
@@ -86,7 +87,8 @@ check_PROGRAMS = test/smt
 test_smt_SOURCES = \
   test/smt_test.cpp \
   test/smt_z3_test.cpp \
-  test/smt_msat_test.cpp
+  test/smt_msat_test.cpp \
+  test/smt_functional_test.cpp
 
 test_smt_CPPFLAGS = -I$(srcdir)/include -I$(top_srcdir)/gtest/include
 test_smt_LDADD = $(top_builddir)/gtest/lib/libgtest_main.la lib/libsmt.la

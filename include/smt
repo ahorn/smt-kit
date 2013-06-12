@@ -1,0 +1,20 @@
+// Copyright 2013, Alex Horn. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+#ifndef __SMT_
+#define __SMT_
+
+#include "smt.h"
+#include "smt_z3.h"
+#include "smt_msat.h"
+
+namespace smt
+{
+
+// smt::Bool etc. is as unambiguous as smt::sort::Bool
+using namespace sort;
+
+}
+
+#endif
