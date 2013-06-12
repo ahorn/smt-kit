@@ -276,7 +276,7 @@ namespace internal {
   template<typename Domain, typename Range>
   struct __Math<sort::Array<Domain, Range>>
   {
-    static constexpr Sort const * const s_sorts[2] = {
+    static constexpr const Sort* const s_sorts[2] = {
       &__SortSwitch<Domain>::Type::s_sort,
       &__SortSwitch<Range>::Type::s_sort };
 
@@ -284,7 +284,7 @@ namespace internal {
   };
 
   template<typename Domain, typename Range>
-  constexpr Sort const * const __Math<sort::Array<Domain, Range>>::s_sorts[2];
+  constexpr const Sort* const __Math<sort::Array<Domain, Range>>::s_sorts[2];
 
   template<typename Domain, typename Range>
   constexpr Sort __Math<sort::Array<Domain, Range>>::s_sort;
@@ -296,7 +296,7 @@ namespace internal {
     typedef __Math<sort::Func<T...>> Type;
   };
 
-  template<size_t N, Sort const * const... sorts>
+  template<size_t N, const Sort* const... sorts>
   struct __SortArray
   {
   };
@@ -307,17 +307,17 @@ namespace internal {
   };
 
   // Function sort: base case
-  template<size_t N, Sort const * const... sorts>
+  template<size_t N, const Sort* const... sorts>
   struct __FuncSort<__SortArray<N, sorts...>>
   {
-    static constexpr Sort const * const s_sorts[N] = {sorts...};
+    static constexpr const Sort* const s_sorts[N] = {sorts...};
     static constexpr const Sort* const (&result())[N]
     {
       return s_sorts;
     }
   };
 
-  template<typename T, typename... U, size_t N, Sort const * const... sorts>
+  template<typename T, typename... U, size_t N, const Sort* const... sorts>
   struct __FuncSort<__SortArray<N, sorts...>, T, U...>
   {
     // Function sort: prepend sort for T and then recurse on U...
@@ -331,8 +331,8 @@ namespace internal {
   };
 
   // Function sort: allocate memory for sort array at compile-time
-  template<size_t N, Sort const * const... sorts>
-  constexpr Sort const * const __FuncSort<__SortArray<N, sorts...>>::s_sorts[N];
+  template<size_t N, const Sort* const... sorts>
+  constexpr const Sort* const __FuncSort<__SortArray<N, sorts...>>::s_sorts[N];
 
   // Function sort: T is first function argument, U are additional ones
   template<typename T, typename... U>
