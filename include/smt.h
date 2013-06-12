@@ -1461,6 +1461,20 @@ SMT_BUILTIN_BOOL_BINARY_OP(!=, NEQ)
     return smt::UnsafeExprPtr(new smt::UnsafeBinaryExpr(                       \
       lptr->sort(), smt::opcode, lptr, rptr));                                 \
   }                                                                            \
+  template<typename T, typename Enable =                                       \
+    typename std::enable_if<std::is_integral<T>::value>::type>                 \
+  inline smt::UnsafeExprPtr operator op(const T larg, smt::UnsafeExprPtr rptr) \
+  {                                                                            \
+    return smt::UnsafeExprPtr(new smt::UnsafeBinaryExpr(                       \
+      rptr->sort(), smt::opcode, literal(rptr->sort(), larg), rptr));          \
+  }                                                                            \
+  template<typename T, typename Enable =                                       \
+    typename std::enable_if<std::is_integral<T>::value>::type>                 \
+  inline smt::UnsafeExprPtr operator op(smt::UnsafeExprPtr lptr, const T rarg) \
+  {                                                                            \
+    return smt::UnsafeExprPtr(new smt::UnsafeBinaryExpr(                       \
+      lptr->sort(), smt::opcode, lptr, literal(lptr->sort(), rarg)));          \
+  }                                                                            \
 
 #define SMT_UNSAFE_BINARY_REL(op, opcode)                                      \
   inline smt::UnsafeExprPtr operator op(smt::UnsafeExprPtr lptr,               \
@@ -1468,6 +1482,22 @@ SMT_BUILTIN_BOOL_BINARY_OP(!=, NEQ)
   {                                                                            \
     return smt::UnsafeExprPtr(new smt::UnsafeBinaryExpr(                       \
       smt::internal::sort<smt::sort::Bool>(), smt::opcode, lptr, rptr));       \
+  }                                                                            \
+  template<typename T, typename Enable =                                       \
+    typename std::enable_if<std::is_integral<T>::value>::type>                 \
+  inline smt::UnsafeExprPtr operator op(const T larg, smt::UnsafeExprPtr rptr) \
+  {                                                                            \
+    return smt::UnsafeExprPtr(new smt::UnsafeBinaryExpr(                       \
+      smt::internal::sort<smt::sort::Bool>(), smt::opcode,                     \
+        literal(rptr->sort(), larg), rptr));                                   \
+  }                                                                            \
+  template<typename T, typename Enable =                                       \
+    typename std::enable_if<std::is_integral<T>::value>::type>                 \
+  inline smt::UnsafeExprPtr operator op(smt::UnsafeExprPtr lptr, const T rarg) \
+  {                                                                            \
+    return smt::UnsafeExprPtr(new smt::UnsafeBinaryExpr(                       \
+      smt::internal::sort<smt::sort::Bool>(), smt::opcode, lptr,               \
+        literal(lptr->sort(), rarg)));                                         \
   }                                                                            \
 
 SMT_UNSAFE_UNARY_OP(-, SUB)

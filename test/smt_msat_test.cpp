@@ -1205,15 +1205,48 @@ TEST(SmtMsatTest, UnsafeAdd)
   const UnsafeExprPtr eq_ptr(select_ptr == x_ptr);
   const UnsafeExprPtr and_ptr(eq_ptr && distinct_ptr);
 
-  s.unsafe_add(and_ptr);
-  EXPECT_EQ(unsat, s.check());
+  char *str;
+  s.push();
+  {
+    s.unsafe_add(and_ptr);
+    EXPECT_EQ(unsat, s.check());
 
-  char *str = msat_term_repr(s.term());
-  EXPECT_EQ(
-    "(`and` (`=_<BitVec, 64, >` "
-      "(`read_<BitVec, 32, >_<BitVec, 64, >` "
-        "(`write_<BitVec, 32, >_<BitVec, 64, >` array index (f 7_64)) index) x) "
-    "(`and` (`and` (`not` (`=_<BitVec, 64, >` x 7_64)) "
-      "(`not` (`=_<BitVec, 64, >` (f 7_64) 7_64))) "
-      "(`not` (`=_<BitVec, 64, >` (f 7_64) x))))", std::string(str));
+    str = msat_term_repr(s.term());
+    EXPECT_EQ(
+      "(`and` (`=_<BitVec, 64, >` "
+        "(`read_<BitVec, 32, >_<BitVec, 64, >` "
+          "(`write_<BitVec, 32, >_<BitVec, 64, >` array index (f 7_64)) index) x) "
+      "(`and` (`and` (`not` (`=_<BitVec, 64, >` x 7_64)) "
+        "(`not` (`=_<BitVec, 64, >` (f 7_64) 7_64))) "
+        "(`not` (`=_<BitVec, 64, >` (f 7_64) x))))", std::string(str));
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.unsafe_add(seven_ptr != 7);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.unsafe_add(7 == seven_ptr);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.unsafe_add(x_ptr == x_ptr + 1);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.unsafe_add(x_ptr + 1 == x_ptr);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
 }

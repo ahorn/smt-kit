@@ -1024,4 +1024,18 @@ TEST(SmtTest, UnsafeExpr)
 
   const UnsafeExprPtr and_ptr(eq_ptr && distinct_ptr);
   EXPECT_TRUE(and_ptr->sort().is_bool());
+
+  const UnsafeExprPtr ladd_ptr(7 + x_ptr);
+  EXPECT_TRUE(ladd_ptr->sort().is_bv());
+  EXPECT_EQ(bv_long_size, ladd_ptr->sort().bv_size());
+
+  const UnsafeExprPtr radd_ptr(x_ptr + 8);
+  EXPECT_TRUE(radd_ptr->sort().is_bv());
+  EXPECT_EQ(bv_long_size, radd_ptr->sort().bv_size());
+
+  const UnsafeExprPtr llss_ptr(7 < x_ptr);
+  EXPECT_TRUE(llss_ptr->sort().is_bool());
+
+  const UnsafeExprPtr rlss_ptr(x_ptr < 8);
+  EXPECT_TRUE(rlss_ptr->sort().is_bool());
 }

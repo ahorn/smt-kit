@@ -949,12 +949,44 @@ TEST(SmtZ3Test, UnsafeAdd)
   const UnsafeExprPtr eq_ptr(select_ptr == x_ptr);
   const UnsafeExprPtr and_ptr(eq_ptr && distinct_ptr);
 
-  s.unsafe_add(and_ptr);
-  EXPECT_EQ(unsat, s.check());
+  s.push();
+  {
+    s.unsafe_add(and_ptr);
+    EXPECT_EQ(unsat, s.check());
 
-  std::stringstream out;
-  out << s.expr();
-  EXPECT_EQ("(let ((a!1 "
-               "(= (select (store array index (f #x0000000000000007)) index) x)))\n  "
-           "(and a!1 (distinct #x0000000000000007 x (f #x0000000000000007))))", out.str());
+    std::stringstream out;
+    out << s.expr();
+    EXPECT_EQ("(let ((a!1 "
+                 "(= (select (store array index (f #x0000000000000007)) index) x)))\n  "
+             "(and a!1 (distinct #x0000000000000007 x (f #x0000000000000007))))", out.str());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.unsafe_add(seven_ptr != 7);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.unsafe_add(7 == seven_ptr);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.unsafe_add(x_ptr == x_ptr + 1);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.unsafe_add(x_ptr + 1 == x_ptr);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
 }
