@@ -364,14 +364,14 @@ private:
   const Sort& m_sort;
 
 public:
-  // Allocate sort statically!
+  // Allocate sort statically and use globally unique symbol names!
   UnsafeDecl(
     const std::string& symbol,
     const Sort& sort)
   : m_symbol(symbol),
     m_sort(sort) {}
 
-  // Allocate sort statically!
+  // Allocate sort statically and use globally unique symbol names!
   UnsafeDecl(
     std::string&& symbol,
     const Sort& sort)
@@ -412,9 +412,11 @@ template<typename T>
 class Decl : public UnsafeDecl 
 {
 public:
+  // Use globally unique symbol names!
   Decl(const std::string& symbol)
   : UnsafeDecl(symbol, internal::sort<T>()) {}
 
+  // Use globally unique symbol names!
   Decl(std::string&& symbol)
   : UnsafeDecl(std::move(symbol), internal::sort<T>()) {}
 
@@ -888,12 +890,14 @@ ExprPtr<typename sort::Func<T...>::Range> apply(
     new FuncAppExpr<T...>(func_decl, arg_ptrs));
 }
 
+// Use globally unique symbol names!
 template<typename T>
 ExprPtr<T> any(const std::string& symbol)
 {
   return constant(Decl<T>(symbol));
 }
 
+// Use globally unique symbol names!
 template<typename T>
 ExprPtr<T> any(std::string&& symbol)
 {
