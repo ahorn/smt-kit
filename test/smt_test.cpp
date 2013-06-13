@@ -150,21 +150,35 @@ TEST(SmtTest, LiteralExpr)
   EXPECT_FALSE(e0.sort().is_int());
   EXPECT_FALSE(e0.sort().is_real());
   EXPECT_TRUE(e0.sort().is_bv());
+  EXPECT_TRUE(e0.sort().is_signed());
   EXPECT_FALSE(e0.sort().is_array());
   EXPECT_FALSE(e0.sort().is_func());
   EXPECT_EQ(sizeof(long) * 8, e0.sort().bv_size());
   EXPECT_EQ(42L, e0.literal());
 
-  const LiteralExpr<sort::Int, char> e1('A');
+  const LiteralExpr<unsigned long> e1(42L);
 
   EXPECT_EQ(LITERAL_EXPR_KIND, e1.expr_kind());
   EXPECT_FALSE(e1.sort().is_bool());
-  EXPECT_TRUE(e1.sort().is_int());
+  EXPECT_FALSE(e1.sort().is_int());
   EXPECT_FALSE(e1.sort().is_real());
-  EXPECT_FALSE(e1.sort().is_bv());
+  EXPECT_TRUE(e1.sort().is_bv());
+  EXPECT_FALSE(e1.sort().is_signed());
   EXPECT_FALSE(e1.sort().is_array());
   EXPECT_FALSE(e1.sort().is_func());
-  EXPECT_EQ('A', e1.literal());
+  EXPECT_EQ(sizeof(long) * 8, e1.sort().bv_size());
+  EXPECT_EQ(42L, e1.literal());
+
+  const LiteralExpr<sort::Int, char> e2('A');
+
+  EXPECT_EQ(LITERAL_EXPR_KIND, e2.expr_kind());
+  EXPECT_FALSE(e2.sort().is_bool());
+  EXPECT_TRUE(e2.sort().is_int());
+  EXPECT_FALSE(e2.sort().is_real());
+  EXPECT_FALSE(e2.sort().is_bv());
+  EXPECT_FALSE(e2.sort().is_array());
+  EXPECT_FALSE(e2.sort().is_func());
+  EXPECT_EQ('A', e2.literal());
 }
 
 TEST(SmtTest, Decl)
@@ -716,6 +730,7 @@ TEST(SmtTest, BvUnaryOperatorSUB)
     EXPECT_EQ(BINARY_EXPR_KIND, e3.expr_kind());                               \
     EXPECT_FALSE(e3.sort().is_bool());                                         \
     EXPECT_TRUE(e3.sort().is_bv());                                            \
+    EXPECT_TRUE(e3.sort().is_signed());                                        \
     EXPECT_EQ(e0_ptr.get(), e3.loperand_ptr().get());                          \
     EXPECT_EQ(e1_ptr.get(), e3.roperand_ptr().get());                          \
                                                                                \
@@ -728,6 +743,7 @@ TEST(SmtTest, BvUnaryOperatorSUB)
     EXPECT_EQ(BINARY_EXPR_KIND, e5.expr_kind());                               \
     EXPECT_FALSE(e5.sort().is_bool());                                         \
     EXPECT_TRUE(e5.sort().is_bv());                                            \
+    EXPECT_TRUE(e5.sort().is_signed());                                        \
     EXPECT_EQ(e0_ptr.get(), e5.loperand_ptr().get());                          \
     EXPECT_EQ(7L, rexpr.literal());                                            \
                                                                                \
@@ -740,6 +756,7 @@ TEST(SmtTest, BvUnaryOperatorSUB)
     EXPECT_EQ(BINARY_EXPR_KIND, e7.expr_kind());                               \
     EXPECT_FALSE(e7.sort().is_bool());                                         \
     EXPECT_TRUE(e7.sort().is_bv());                                            \
+    EXPECT_TRUE(e7.sort().is_signed());                                        \
     EXPECT_EQ(7L, lexpr.literal());                                            \
     EXPECT_EQ(e0_ptr.get(), e7.roperand_ptr().get());                          \
   }                                                                            \
@@ -963,6 +980,18 @@ TEST(SmtTest, Identity)
   const LiteralExpr<sort::Bool, bool>& ttexpr =
     static_cast<const LiteralExpr<sort::Bool, bool>&>(*ttexpr_ptr);
   EXPECT_TRUE(ttexpr.literal());
+}
+
+TEST(SmtTest, Signedness)
+{
+  const ExprPtr<unsigned> e0_ptr(any<unsigned>("x"));
+  const ExprPtr<unsigned> e1_ptr(e0_ptr + 1);
+  const ExprPtr<unsigned> e2_ptr(2 + e0_ptr);
+
+  EXPECT_TRUE(e1_ptr->sort().is_bv());
+  EXPECT_FALSE(e1_ptr->sort().is_signed());
+  EXPECT_TRUE(e2_ptr->sort().is_bv());
+  EXPECT_FALSE(e2_ptr->sort().is_signed());
 }
 
 TEST(SmtTest, UnsafeExpr)
