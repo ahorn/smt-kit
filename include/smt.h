@@ -439,6 +439,27 @@ using ExprPtr = std::shared_ptr<const Expr<T>>;
 
 class Solver
 {
+public:
+  struct Stats
+  {
+    unsigned constants;
+    unsigned func_apps;
+    unsigned array_selects;
+    unsigned array_stores;
+    unsigned unary_ops;
+    unsigned binary_ops;
+    unsigned nary_ops;
+    unsigned equalities;
+    unsigned disequalities;
+    unsigned inequalities;
+    unsigned implications;
+    unsigned conjunctions;
+    unsigned disjunctions;
+  };
+
+private:
+  Stats m_stats;
+
 #define SMT_ENCODE_BUILTIN_LITERAL(type)    \
 private:                                    \
   virtual Error __encode_literal(           \
@@ -555,6 +576,12 @@ public:
     const Sort& sort,
     const UnsafeExprPtrs& ptrs);
 
+  // Generic SMT formula statistics
+  const Stats& stats()
+  {
+    return m_stats;
+  }
+
   void reset();
 
   void push();
@@ -565,6 +592,11 @@ public:
   Error unsafe_add(UnsafeExprPtr condition);
 
   CheckResult check();
+
+  Solver()
+  : m_stats{0} {}
+
+  virtual ~Solver() {}
 };
 
 class UnsafeExpr

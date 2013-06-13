@@ -76,6 +76,7 @@ UnsafeExprPtr store(
 Error Solver::encode_constant(
   const UnsafeDecl& decl)
 {
+  m_stats.constants++;
   return __encode_constant(decl);
 }
 
@@ -87,6 +88,7 @@ Error Solver::encode_func_app(
   assert(0 < arity);
   assert(arg_ptrs != nullptr);
 
+  m_stats.func_apps++;
   return __encode_func_app(func_decl, arity, arg_ptrs);
 }
 
@@ -106,6 +108,7 @@ Error Solver::encode_array_select(
   assert(array_ptr != nullptr);
   assert(index_ptr != nullptr);
 
+  m_stats.array_selects++;
   return __encode_array_select(array_ptr, index_ptr);
 }
 
@@ -118,6 +121,7 @@ Error Solver::encode_array_store(
   assert(index_ptr != nullptr);
   assert(value_ptr != nullptr);
 
+  m_stats.array_stores++;
   return __encode_array_store(array_ptr, index_ptr, value_ptr);
 }
 
@@ -128,6 +132,7 @@ Error Solver::encode_unary(
 {
   assert(expr_ptr != nullptr);
 
+  m_stats.unary_ops++;
   return __encode_unary(opcode, sort, expr_ptr);
 }
 
@@ -141,6 +146,31 @@ Error Solver::encode_binary(
   assert(rptr != nullptr);
   assert(lptr->sort() == rptr->sort());
 
+  switch (opcode) {
+  case EQL:
+    m_stats.equalities++;
+    break;
+  case NEQ:
+    m_stats.disequalities++;
+    break;
+  case LSS:
+  case GTR:
+  case LEQ:
+  case GEQ:
+    m_stats.inequalities++;
+    break;
+  case IMP:
+    m_stats.implications++;
+    break;
+  case LAND:
+    m_stats.conjunctions++;
+    break;
+  case LOR:
+    m_stats.disjunctions++;
+    break;
+  }
+
+  m_stats.binary_ops++;
   return __encode_binary(opcode, sort, lptr, rptr);
 }
 
@@ -151,6 +181,22 @@ Error Solver::encode_nary(
 {
   assert(!ptrs.empty());
 
+  switch (opcode) {
+  case EQL:
+    m_stats.equalities += ptrs.size();
+    break;
+  case NEQ:
+    m_stats.disequalities += ptrs.size();
+    break;
+  case LAND:
+    m_stats.conjunctions += ptrs.size();
+    break;
+  case LOR:
+    m_stats.disjunctions += ptrs.size();
+    break;
+  }
+
+  m_stats.nary_ops++;
   return __encode_nary(opcode, sort, ptrs);
 }
 

@@ -163,3 +163,44 @@ TEST(SmtFunctionalTest, Function)
   msat_solver.add(formula && x != 7);
   EXPECT_EQ(smt::unsat, msat_solver.check());
 }
+
+TEST(SmtFunctionalTest, Stats)
+{
+  const smt::Decl<smt::Func<smt::Int, smt::Int>> func_decl("f");
+  const smt::ExprPtr<smt::Int> x = smt::any<smt::Int>("x");
+  const smt::ExprPtr<smt::Bool> formula = x < 3 && x == smt::apply(func_decl, 3);
+
+  smt::Z3Solver z3_solver;
+  z3_solver.add(formula);
+
+  EXPECT_EQ(2, z3_solver.stats().constants);
+  EXPECT_EQ(1, z3_solver.stats().func_apps);
+  EXPECT_EQ(0, z3_solver.stats().array_selects);
+  EXPECT_EQ(0, z3_solver.stats().array_stores);
+  EXPECT_EQ(0, z3_solver.stats().unary_ops);
+  EXPECT_EQ(3, z3_solver.stats().binary_ops);
+  EXPECT_EQ(0, z3_solver.stats().nary_ops);
+  EXPECT_EQ(1, z3_solver.stats().equalities);
+  EXPECT_EQ(0, z3_solver.stats().disequalities);
+  EXPECT_EQ(1, z3_solver.stats().inequalities);
+  EXPECT_EQ(0, z3_solver.stats().implications);
+  EXPECT_EQ(1, z3_solver.stats().conjunctions);
+  EXPECT_EQ(0, z3_solver.stats().disjunctions);
+
+  smt::MsatSolver msat_solver;
+  msat_solver.add(formula);
+
+  EXPECT_EQ(2, msat_solver.stats().constants);
+  EXPECT_EQ(1, msat_solver.stats().func_apps);
+  EXPECT_EQ(0, msat_solver.stats().array_selects);
+  EXPECT_EQ(0, msat_solver.stats().array_stores);
+  EXPECT_EQ(0, msat_solver.stats().unary_ops);
+  EXPECT_EQ(3, msat_solver.stats().binary_ops);
+  EXPECT_EQ(0, msat_solver.stats().nary_ops);
+  EXPECT_EQ(1, msat_solver.stats().equalities);
+  EXPECT_EQ(0, msat_solver.stats().disequalities);
+  EXPECT_EQ(1, msat_solver.stats().inequalities);
+  EXPECT_EQ(0, msat_solver.stats().implications);
+  EXPECT_EQ(1, msat_solver.stats().conjunctions);
+  EXPECT_EQ(0, msat_solver.stats().disjunctions);
+}
