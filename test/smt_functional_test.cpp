@@ -3,6 +3,18 @@
 #include <smt>
 #include <cstdint>
 
+// Only access global solver through a function that has a static local object!
+smt::Solver& global_solver()
+{
+  static smt::MsatSolver s_msat_solver;
+  return s_msat_solver;
+}
+
+TEST(SmtFunctionalTest, Reset)
+{
+  global_solver().reset();
+}
+
 TEST(SmtFunctionalTest, DeMorgan)
 {
   const smt::ExprPtr<smt::Bool> x = smt::any<smt::Bool>("x");
