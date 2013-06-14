@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Intro to SMT Kit</title>
+    <meta charset='utf-8'>
+    <script src='static/slides.js'></script>
+  </head>
+  <body style='display: none'>
+    <section class='slides layout-widescreen'>
+      <article>
+        <h1>SMT Kit</h1>
+        <h3>C&#43;&#43;11 library for many-sorted first-order logics</h3>
+          <div class="presenter">
+            <p>
+              Alex Horn
+            </p>
+            <p>
+              University of Oxford
+            </p>
+          </div>
+      </article>
+
+      <article>
+        <h3>What is SMT Kit?</h3>
+          <p>
+            SMT Kit is:
+          </p>
+          <ul>
+            <li>open source</li>
+            <li>domain-specific language for many-sorted first-order logics</li>
+            <li>type-safe, or optionally not</li>
+            <li>C&#43;&#43;11 interface (API) to SMT solvers</li>
+            <li>around 3K lines of code</li>
+            <li>well-tested with around 90% code coverage</li>
+            <li>useful for experimental research</li>
+          </ul>
+          <p>
+            The code originates from our research into symbolic concurrency analysis techniques.
+          </p>
+      </article>
+
+      <article>
+        <h3>Well-sortedness of SMT terms</h3>
+          <div class="image">
+            <img src="smt-well-sortedness.png">
+          </div>
+          <p>
+            Refer to SMT-LIB 2.0 standard, p. 47
+          </p>
+      </article>
+
+      <article>
+        <h2>API Usage</h2>
+      </article> 
+
+      <article>
+        <h3>Overview</h3>
+        <p>
+          Introductory example:
+        </p>
+        <div class="code">
+          <pre>#include &lt;smt&gt;
+
+int main()
+{
+  auto x = smt::any&lt;smt::Bool&gt;("x");
+  auto y = smt::any&lt;smt::Bool&gt;("y");
+  auto lhs = !(x &amp;&amp; y);
+  auto rhs = !x || !y;
+
+  smt::Z3Solver z3_solver;
+  z3_solver.add(lhs != rhs);
+  assert(smt::unsat == z3_solver.check());
+
+  smt::MsatSolver msat_solver;
+  msat_solver.add(lhs != rhs);
+  assert(smt::unsat == msat_solver.check());
+
+  // can also check msat_solver.stats() etc.
+
+  return 0;
+}</pre>
+        </div>
+      </article>
+
+      <article>
+        <h3>Examples (1/2)</h3>
+        <p>
+          Bit vectors:
+        </p>
+        <div class="code">
+          <pre>auto x = smt::any&lt;uint64_t&gt;("x");
+auto y = smt::any&lt;uint64_t&gt;("y");
+auto z = (x &amp; ~y) == x;</pre>
+        </div>
+        <p>
+          Arrays:
+        </p>
+        <div class="code">
+          <pre>const smt::Decl&lt;smt::Array&lt;smt::Int, uint8_t&gt;&gt; array_decl("array");
+
+auto array = smt::constant(array_decl);
+auto index = smt::any&lt;smt::Int&gt;("index");
+auto update_term = smt::literal&lt;uint8_t&gt;(0x3f);
+
+auto new_array = smt::store(array, index, update_term);</pre>
+        </div>
+      </article>
+
+      <article>
+        <h3>Examples (2/2)</h3>
+        <p>
+          Function declarations:
+        </p>
+        <div class="code">
+          <pre>const smt::Decl&lt;smt::Func&lt;smt::Int, smt::Int&gt;&gt; func_decl("f");
+auto x = smt::any<smt::Int>("x");
+
+auto formula = smt::apply(func_decl, x) == 7;     // f(x) = 7</pre>
+        </div>
+        <p>
+          Push and pop assertion stack:
+        </p>
+        <div class="code">
+          <pre>smt::MsatSolver solver;
+
+solver.push();
+{
+  solver.add(smt::literal&lt;smt::Bool&gt;(false));
+  assert(smt::unsat == solver.check());
+}
+solver.pop();
+
+assert(smt::sat == solver.check());</pre>
+        </div>
+        <p>
+          Other examples can be found in the <a href="https://github.com/ahorn/smt-kit/blob/master/test/smt_functional_test.cpp" target="_blank">functional tests</a>.
+        </p>
+      </article>
+
+      <article>
+        <h3>Well-sortedness revisited</h3>
+        <p>
+          SMT sorts are rendered as types:
+        </p>
+        <div class="code">
+          <pre>typedef smt::Int ClockSort;</pre>
+        </div>
+        <p>
+          Functions and arrays integrate nicely:
+        </p>
+        <div class="code">
+          <pre>namespace smt
+{
+
+  template&lt;typename... T&gt;
+  struct Func
+  {
+    // last tuple element
+    typedef typename std::tuple_element&lt;sizeof...(T) - 1,
+      std::tuple&lt;T...&gt;&gt;::type Range;
+
+      Func() = delete;
+  };
+
+}</pre>
+        </div>
+        <p>
+          This is implemented in <a href="https://github.com/ahorn/smt-kit/blob/master/include/smt.h" target="_blank">include/smt.h</a> using C&#43;&#43;11 template metaprogramming.
+        </p>
+      </article>
+
+      <article>
+        <h3>Build instructions</h3>
+        <p>
+          On a (mostly) POSIX-compliant operating system, execute the commands:
+        </p>
+        <div class="code">
+          <pre>$ ./autogen.sh
+$ ./configure
+$ make
+$ make test
+$ make install</pre>
+        </div>
+        <p>
+          There are over 150 unit and functional tests.
+        </p>
+      </article>
+
+      <article>
+        <h3>Thank you</h1>
+          <div class="presenter">
+            <p>
+              Alex Horn
+            </p>
+            <p class="link"><a href="https://github.com/ahorn/smt-kit" target="_blank">https://github.com/ahorn/smt-kit</a></p>
+          </div>
+      </article>
+    </section>
+  </body>
+</html>
