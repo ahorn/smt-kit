@@ -668,6 +668,7 @@ public:
   UnsafeExprPtr& operator=(const UnsafeExprPtr& other) 
   {
     m_ptr = other.m_ptr;
+    return *this;
   }
 
   template<typename T>
@@ -744,6 +745,7 @@ public:
   ExprPtr& operator=(const ExprPtr& other) 
   {
     m_ptr = other.m_ptr;
+    return *this;
   }
 
   operator UnsafeExprPtr() const

@@ -176,6 +176,8 @@ Error Solver::encode_binary(
   case LOR:
     m_stats.disjunctions++;
     break;
+   default:
+    ;
   }
 
   m_stats.binary_ops++;
@@ -202,6 +204,8 @@ Error Solver::encode_nary(
   case LOR:
     m_stats.disjunctions += ptrs.size();
     break;
+   default:
+    ;
   }
 
   m_stats.nary_ops++;
