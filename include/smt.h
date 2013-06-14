@@ -175,7 +175,7 @@ public:
     m_is_func(other.m_is_func),
     m_is_array(other.m_is_array),
     m_is_tuple(other.m_is_tuple),
-    m_sorts(std::move(other.m_sorts)),
+    m_sorts(other.m_sorts),
     m_sorts_size(other.m_sorts_size) {}
 
   constexpr bool is_bool()   const { return m_is_bool;   }
