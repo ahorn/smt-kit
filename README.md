@@ -42,6 +42,28 @@ For advanced usage information on other configure options refer to the
 
 [autoconf]: http://www.gnu.org/software/autoconf/
 
+## API Usage
+
+First, `#include <smt>`. An example with built-in operators follows:
+
+    auto x = smt::any<smt::Bool>("x");
+    auto y = smt::any<smt::Bool>("y");
+    auto lhs = !(x && y);
+    auto rhs = !x || !y;
+
+    smt::Z3Solver z3_solver;
+    z3_solver.add(lhs != rhs);
+    assert(smt::unsat != z3_solver.check());
+
+    smt::MsatSolver msat_solver;
+    msat_solver.add(lhs != rhs);
+    assert(smt::unsat == msat_solver.check());
+
+Several more examples including incremental solving, function applications
+and array logic expressions can be found in the [functional tests][api].
+
+[api]: https://github.com/ahorn/smt-kit/blob/master/test/smt_functional_test.cpp
+
 ## Troubleshooting
 
 Since SMT Kit uses advanced C++11 language features, older compiler
