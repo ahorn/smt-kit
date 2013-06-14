@@ -46,6 +46,7 @@ For advanced usage information on other configure options refer to the
 
 First, `#include <smt>`. An example with built-in operators follows:
 
+```C++
     auto x = smt::any<smt::Bool>("x");
     auto y = smt::any<smt::Bool>("y");
     auto lhs = !(x && y);
@@ -58,6 +59,7 @@ First, `#include <smt>`. An example with built-in operators follows:
     smt::MsatSolver msat_solver;
     msat_solver.add(lhs != rhs);
     assert(smt::unsat == msat_solver.check());
+```
 
 Several more examples including incremental solving, function applications
 and array logic expressions can be found in the [functional tests][api].
