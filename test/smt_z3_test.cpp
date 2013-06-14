@@ -634,10 +634,10 @@ TEST(SmtZ3Test, Add)
   Z3Solver s;
 
   const ExprPtr<long> e0_ptr = any<long>("x");
-  EXPECT_EQ(OK, s.add(0 < e0_ptr));
+  s.add(0 < e0_ptr);
 
   const ExprPtr<sort::Int> e1_ptr = any<sort::Int>("y");
-  EXPECT_EQ(OK, s.add(0 < e1_ptr));
+  s.add(0 < e1_ptr);
 
   z3::context& context = s.context();
   z3::solver& solver = s.solver();
@@ -682,7 +682,7 @@ TEST(SmtZ3Test, BinaryBvSignedOperatorLSS)
   Z3Solver solver;
 
   ExprPtr<int8_t> x = any<int8_t>("x");
-  EXPECT_EQ(OK, solver.add('\0' < x));
+  solver.add('\0' < x);
 
   std::stringstream out;
   out << solver.expr();
@@ -694,7 +694,7 @@ TEST(SmtZ3Test, BinaryBvUnsignedOperatorLSS)
   Z3Solver solver;
 
   ExprPtr<uint8_t> x = any<uint8_t>("x");
-  EXPECT_EQ(OK, solver.add('\0' < x));
+  solver.add('\0' < x);
 
   std::stringstream out;
   out << solver.expr();
@@ -706,7 +706,7 @@ TEST(SmtZ3Test, BinaryBvSignedOperatorGTR)
   Z3Solver solver;
 
   ExprPtr<int8_t> x = any<int8_t>("x");
-  EXPECT_EQ(OK, solver.add('\0' > x));
+  solver.add('\0' > x);
 
   std::stringstream out;
   out << solver.expr();
@@ -718,7 +718,7 @@ TEST(SmtZ3Test, BinaryBvUnsignedOperatorGTR)
   Z3Solver solver;
 
   ExprPtr<uint8_t> x = any<uint8_t>("x");
-  EXPECT_EQ(OK, solver.add('\0' > x));
+  solver.add('\0' > x);
 
   std::stringstream out;
   out << solver.expr();
@@ -730,7 +730,7 @@ TEST(SmtZ3Test, BinaryBvSignedOperatorNEQ)
   Z3Solver solver;
 
   ExprPtr<int8_t> x = any<int8_t>("x");
-  EXPECT_EQ(OK, solver.add('\0' != x));
+  solver.add('\0' != x);
 
   std::stringstream out;
   out << solver.expr();
@@ -742,7 +742,7 @@ TEST(SmtZ3Test, BinaryBvUnsignedOperatorNEQ)
   Z3Solver solver;
 
   ExprPtr<uint8_t> x = any<uint8_t>("x");
-  EXPECT_EQ(OK, solver.add('\0' != x));
+  solver.add('\0' != x);
 
   std::stringstream out;
   out << solver.expr();
@@ -754,7 +754,7 @@ TEST(SmtZ3Test, BinaryBvSignedOperatorLEQ)
   Z3Solver solver;
 
   ExprPtr<int8_t> x = any<int8_t>("x");
-  EXPECT_EQ(OK, solver.add('\0' <= x));
+  solver.add('\0' <= x);
 
   std::stringstream out;
   out << solver.expr();
@@ -766,7 +766,7 @@ TEST(SmtZ3Test, BinaryBvUnsignedOperatorLEQ)
   Z3Solver solver;
 
   ExprPtr<uint8_t> x = any<uint8_t>("x");
-  EXPECT_EQ(OK, solver.add('\0' <= x));
+  solver.add('\0' <= x);
 
   std::stringstream out;
   out << solver.expr();
@@ -778,7 +778,7 @@ TEST(SmtZ3Test, BinaryBvSignedOperatorGEQ)
   Z3Solver solver;
 
   ExprPtr<int8_t> x = any<int8_t>("x");
-  EXPECT_EQ(OK, solver.add('\0' >= x));
+  solver.add('\0' >= x);
 
   std::stringstream out;
   out << solver.expr();
@@ -790,7 +790,7 @@ TEST(SmtZ3Test, BinaryBvUnsignedOperatorGEQ)
   Z3Solver solver;
 
   ExprPtr<uint8_t> x = any<uint8_t>("x");
-  EXPECT_EQ(OK, solver.add('\0' >= x));
+  solver.add('\0' >= x);
 
   std::stringstream out;
   out << solver.expr();
@@ -802,7 +802,7 @@ TEST(SmtZ3Test, BinaryIntOperatorLSS)
   Z3Solver solver;
 
   ExprPtr<sort::Int> x = any<sort::Int>("x");
-  EXPECT_EQ(OK, solver.add(0 < x));
+  solver.add(0 < x);
 
   std::stringstream out;
   out << solver.expr();
@@ -814,7 +814,7 @@ TEST(SmtZ3Test, BinaryIntOperatorGTR)
   Z3Solver solver;
 
   ExprPtr<sort::Int> x = any<sort::Int>("x");
-  EXPECT_EQ(OK, solver.add(0 > x));
+  solver.add(0 > x);
 
   std::stringstream out;
   out << solver.expr();
@@ -826,7 +826,7 @@ TEST(SmtZ3Test, BinaryIntOperatorNEQ)
   Z3Solver solver;
 
   ExprPtr<sort::Int> x = any<sort::Int>("x");
-  EXPECT_EQ(OK, solver.add(0 != x));
+  solver.add(0 != x);
 
   std::stringstream out;
   out << solver.expr();
@@ -838,7 +838,7 @@ TEST(SmtZ3Test, BinaryIntOperatorLEQ)
   Z3Solver solver;
 
   ExprPtr<sort::Int> x = any<sort::Int>("x");
-  EXPECT_EQ(OK, solver.add(0 <= x));
+  solver.add(0 <= x);
 
   std::stringstream out;
   out << solver.expr();
@@ -850,7 +850,7 @@ TEST(SmtZ3Test, BinaryIntOperatorGEQ)
   Z3Solver solver;
 
   ExprPtr<sort::Int> x = any<sort::Int>("x");
-  EXPECT_EQ(OK, solver.add(0 >= x));
+  solver.add(0 >= x);
 
   std::stringstream out;
   out << solver.expr();
@@ -862,10 +862,10 @@ TEST(SmtZ3Test, Functional)
   Z3Solver solver;
 
   auto x = any<long>("x");
-  EXPECT_EQ(OK, solver.add(0 < x));
+  solver.add(0 < x);
 
   auto y = any<sort::Int>("y");
-  EXPECT_EQ(OK, solver.add(0 < y));
+  solver.add(0 < y);
 
   EXPECT_EQ(smt::sat, solver.check());
 

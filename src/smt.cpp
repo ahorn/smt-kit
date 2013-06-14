@@ -223,14 +223,16 @@ void Solver::pop()
   return __pop();
 }
 
-Error Solver::unsafe_add(const UnsafeExprPtr& condition)
+void Solver::unsafe_add(const UnsafeExprPtr& condition)
 {
-  return __unsafe_add(condition);
+  const Error err = __unsafe_add(condition);
+  assert(err == OK);
 }
 
-Error Solver::add(const ExprPtr<sort::Bool>& condition)
+void Solver::add(const ExprPtr<sort::Bool>& condition)
 {
-  return __add(condition);
+  const Error err = __unsafe_add(condition);
+  assert(err == OK);
 }
 
 CheckResult Solver::check()

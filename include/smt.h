@@ -73,7 +73,7 @@ namespace sort
   };
 }
 
-// Contingencies that a caller of the API must always consider
+// Contingencies that an implementation of the API must always consider
 enum Error : unsigned {
   // No error, OK equals zero
   OK = 0,
@@ -585,8 +585,8 @@ public:
 
   void pop();
 
-  Error add(const ExprPtr<sort::Bool>& condition);
-  Error unsafe_add(const UnsafeExprPtr& condition);
+  void add(const ExprPtr<sort::Bool>& condition);
+  void unsafe_add(const UnsafeExprPtr& condition);
 
   CheckResult check();
 
