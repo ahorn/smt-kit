@@ -30,6 +30,7 @@ execute the following commands from the `smt-kit` folder:
 If `./configure` fails, you may have to set environment variables
 such as `CXX` and `CXXFLAGS`. For example, to compile on OS X with
 LLVM use the command `./configure CXX=clang++ CXXFLAGS=-stdlib=libc++`.
+But see also the troubleshooting section below.
 
 If `make test` fails, you can still install, but it is likely that some
 features of this library will not work correctly on your system.
