@@ -76,3 +76,8 @@ In particular, MathSAT5 on OS X does not currently link with clang++
 and LLVM's C++11 standard library (libc++). As a workaround, g++ from
 Mac Ports works fine. This compiler portability issue has been reported
 to mathsat@fbk.eu.
+
+## Bug Reports
+
+Please submit patches as Github pull request, formatted according to the
+existing coding style.
