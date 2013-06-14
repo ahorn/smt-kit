@@ -174,7 +174,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     const z3::expr z3_arch_expr(m_z3_context);
     std::vector<z3::expr> z3_args(arity, z3_arch_expr);
     for (int i = 0; i < arity; i++) {
-      err = arg_ptrs[i]->encode(*this);
+      err = arg_ptrs[i].encode(*this);
       if (err) {
         return err;
       }
@@ -187,7 +187,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_const_array(
     const Sort& sort,
-    UnsafeExprPtr init_ptr) override
+    const UnsafeExprPtr& init_ptr) override
   {
     assert(sort.is_array());
 
@@ -198,7 +198,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
       return err;
     }
 
-    err = init_ptr->encode(*this);
+    err = init_ptr.encode(*this);
     if (err) {
       return err;
     }
@@ -207,18 +207,18 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
   virtual Error __encode_array_select(
-    UnsafeExprPtr array_ptr,
-    UnsafeExprPtr index_ptr) override
+    const UnsafeExprPtr& array_ptr,
+    const UnsafeExprPtr& index_ptr) override
   {
     Error err;
 
-    err = array_ptr->encode(*this);
+    err = array_ptr.encode(*this);
     if (err) {
       return err;
     }
     const z3::expr z3_array_expr(m_z3_expr);
 
-    err = index_ptr->encode(*this);
+    err = index_ptr.encode(*this);
     if (err) {
       return err;
     }
@@ -229,25 +229,25 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
   virtual Error __encode_array_store(
-    UnsafeExprPtr array_ptr,
-    UnsafeExprPtr index_ptr,
-    UnsafeExprPtr value_ptr) override
+    const UnsafeExprPtr& array_ptr,
+    const UnsafeExprPtr& index_ptr,
+    const UnsafeExprPtr& value_ptr) override
   {
     Error err;
 
-    err = array_ptr->encode(*this);
+    err = array_ptr.encode(*this);
     if (err) {
       return err;
     }
     const z3::expr z3_array_expr(m_z3_expr);
 
-    err = index_ptr->encode(*this);
+    err = index_ptr.encode(*this);
     if (err) {
       return err;
     }
     const z3::expr z3_index_expr(m_z3_expr);
 
-    err = value_ptr->encode(*this);
+    err = value_ptr.encode(*this);
     if (err) {
       return err;
     }
@@ -260,9 +260,9 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_unary(
     Opcode opcode,
     const Sort& sort,
-    UnsafeExprPtr ptr) override
+    const UnsafeExprPtr& ptr) override
   {
-    const Error err = ptr->encode(*this);
+    const Error err = ptr.encode(*this);
     if (err) {
       return err;
     }
@@ -286,17 +286,17 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary(
     Opcode opcode,
     const Sort& sort,
-    UnsafeExprPtr lptr,
-    UnsafeExprPtr rptr) override
+    const UnsafeExprPtr& lptr,
+    const UnsafeExprPtr& rptr) override
   {
     Error err;
-    err = lptr->encode(*this);
+    err = lptr.encode(*this);
     if (err) {
       return err;
     }
     const z3::expr lexpr(m_z3_expr);
 
-    err = rptr->encode(*this);
+    err = rptr.encode(*this);
     if (err) {
       return err;
     }
@@ -344,7 +344,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
       return UNSUPPORT_ERROR;
     case LSS:
       {
-        const Sort& lptr_sort = lptr->sort();
+        const Sort& lptr_sort = lptr.sort();
         if (lptr_sort.is_bv() && !lptr_sort.is_signed()) {
           m_z3_expr = ult(lexpr, rexpr);
         } else {
@@ -354,7 +354,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
       break;
     case GTR:
       {
-        const Sort& lptr_sort = lptr->sort();
+        const Sort& lptr_sort = lptr.sort();
         if (lptr_sort.is_bv() && !lptr_sort.is_signed()) {
           m_z3_expr = ugt(lexpr, rexpr);
         } else {
@@ -367,7 +367,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
       break;
     case LEQ:
       {
-        const Sort& lptr_sort = lptr->sort();
+        const Sort& lptr_sort = lptr.sort();
         if (lptr_sort.is_bv() && !lptr_sort.is_signed()) {
           m_z3_expr = ule(lexpr, rexpr);
         } else {
@@ -377,7 +377,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
       break;
     case GEQ:
       {
-        const Sort& lptr_sort = lptr->sort();
+        const Sort& lptr_sort = lptr.sort();
         if (lptr_sort.is_bv() && !lptr_sort.is_signed()) {
           m_z3_expr = uge(lexpr, rexpr);
         } else {
@@ -401,8 +401,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
       // SMT-LIB 2.0 distinct variadic function, formula size O(N)
       size_t i = 0, ptrs_size = ptrs.size();
       Z3_ast asts[ptrs_size];
-      for (const UnsafeExprPtr ptr : ptrs) {
-        ptr->encode(*this);
+      for (const UnsafeExprPtr& ptr : ptrs) {
+        ptr.encode(*this);
         asts[i] = m_z3_expr;
         Z3_inc_ref(m_z3_context, asts[i]);
 
@@ -438,9 +438,9 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     m_z3_solver.pop();
   }
 
-  virtual Error __unsafe_add(UnsafeExprPtr condition) override
+  virtual Error __unsafe_add(const UnsafeExprPtr& condition) override
   {
-    const Error err = condition->encode(*this);
+    const Error err = condition.encode(*this);
     if (err) {
       return err;
     }
@@ -448,7 +448,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     return OK;
   }
 
-  virtual Error __add(ExprPtr<sort::Bool> condition) override
+  virtual Error __add(const ExprPtr<sort::Bool>& condition) override
   {
     return __unsafe_add(condition);
   }

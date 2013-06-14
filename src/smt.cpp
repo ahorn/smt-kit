@@ -28,15 +28,17 @@ UnsafeExprPtr constant(const UnsafeDecl& decl)
   return UnsafeExprPtr(new UnsafeConstantExpr(decl));
 }
 
-UnsafeExprPtr apply(UnsafeDecl func_decl, UnsafeExprPtr arg_ptr)
+UnsafeExprPtr apply(
+  const UnsafeDecl& func_decl,
+  const UnsafeExprPtr& arg_ptr)
 {
   return UnsafeExprPtr(new UnsafeFuncAppExpr<1>(func_decl, { arg_ptr }));
 }
 
 UnsafeExprPtr apply(
-  UnsafeDecl func_decl,
-  UnsafeExprPtr larg_ptr,
-  UnsafeExprPtr rarg_ptr)
+  const UnsafeDecl& func_decl,
+  const UnsafeExprPtr& larg_ptr,
+  const UnsafeExprPtr& rarg_ptr)
 {
   return UnsafeExprPtr(new UnsafeFuncAppExpr<2>(func_decl,
     { larg_ptr, rarg_ptr }));
@@ -48,26 +50,32 @@ UnsafeExprPtr distinct(UnsafeExprPtrs&& ptrs)
     internal::sort<sort::Bool>(), NEQ, std::move(ptrs)));
 }
 
-UnsafeExprPtr select(UnsafeExprPtr array_ptr, UnsafeExprPtr index_ptr)
+UnsafeExprPtr select(
+  const UnsafeExprPtr& array_ptr,
+  const UnsafeExprPtr& index_ptr)
 {
   return UnsafeExprPtr(new UnsafeArraySelectExpr(array_ptr, index_ptr));
 }
 
-UnsafeExprPtr implies(UnsafeExprPtr lptr, UnsafeExprPtr rptr)
+UnsafeExprPtr implies(
+  const UnsafeExprPtr& lptr,
+  const UnsafeExprPtr& rptr)
 {
   return UnsafeExprPtr(new UnsafeBinaryExpr(
     internal::sort<sort::Bool>(), IMP, lptr, rptr));
 }
 
-ExprPtr<sort::Bool> implies(ExprPtr<sort::Bool> lptr, ExprPtr<sort::Bool> rptr)
+ExprPtr<sort::Bool> implies(
+  const ExprPtr<sort::Bool>& lptr,
+  const ExprPtr<sort::Bool>& rptr)
 {
   return ExprPtr<sort::Bool>(new BinaryExpr<IMP, sort::Bool>(lptr, rptr));
 }
 
 UnsafeExprPtr store(
-  UnsafeExprPtr array_ptr,
-  UnsafeExprPtr index_ptr,
-  UnsafeExprPtr value_ptr)
+  const UnsafeExprPtr& array_ptr,
+  const UnsafeExprPtr& index_ptr,
+  const UnsafeExprPtr& value_ptr)
 {
   return UnsafeExprPtr(new UnsafeArrayStoreExpr(
     array_ptr, index_ptr, value_ptr));
@@ -94,32 +102,32 @@ Error Solver::encode_func_app(
 
 Error Solver::encode_const_array(
   const Sort& sort,
-  UnsafeExprPtr init_ptr)
+  const UnsafeExprPtr& init_ptr)
 {
-  assert(init_ptr != nullptr);
+  assert(!init_ptr.is_null());
 
   return __encode_const_array(sort, init_ptr);
 }
 
 Error Solver::encode_array_select(
-  UnsafeExprPtr array_ptr,
-  UnsafeExprPtr index_ptr)
+  const UnsafeExprPtr& array_ptr,
+  const UnsafeExprPtr& index_ptr)
 {
-  assert(array_ptr != nullptr);
-  assert(index_ptr != nullptr);
+  assert(!array_ptr.is_null());
+  assert(!index_ptr.is_null());
 
   m_stats.array_selects++;
   return __encode_array_select(array_ptr, index_ptr);
 }
 
 Error Solver::encode_array_store(
-  UnsafeExprPtr array_ptr,
-  UnsafeExprPtr index_ptr,
-  UnsafeExprPtr value_ptr)
+  const UnsafeExprPtr& array_ptr,
+  const UnsafeExprPtr& index_ptr,
+  const UnsafeExprPtr& value_ptr)
 {
-  assert(array_ptr != nullptr);
-  assert(index_ptr != nullptr);
-  assert(value_ptr != nullptr);
+  assert(!array_ptr.is_null());
+  assert(!index_ptr.is_null());
+  assert(!value_ptr.is_null());
 
   m_stats.array_stores++;
   return __encode_array_store(array_ptr, index_ptr, value_ptr);
@@ -128,9 +136,9 @@ Error Solver::encode_array_store(
 Error Solver::encode_unary(
   Opcode opcode,
   const Sort& sort,
-  UnsafeExprPtr expr_ptr)
+  const UnsafeExprPtr& expr_ptr)
 {
-  assert(expr_ptr != nullptr);
+  assert(!expr_ptr.is_null());
 
   m_stats.unary_ops++;
   return __encode_unary(opcode, sort, expr_ptr);
@@ -139,12 +147,12 @@ Error Solver::encode_unary(
 Error Solver::encode_binary(
   Opcode opcode,
   const Sort& sort,
-  UnsafeExprPtr lptr,
-  UnsafeExprPtr rptr)
+  const UnsafeExprPtr& lptr,
+  const UnsafeExprPtr& rptr)
 {
-  assert(lptr != nullptr);
-  assert(rptr != nullptr);
-  assert(lptr->sort() == rptr->sort());
+  assert(!lptr.is_null());
+  assert(!rptr.is_null());
+  assert(lptr.sort() == rptr.sort());
 
   switch (opcode) {
   case EQL:
@@ -215,12 +223,12 @@ void Solver::pop()
   return __pop();
 }
 
-Error Solver::unsafe_add(UnsafeExprPtr condition)
+Error Solver::unsafe_add(const UnsafeExprPtr& condition)
 {
   return __unsafe_add(condition);
 }
 
-Error Solver::add(ExprPtr<sort::Bool> condition)
+Error Solver::add(const ExprPtr<sort::Bool>& condition)
 {
   return __add(condition);
 }

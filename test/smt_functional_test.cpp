@@ -107,21 +107,21 @@ TEST(SmtFunctionalTest, UnsafeExpr)
 TEST(SmtFunctionalTest, Reflection)
 {
   constexpr size_t bv_int_size = sizeof(int) * 8;
-  EXPECT_EQ(smt::bv_sort(true, bv_int_size), smt::literal<int>(3)->sort());
+  EXPECT_EQ(smt::bv_sort(true, bv_int_size), smt::literal<int>(3).sort());
 
   const smt::ExprPtr<uint32_t> x = smt::any<uint32_t>("x");
-  EXPECT_TRUE(x->sort().is_bv());
-  EXPECT_FALSE(x->sort().is_signed());
-  EXPECT_EQ(32, x->sort().bv_size());
+  EXPECT_TRUE(x.sort().is_bv());
+  EXPECT_FALSE(x.sort().is_signed());
+  EXPECT_EQ(32, x.sort().bv_size());
 
   typedef smt::Func<smt::Int, smt::Real, char> SomeFunc;
   const smt::ExprPtr<SomeFunc> f = smt::any<SomeFunc>("f");
-  EXPECT_TRUE(f->sort().is_func());
-  EXPECT_EQ(3, f->sort().sorts_size());
-  EXPECT_TRUE(f->sort().sorts(0).is_int());
-  EXPECT_TRUE(f->sort().sorts(1).is_real());
-  EXPECT_TRUE(f->sort().sorts(2).is_bv());
-  EXPECT_EQ(sizeof(char) * 8, f->sort().sorts(2).bv_size());
+  EXPECT_TRUE(f.sort().is_func());
+  EXPECT_EQ(3, f.sort().sorts_size());
+  EXPECT_TRUE(f.sort().sorts(0).is_int());
+  EXPECT_TRUE(f.sort().sorts(1).is_real());
+  EXPECT_TRUE(f.sort().sorts(2).is_bv());
+  EXPECT_EQ(sizeof(char) * 8, f.sort().sorts(2).bv_size());
 }
 
 TEST(SmtFunctionalTest, Array)

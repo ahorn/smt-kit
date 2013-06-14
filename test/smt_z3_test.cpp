@@ -173,7 +173,7 @@ TEST(SmtZ3Test, Decl)
 
   const Decl<long> d0("x");
   ExprPtr<long> e0_ptr = constant(d0);
-  EXPECT_EQ(OK, e0_ptr->encode(s));
+  EXPECT_EQ(OK, static_cast<UnsafeExprPtr>(e0_ptr).encode(s));
 
   const z3::expr expr(s.expr());
   EXPECT_TRUE(expr.is_bv());
@@ -316,7 +316,7 @@ TEST(SmtZ3Test, Distinct)
 
   ExprPtr<sort::Bool> d(distinct(std::move(operand_ptrs)));
 
-  EXPECT_EQ(OK, d->encode(s));
+  EXPECT_EQ(OK, static_cast<UnsafeExprPtr>(d).encode(s));
   std::stringstream out;
   out << s.expr();
   EXPECT_EQ("(distinct x y z)", out.str());

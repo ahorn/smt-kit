@@ -193,7 +193,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
     msat_term arg_terms[arity];
     for (int i = 0; i < arity; i++) {
-      err = arg_ptrs[i]->encode(*this);
+      err = arg_ptrs[i].encode(*this);
       if (err) {
         return err;
       }
@@ -209,23 +209,23 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_const_array(
     const Sort& sort,
-    UnsafeExprPtr init_ptr) override
+    const UnsafeExprPtr& init_ptr) override
   {
     return UNSUPPORT_ERROR;
   }
 
   virtual Error __encode_array_select(
-    UnsafeExprPtr array_ptr,
-    UnsafeExprPtr index_ptr) override
+    const UnsafeExprPtr& array_ptr,
+    const UnsafeExprPtr& index_ptr) override
   {
     Error err;
-    err = array_ptr->encode(*this);
+    err = array_ptr.encode(*this);
     if (err) {
       return err;
     }
     const msat_term array_term = m_term;
 
-    err = index_ptr->encode(*this);
+    err = index_ptr.encode(*this);
     if (err) {
       return err;
     }
@@ -236,24 +236,24 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_array_store(
-    UnsafeExprPtr array_ptr,
-    UnsafeExprPtr index_ptr,
-    UnsafeExprPtr value_ptr) override
+    const UnsafeExprPtr& array_ptr,
+    const UnsafeExprPtr& index_ptr,
+    const UnsafeExprPtr& value_ptr) override
   {
     Error err;
-    err = array_ptr->encode(*this);
+    err = array_ptr.encode(*this);
     if (err) {
       return err;
     }
     const msat_term array_term = m_term;
 
-    err = index_ptr->encode(*this);
+    err = index_ptr.encode(*this);
     if (err) {
       return err;
     }
     const msat_term index_term = m_term;
 
-    err = value_ptr->encode(*this);
+    err = value_ptr.encode(*this);
     if (err) {
       return err;
     }
@@ -266,9 +266,9 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   virtual Error __encode_unary(
     Opcode opcode,
     const Sort& sort,
-    UnsafeExprPtr ptr) override
+    const UnsafeExprPtr& ptr) override
   {
-    const Error err = ptr->encode(*this);
+    const Error err = ptr.encode(*this);
     if (err) {
       return err;
     }
@@ -297,17 +297,17 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   virtual Error __encode_binary(
     Opcode opcode,
     const Sort& sort,
-    UnsafeExprPtr lptr,
-    UnsafeExprPtr rptr) override
+    const UnsafeExprPtr& lptr,
+    const UnsafeExprPtr& rptr) override
   {
     Error err;
-    err = lptr->encode(*this);
+    err = lptr.encode(*this);
     if (err) {
       return err;
     }
     const msat_term lterm = m_term;
 
-    err = rptr->encode(*this);
+    err = rptr.encode(*this);
     if (err) {
       return err;
     }
@@ -340,7 +340,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       }
       break;
     case EQL:
-      if (lptr->sort().is_bool()) {
+      if (lptr.sort().is_bool()) {
         set_term(msat_make_iff(m_env, lterm, rterm));
       } else {
         set_term(msat_make_equal(m_env, lterm, rterm));
@@ -387,13 +387,13 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       }
       break;
     case LSS:
-      if (lptr->sort().is_bv()) {
-        if (lptr->sort().is_signed()) {
+      if (lptr.sort().is_bv()) {
+        if (lptr.sort().is_signed()) {
           set_term(msat_make_bv_slt(m_env, lterm, rterm));
         } else {
           set_term(msat_make_bv_ult(m_env, lterm, rterm));
         }
-      } else if (lptr->sort().is_int()) {
+      } else if (lptr.sort().is_int()) {
         const msat_term leq_term = msat_make_leq(m_env, lterm, rterm);
         assert(!MSAT_ERROR_TERM(leq_term));
         const msat_term eq_term = msat_make_equal(m_env, lterm, rterm);
@@ -406,13 +406,13 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       }
       break;
     case GTR:
-      if (lptr->sort().is_bv()) {
-        if (lptr->sort().is_signed()) {
+      if (lptr.sort().is_bv()) {
+        if (lptr.sort().is_signed()) {
           set_term(msat_make_bv_slt(m_env, rterm, lterm));
         } else {
           set_term(msat_make_bv_ult(m_env, rterm, lterm));
         }
-      } else if (lptr->sort().is_int()) {
+      } else if (lptr.sort().is_int()) {
         const msat_term geq_term = msat_make_leq(m_env, rterm, lterm);
         assert(!MSAT_ERROR_TERM(geq_term));
         const msat_term eq_term = msat_make_equal(m_env, lterm, rterm);
@@ -424,7 +424,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       break;
     case NEQ:
       msat_term eq_term;
-      if (lptr->sort().is_bool()) {
+      if (lptr.sort().is_bool()) {
         eq_term = msat_make_iff(m_env, lterm, rterm);
       } else {
         eq_term = msat_make_equal(m_env, lterm, rterm);
@@ -433,24 +433,24 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       set_term(msat_make_not(m_env, eq_term));
       break;
     case LEQ:
-      if (lptr->sort().is_bv()) {
-        if (lptr->sort().is_signed()) {
+      if (lptr.sort().is_bv()) {
+        if (lptr.sort().is_signed()) {
           set_term(msat_make_bv_sleq(m_env, lterm, rterm));
         } else {
           set_term(msat_make_bv_uleq(m_env, lterm, rterm));
         }
-      } else if (lptr->sort().is_int()) {
+      } else if (lptr.sort().is_int()) {
         set_term(msat_make_leq(m_env, lterm, rterm));
       }
       break;
     case GEQ:
-      if (lptr->sort().is_bv()) {
-        if (lptr->sort().is_signed()) {
+      if (lptr.sort().is_bv()) {
+        if (lptr.sort().is_signed()) {
           set_term(msat_make_bv_sleq(m_env, rterm, lterm));
         } else {
           set_term(msat_make_bv_uleq(m_env, rterm, lterm));
         }
-      } else if (lptr->sort().is_int()) {
+      } else if (lptr.sort().is_int()) {
         set_term(msat_make_leq(m_env, rterm, lterm));
       }
       break;
@@ -505,9 +505,9 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     msat_pop_backtrack_point(m_env);
   }
 
-  virtual Error __unsafe_add(UnsafeExprPtr condition) override
+  virtual Error __unsafe_add(const UnsafeExprPtr& condition) override
   {
-    const Error err = condition->encode(*this);
+    const Error err = condition.encode(*this);
     if (err) {
       return err;
     }
@@ -516,7 +516,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     return OK;
   }
 
-  virtual Error __add(ExprPtr<sort::Bool> condition) override
+  virtual Error __add(const ExprPtr<sort::Bool>& condition) override
   {
     return __unsafe_add(condition);
   }
