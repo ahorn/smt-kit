@@ -27,7 +27,7 @@
           </p>
           <ul>
             <li>open source</li>
-            <li>domain-specific language for many-sorted first-order logics</li>
+            <li>domain-specific language for many-sorted logics such as SMT-LIB 2.0</li>
             <li>type-safe, or optionally not</li>
             <li>C&#43;&#43;11 interface (API) to SMT solvers</li>
             <li>around 3K lines of code</li>
@@ -52,6 +52,24 @@
       <article>
         <h2>API Usage</h2>
       </article> 
+
+      <article>
+        <h3>Well-sorted expressions</h3>
+          <p>
+            Type-safe subset of the SMT Kit:
+          </p>
+          <ul>
+            <li>All shared expressions are of type <code>Term&lt;T&gt;</code></li>
+            <li>Primitive sorts comprise <code>smt::Bool</code>, <code>smt::Int</code> etc.</li>
+            <li>Bit vectors can be built with C++11 integral types such as <code>uint64_t</code></li>
+            <li>SMT functions have signature <code>smt::Func&lt;T...&gt;</code></li>
+            <li>McCarthy's array logic is used for <code>smt::Array&lt;Domain, Range&gt;</code></li>
+            <li>...</li>
+          </ul>
+          <p>
+            On the next slides, examples follow.
+          </p>
+      </article>
 
       <article>
         <h3>Overview</h3>
@@ -171,9 +189,40 @@ assert(smt::sat == solver.check());</pre>
       </article>
 
       <article>
+        <h3>Unsafe API subset</h3>
+        <p>
+          Sometimes, templates are inconvenient or cannot be used at all. In those cases, we can fall back to the <code>UnsafeTerm</code> API. It mostly integrates with the type-safe subset of SMT Kit.
+        </p>
+        <p>
+          Example:
+        </p>
+        <div class="code">
+          <pre>#include &lt;smt&gt;
+
+int main()
+{
+  UnsafeTerm x = smt::any&lt;smt::Bool&gt;("x");
+
+  smt::Z3Solver z3_solver;
+  z3_solver.unsafe_add(x != !!x);
+  assert(smt::unsat == z3_solver.check());
+
+  smt::MsatSolver msat_solver;
+  msat_solver.unsafe_add(x != !!x);
+  assert(smt::unsat == msat_solver.check());
+
+  return 0;
+}</pre>
+        </div>
+      </article>
+
+      <article>
         <h3>Build instructions</h3>
         <p>
-          On a (mostly) POSIX-compliant operating system, execute the commands:
+          Step 1: Install Z3 and MathSAT5.
+        </p>
+        <p>
+          Step 2: On a (mostly) POSIX-compliant operating system, execute the commands:
         </p>
         <div class="code">
           <pre>$ ./autogen.sh
