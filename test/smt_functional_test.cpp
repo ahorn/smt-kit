@@ -17,10 +17,10 @@ TEST(SmtFunctionalTest, Reset)
 
 TEST(SmtFunctionalTest, DeMorgan)
 {
-  const smt::ExprPtr<smt::Bool> x = smt::any<smt::Bool>("x");
-  const smt::ExprPtr<smt::Bool> y = smt::any<smt::Bool>("y");
-  const smt::ExprPtr<smt::Bool> lhs = !(x && y);
-  const smt::ExprPtr<smt::Bool> rhs = !x || !y;
+  const smt::Term<smt::Bool> x = smt::any<smt::Bool>("x");
+  const smt::Term<smt::Bool> y = smt::any<smt::Bool>("y");
+  const smt::Term<smt::Bool> lhs = !(x && y);
+  const smt::Term<smt::Bool> rhs = !x || !y;
 
   smt::Z3Solver z3_solver;
   z3_solver.add(lhs != rhs);
@@ -35,10 +35,10 @@ TEST(SmtFunctionalTest, SeparateDecls)
 {
   const smt::Decl<smt::Bool> x_decl("x");
   const smt::Decl<smt::Bool> y_decl("y");
-  const smt::ExprPtr<smt::Bool> x = smt::constant(x_decl);
-  const smt::ExprPtr<smt::Bool> y = smt::constant(y_decl);
-  const smt::ExprPtr<smt::Bool> lhs = !(x && y);
-  const smt::ExprPtr<smt::Bool> rhs = !x || !y;
+  const smt::Term<smt::Bool> x = smt::constant(x_decl);
+  const smt::Term<smt::Bool> y = smt::constant(y_decl);
+  const smt::Term<smt::Bool> lhs = !(x && y);
+  const smt::Term<smt::Bool> rhs = !x || !y;
 
   smt::Z3Solver z3_solver;
   z3_solver.add(lhs != rhs);
@@ -51,10 +51,10 @@ TEST(SmtFunctionalTest, SeparateDecls)
 
 TEST(SmtFunctionalTest, BitVectors)
 {
-  const smt::ExprPtr<unsigned long> x = smt::any<unsigned long>("x");
-  const smt::ExprPtr<unsigned long> y = smt::any<unsigned long>("y");
-  const smt::ExprPtr<unsigned long> z = smt::any<unsigned long>("z");
-  const smt::ExprPtr<smt::Bool> equality = (x == y) && ((x & ~y) == z);
+  const smt::Term<unsigned long> x = smt::any<unsigned long>("x");
+  const smt::Term<unsigned long> y = smt::any<unsigned long>("y");
+  const smt::Term<unsigned long> z = smt::any<unsigned long>("z");
+  const smt::Term<smt::Bool> equality = (x == y) && ((x & ~y) == z);
 
   smt::Z3Solver z3_solver;
   z3_solver.add(equality);
@@ -92,8 +92,8 @@ TEST(SmtFunctionalTest, BitVectors)
 TEST(SmtFunctionalTest, UnsafeExpr)
 {
   const smt::UnsafeDecl unsafe_decl("x", smt::bv_sort(true, sizeof(int) * 8));
-  const smt::UnsafeExprPtr x = smt::constant(unsafe_decl);
-  const smt::UnsafeExprPtr equality = (x & smt::literal<int>(3)) != x;
+  const smt::UnsafeTerm x = smt::constant(unsafe_decl);
+  const smt::UnsafeTerm equality = (x & smt::literal<int>(3)) != x;
 
   smt::Z3Solver z3_solver;
   z3_solver.unsafe_add(equality);
@@ -109,13 +109,13 @@ TEST(SmtFunctionalTest, Reflection)
   constexpr size_t bv_int_size = sizeof(int) * 8;
   EXPECT_EQ(smt::bv_sort(true, bv_int_size), smt::literal<int>(3).sort());
 
-  const smt::ExprPtr<uint32_t> x = smt::any<uint32_t>("x");
+  const smt::Term<uint32_t> x = smt::any<uint32_t>("x");
   EXPECT_TRUE(x.sort().is_bv());
   EXPECT_FALSE(x.sort().is_signed());
   EXPECT_EQ(32, x.sort().bv_size());
 
   typedef smt::Func<smt::Int, smt::Real, char> SomeFunc;
-  const smt::ExprPtr<SomeFunc> f = smt::any<SomeFunc>("f");
+  const smt::Term<SomeFunc> f = smt::any<SomeFunc>("f");
   EXPECT_TRUE(f.sort().is_func());
   EXPECT_EQ(3, f.sort().sorts_size());
   EXPECT_TRUE(f.sort().sorts(0).is_int());
@@ -129,9 +129,9 @@ TEST(SmtFunctionalTest, Array)
   typedef smt::Array<smt::Int, char> IntToCharArray;
   const smt::Decl<IntToCharArray> array_decl("array");
 
-  smt::ExprPtr<IntToCharArray> array, new_array;
-  smt::ExprPtr<smt::Int> index;
-  smt::ExprPtr<char> value;
+  smt::Term<IntToCharArray> array, new_array;
+  smt::Term<smt::Int> index;
+  smt::Term<char> value;
 
   array = smt::constant(array_decl);
   index = smt::any<smt::Int>("index");
@@ -151,8 +151,8 @@ TEST(SmtFunctionalTest, Array)
 TEST(SmtFunctionalTest, Function)
 {
   const smt::Decl<smt::Func<smt::Int, smt::Int>> func_decl("f");
-  const smt::ExprPtr<smt::Int> x = smt::any<smt::Int>("x");
-  const smt::ExprPtr<smt::Bool> formula =
+  const smt::Term<smt::Int> x = smt::any<smt::Int>("x");
+  const smt::Term<smt::Bool> formula =
     smt::apply(func_decl, 3) == 7 && x == smt::apply(func_decl, 3);
 
   smt::Z3Solver z3_solver;
@@ -167,8 +167,8 @@ TEST(SmtFunctionalTest, Function)
 TEST(SmtFunctionalTest, Stats)
 {
   const smt::Decl<smt::Func<smt::Int, smt::Int>> func_decl("f");
-  const smt::ExprPtr<smt::Int> x = smt::any<smt::Int>("x");
-  const smt::ExprPtr<smt::Bool> formula = x < 3 && x == smt::apply(func_decl, 3);
+  const smt::Term<smt::Int> x = smt::any<smt::Int>("x");
+  const smt::Term<smt::Bool> formula = x < 3 && x == smt::apply(func_decl, 3);
 
   smt::Z3Solver z3_solver;
   z3_solver.add(formula);

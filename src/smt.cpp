@@ -23,62 +23,60 @@ const Sort& bv_sort(bool is_signed, size_t size)
   return *bv_sorts[is_signed][size];
 }
 
-UnsafeExprPtr constant(const UnsafeDecl& decl)
+UnsafeTerm constant(const UnsafeDecl& decl)
 {
-  return UnsafeExprPtr(new UnsafeConstantExpr(decl));
+  return UnsafeTerm(new UnsafeConstantExpr(decl));
 }
 
-UnsafeExprPtr apply(
+UnsafeTerm apply(
   const UnsafeDecl& func_decl,
-  const UnsafeExprPtr& arg_ptr)
+  const UnsafeTerm& arg)
 {
-  return UnsafeExprPtr(new UnsafeFuncAppExpr<1>(func_decl, { arg_ptr }));
+  return UnsafeTerm(new UnsafeFuncAppExpr<1>(func_decl, { arg }));
 }
 
-UnsafeExprPtr apply(
+UnsafeTerm apply(
   const UnsafeDecl& func_decl,
-  const UnsafeExprPtr& larg_ptr,
-  const UnsafeExprPtr& rarg_ptr)
+  const UnsafeTerm& larg,
+  const UnsafeTerm& rarg)
 {
-  return UnsafeExprPtr(new UnsafeFuncAppExpr<2>(func_decl,
-    { larg_ptr, rarg_ptr }));
+  return UnsafeTerm(new UnsafeFuncAppExpr<2>(func_decl, { larg, rarg }));
 }
 
-UnsafeExprPtr distinct(UnsafeExprPtrs&& ptrs)
+UnsafeTerm distinct(UnsafeTerms&& terms)
 {
-  return UnsafeExprPtr(new UnsafeNaryExpr(
-    internal::sort<sort::Bool>(), NEQ, std::move(ptrs)));
+  return UnsafeTerm(new UnsafeNaryExpr(
+    internal::sort<sort::Bool>(), NEQ, std::move(terms)));
 }
 
-UnsafeExprPtr select(
-  const UnsafeExprPtr& array_ptr,
-  const UnsafeExprPtr& index_ptr)
+UnsafeTerm select(
+  const UnsafeTerm& array,
+  const UnsafeTerm& index)
 {
-  return UnsafeExprPtr(new UnsafeArraySelectExpr(array_ptr, index_ptr));
+  return UnsafeTerm(new UnsafeArraySelectExpr(array, index));
 }
 
-UnsafeExprPtr implies(
-  const UnsafeExprPtr& lptr,
-  const UnsafeExprPtr& rptr)
+UnsafeTerm implies(
+  const UnsafeTerm& larg,
+  const UnsafeTerm& rarg)
 {
-  return UnsafeExprPtr(new UnsafeBinaryExpr(
-    internal::sort<sort::Bool>(), IMP, lptr, rptr));
+  return UnsafeTerm(new UnsafeBinaryExpr(
+    internal::sort<sort::Bool>(), IMP, larg, rarg));
 }
 
-ExprPtr<sort::Bool> implies(
-  const ExprPtr<sort::Bool>& lptr,
-  const ExprPtr<sort::Bool>& rptr)
+Term<sort::Bool> implies(
+  const Term<sort::Bool>& larg,
+  const Term<sort::Bool>& rarg)
 {
-  return ExprPtr<sort::Bool>(new BinaryExpr<IMP, sort::Bool>(lptr, rptr));
+  return Term<sort::Bool>(new BinaryExpr<IMP, sort::Bool>(larg, rarg));
 }
 
-UnsafeExprPtr store(
-  const UnsafeExprPtr& array_ptr,
-  const UnsafeExprPtr& index_ptr,
-  const UnsafeExprPtr& value_ptr)
+UnsafeTerm store(
+  const UnsafeTerm& array,
+  const UnsafeTerm& index,
+  const UnsafeTerm& value)
 {
-  return UnsafeExprPtr(new UnsafeArrayStoreExpr(
-    array_ptr, index_ptr, value_ptr));
+  return UnsafeTerm(new UnsafeArrayStoreExpr(array, index, value));
 }
 
 Error Solver::encode_constant(
@@ -91,68 +89,68 @@ Error Solver::encode_constant(
 Error Solver::encode_func_app(
   const UnsafeDecl& func_decl,
   const size_t arity,
-  const UnsafeExprPtr* const arg_ptrs)
+  const UnsafeTerm* const args)
 {
   assert(0 < arity);
-  assert(arg_ptrs != nullptr);
+  assert(args != nullptr);
 
   m_stats.func_apps++;
-  return __encode_func_app(func_decl, arity, arg_ptrs);
+  return __encode_func_app(func_decl, arity, args);
 }
 
 Error Solver::encode_const_array(
   const Sort& sort,
-  const UnsafeExprPtr& init_ptr)
+  const UnsafeTerm& init)
 {
-  assert(!init_ptr.is_null());
+  assert(!init.is_null());
 
-  return __encode_const_array(sort, init_ptr);
+  return __encode_const_array(sort, init);
 }
 
 Error Solver::encode_array_select(
-  const UnsafeExprPtr& array_ptr,
-  const UnsafeExprPtr& index_ptr)
+  const UnsafeTerm& array,
+  const UnsafeTerm& index)
 {
-  assert(!array_ptr.is_null());
-  assert(!index_ptr.is_null());
+  assert(!array.is_null());
+  assert(!index.is_null());
 
   m_stats.array_selects++;
-  return __encode_array_select(array_ptr, index_ptr);
+  return __encode_array_select(array, index);
 }
 
 Error Solver::encode_array_store(
-  const UnsafeExprPtr& array_ptr,
-  const UnsafeExprPtr& index_ptr,
-  const UnsafeExprPtr& value_ptr)
+  const UnsafeTerm& array,
+  const UnsafeTerm& index,
+  const UnsafeTerm& value)
 {
-  assert(!array_ptr.is_null());
-  assert(!index_ptr.is_null());
-  assert(!value_ptr.is_null());
+  assert(!array.is_null());
+  assert(!index.is_null());
+  assert(!value.is_null());
 
   m_stats.array_stores++;
-  return __encode_array_store(array_ptr, index_ptr, value_ptr);
+  return __encode_array_store(array, index, value);
 }
 
 Error Solver::encode_unary(
   Opcode opcode,
   const Sort& sort,
-  const UnsafeExprPtr& expr_ptr)
+  const UnsafeTerm& arg)
 {
-  assert(!expr_ptr.is_null());
+  assert(!arg.is_null());
 
   m_stats.unary_ops++;
-  return __encode_unary(opcode, sort, expr_ptr);
+  return __encode_unary(opcode, sort, arg);
 }
 
 Error Solver::encode_binary(
   Opcode opcode,
   const Sort& sort,
-  const UnsafeExprPtr& lptr,
-  const UnsafeExprPtr& rptr)
+  const UnsafeTerm& larg,
+  const UnsafeTerm& rarg)
 {
-  assert(!lptr.is_null());
-  assert(!rptr.is_null());
-  assert(lptr.sort() == rptr.sort());
+  assert(!larg.is_null());
+  assert(!rarg.is_null());
+  assert(larg.sort() == rarg.sort());
 
   switch (opcode) {
   case EQL:
@@ -181,35 +179,35 @@ Error Solver::encode_binary(
   }
 
   m_stats.binary_ops++;
-  return __encode_binary(opcode, sort, lptr, rptr);
+  return __encode_binary(opcode, sort, larg, rarg);
 }
 
 Error Solver::encode_nary(
   Opcode opcode,
   const Sort& sort,
-  const UnsafeExprPtrs& ptrs)
+  const UnsafeTerms& args)
 {
-  assert(!ptrs.empty());
+  assert(!args.empty());
 
   switch (opcode) {
   case EQL:
-    m_stats.equalities += ptrs.size();
+    m_stats.equalities += args.size();
     break;
   case NEQ:
-    m_stats.disequalities += ptrs.size();
+    m_stats.disequalities += args.size();
     break;
   case LAND:
-    m_stats.conjunctions += ptrs.size();
+    m_stats.conjunctions += args.size();
     break;
   case LOR:
-    m_stats.disjunctions += ptrs.size();
+    m_stats.disjunctions += args.size();
     break;
    default:
     ;
   }
 
   m_stats.nary_ops++;
-  return __encode_nary(opcode, sort, ptrs);
+  return __encode_nary(opcode, sort, args);
 }
 
 void Solver::reset()
@@ -227,13 +225,13 @@ void Solver::pop()
   return __pop();
 }
 
-void Solver::unsafe_add(const UnsafeExprPtr& condition)
+void Solver::unsafe_add(const UnsafeTerm& condition)
 {
   const Error err = __unsafe_add(condition);
   assert(err == OK);
 }
 
-void Solver::add(const ExprPtr<sort::Bool>& condition)
+void Solver::add(const Term<sort::Bool>& condition)
 {
   const Error err = __unsafe_add(condition);
   assert(err == OK);
@@ -244,6 +242,6 @@ CheckResult Solver::check()
   return __check();
 }
 
-ExprPtr<sort::Bool> Identity<LAND, sort::Bool>::expr_ptr(literal<sort::Bool>(true));
+Term<sort::Bool> Identity<LAND, sort::Bool>::term(literal<sort::Bool>(true));
 
 }

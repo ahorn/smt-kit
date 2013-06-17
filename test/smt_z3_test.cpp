@@ -172,8 +172,8 @@ TEST(SmtZ3Test, Decl)
   constexpr size_t bv_size = sizeof(long) * 8;
 
   const Decl<long> d0("x");
-  ExprPtr<long> e0_ptr = constant(d0);
-  EXPECT_EQ(OK, static_cast<UnsafeExprPtr>(e0_ptr).encode(s));
+  Term<long> e0_term = constant(d0);
+  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0_term).encode(s));
 
   const z3::expr expr(s.expr());
   EXPECT_TRUE(expr.is_bv());
@@ -210,8 +210,8 @@ TEST(SmtZ3Test, UnaryExpr)
 {
   Z3Solver s;
 
-  const ExprPtr<int> e0_ptr(new LiteralExpr<int>(42));
-  const UnaryExpr<SUB, int> e1(e0_ptr);
+  const Term<int> e0_term(new LiteralExpr<int>(42));
+  const UnaryExpr<SUB, int> e1(e0_term);
 
   EXPECT_EQ(OK, e1.encode(s));
 
@@ -242,9 +242,9 @@ TEST(SmtZ3Test, BinaryExpr)
   Z3Solver s;
   z3::expr expr(s.context());
 
-  const ExprPtr<long> e0_ptr(new LiteralExpr<long>(42L));
-  const ExprPtr<long> e1_ptr(new LiteralExpr<long>(7L));
-  const BinaryExpr<ADD, long> e2(e0_ptr, e1_ptr);
+  const Term<long> e0_term(new LiteralExpr<long>(42L));
+  const Term<long> e1_term(new LiteralExpr<long>(7L));
+  const BinaryExpr<ADD, long> e2(e0_term, e1_term);
 
   EXPECT_EQ(OK, e2.encode(s));
 
@@ -269,7 +269,7 @@ TEST(SmtZ3Test, BinaryExpr)
   }
   solver.pop();
 
-  const BinaryExpr<LSS, long, sort::Bool> e3(e0_ptr, e1_ptr);
+  const BinaryExpr<LSS, long, sort::Bool> e3(e0_term, e1_term);
 
   EXPECT_EQ(OK, e3.encode(s));
 
@@ -284,7 +284,7 @@ TEST(SmtZ3Test, BinaryExpr)
   }
   solver.pop();
 
-  const BinaryExpr<GTR, long, sort::Bool> e4(e0_ptr, e1_ptr);
+  const BinaryExpr<GTR, long, sort::Bool> e4(e0_term, e1_term);
 
   EXPECT_EQ(OK, e4.encode(s));
 
@@ -304,19 +304,19 @@ TEST(SmtZ3Test, Distinct)
 {
   Z3Solver s;
 
-  const ExprPtr<long> x = any<long>("x");
-  const ExprPtr<long> y = any<long>("y");
-  const ExprPtr<long> z = any<long>("z");
-  const ExprPtr<long> w = any<long>("w");
+  const Term<long> x = any<long>("x");
+  const Term<long> y = any<long>("y");
+  const Term<long> z = any<long>("z");
+  const Term<long> w = any<long>("w");
 
-  ExprPtrs<long> operand_ptrs(3);
-  operand_ptrs.push_back(x);
-  operand_ptrs.push_back(y);
-  operand_ptrs.push_back(z);
+  Terms<long> operand_terms(3);
+  operand_terms.push_back(x);
+  operand_terms.push_back(y);
+  operand_terms.push_back(z);
 
-  ExprPtr<sort::Bool> d(distinct(std::move(operand_ptrs)));
+  Term<sort::Bool> d(distinct(std::move(operand_terms)));
 
-  EXPECT_EQ(OK, static_cast<UnsafeExprPtr>(d).encode(s));
+  EXPECT_EQ(OK, static_cast<UnsafeTerm>(d).encode(s));
   std::stringstream out;
   out << s.expr();
   EXPECT_EQ("(distinct x y z)", out.str());
@@ -375,9 +375,9 @@ TEST(SmtZ3Test, LogicalImplication)
 
   const Decl<sort::Bool> d0("x");
   const Decl<sort::Bool> d1("y");
-  const ExprPtr<sort::Bool> e0_ptr = constant(d0);
-  const ExprPtr<sort::Bool> e1_ptr = constant(d1);
-  const BinaryExpr<IMP, sort::Bool> e2(e0_ptr, e1_ptr);
+  const Term<sort::Bool> e0_term = constant(d0);
+  const Term<sort::Bool> e1_term = constant(d1);
+  const BinaryExpr<IMP, sort::Bool> e2(e0_term, e1_term);
 
   EXPECT_EQ(OK, e2.encode(s));
 
@@ -409,8 +409,8 @@ TEST(SmtZ3Test, UnaryFuncAppExpr)
   Z3Solver s;
 
   Decl<sort::Func<sort::Int, long>> d0("f");
-  const ExprPtr<sort::Int> e1_ptr(new LiteralExpr<sort::Int, int>(7));
-  const FuncAppExpr<sort::Int, long> e2(d0, std::make_tuple(e1_ptr));
+  const Term<sort::Int> e1_term(new LiteralExpr<sort::Int, int>(7));
+  const FuncAppExpr<sort::Int, long> e2(d0, std::make_tuple(e1_term));
 
   EXPECT_EQ(OK, e2.encode(s));
   const z3::expr app_expr(s.expr());
@@ -456,9 +456,9 @@ TEST(SmtZ3Test, BinaryFuncAppExpr)
 
   const Decl<sort::Func<sort::Int, bool, long>> d0("f");
   const Decl<bool> d2("x");
-  const ExprPtr<sort::Int> e1_ptr(new LiteralExpr<sort::Int, int>(7));
-  const ExprPtr<bool> e2_ptr = constant(d2);
-  const FuncAppExpr<sort::Int, bool, long> e3(d0, std::make_tuple(e1_ptr, e2_ptr));
+  const Term<sort::Int> e1_term(new LiteralExpr<sort::Int, int>(7));
+  const Term<bool> e2_term = constant(d2);
+  const FuncAppExpr<sort::Int, bool, long> e3(d0, std::make_tuple(e1_term, e2_term));
 
   EXPECT_EQ(OK, e3.encode(s));
   const z3::expr app_expr(s.expr());
@@ -505,8 +505,8 @@ TEST(SmtZ3Test, ConstArrayExpr)
 {
   Z3Solver s;
 
-  const ExprPtr<sort::Int> init_ptr(new LiteralExpr<sort::Int, int>(7));
-  const ConstArrayExpr<sort::Int, sort::Int> e0(init_ptr);
+  const Term<sort::Int> init_term(new LiteralExpr<sort::Int, int>(7));
+  const ConstArrayExpr<sort::Int, sort::Int> e0(init_term);
 
   EXPECT_EQ(OK, e0.encode(s));
 
@@ -549,9 +549,9 @@ TEST(SmtZ3Test, ArraySelectExpr)
   constexpr char const array_name[] = "array";
   const Decl<sort::Array<sort::Int, sort::Bool>> array_decl(array_name);
   const Decl<sort::Int> index_decl("i");
-  const ExprPtr<sort::Array<sort::Int, sort::Bool>> array_ptr = constant(array_decl);
-  const ExprPtr<sort::Int> index_ptr = constant(index_decl);
-  const ArraySelectExpr<sort::Int, sort::Bool> e0(array_ptr, index_ptr);
+  const Term<sort::Array<sort::Int, sort::Bool>> array_term = constant(array_decl);
+  const Term<sort::Int> index_term = constant(index_decl);
+  const ArraySelectExpr<sort::Int, sort::Bool> e0(array_term, index_term);
 
   EXPECT_EQ(OK, e0.encode(s));
 
@@ -583,10 +583,10 @@ TEST(SmtZ3Test, ArrayStoreExpr)
 
   const Decl<sort::Array<sort::Int, sort::Int>> array_decl("array");
   const Decl<sort::Int> index_decl("i");
-  const ExprPtr<sort::Array<sort::Int, sort::Int>> array_ptr = constant(array_decl);
-  const ExprPtr<sort::Int> index_ptr = constant(index_decl);
-  const ExprPtr<sort::Int> value_ptr(new LiteralExpr<sort::Int, int>(7));
-  const ArrayStoreExpr<sort::Int, sort::Int> e0(array_ptr, index_ptr, value_ptr);
+  const Term<sort::Array<sort::Int, sort::Int>> array_term = constant(array_decl);
+  const Term<sort::Int> index_term = constant(index_decl);
+  const Term<sort::Int> value_term(new LiteralExpr<sort::Int, int>(7));
+  const ArrayStoreExpr<sort::Int, sort::Int> e0(array_term, index_term, value_term);
 
   EXPECT_EQ(OK, e0.encode(s));
 
@@ -633,11 +633,11 @@ TEST(SmtZ3Test, Add)
 {
   Z3Solver s;
 
-  const ExprPtr<long> e0_ptr = any<long>("x");
-  s.add(0 < e0_ptr);
+  const Term<long> e0_term = any<long>("x");
+  s.add(0 < e0_term);
 
-  const ExprPtr<sort::Int> e1_ptr = any<sort::Int>("y");
-  s.add(0 < e1_ptr);
+  const Term<sort::Int> e1_term = any<sort::Int>("y");
+  s.add(0 < e1_term);
 
   z3::context& context = s.context();
   z3::solver& solver = s.solver();
@@ -681,7 +681,7 @@ TEST(SmtZ3Test, BinaryBvSignedOperatorLSS)
 {
   Z3Solver solver;
 
-  ExprPtr<int8_t> x = any<int8_t>("x");
+  Term<int8_t> x = any<int8_t>("x");
   solver.add('\0' < x);
 
   std::stringstream out;
@@ -693,7 +693,7 @@ TEST(SmtZ3Test, BinaryBvUnsignedOperatorLSS)
 {
   Z3Solver solver;
 
-  ExprPtr<uint8_t> x = any<uint8_t>("x");
+  Term<uint8_t> x = any<uint8_t>("x");
   solver.add('\0' < x);
 
   std::stringstream out;
@@ -705,7 +705,7 @@ TEST(SmtZ3Test, BinaryBvSignedOperatorGTR)
 {
   Z3Solver solver;
 
-  ExprPtr<int8_t> x = any<int8_t>("x");
+  Term<int8_t> x = any<int8_t>("x");
   solver.add('\0' > x);
 
   std::stringstream out;
@@ -717,7 +717,7 @@ TEST(SmtZ3Test, BinaryBvUnsignedOperatorGTR)
 {
   Z3Solver solver;
 
-  ExprPtr<uint8_t> x = any<uint8_t>("x");
+  Term<uint8_t> x = any<uint8_t>("x");
   solver.add('\0' > x);
 
   std::stringstream out;
@@ -729,7 +729,7 @@ TEST(SmtZ3Test, BinaryBvSignedOperatorNEQ)
 {
   Z3Solver solver;
 
-  ExprPtr<int8_t> x = any<int8_t>("x");
+  Term<int8_t> x = any<int8_t>("x");
   solver.add('\0' != x);
 
   std::stringstream out;
@@ -741,7 +741,7 @@ TEST(SmtZ3Test, BinaryBvUnsignedOperatorNEQ)
 {
   Z3Solver solver;
 
-  ExprPtr<uint8_t> x = any<uint8_t>("x");
+  Term<uint8_t> x = any<uint8_t>("x");
   solver.add('\0' != x);
 
   std::stringstream out;
@@ -753,7 +753,7 @@ TEST(SmtZ3Test, BinaryBvSignedOperatorLEQ)
 {
   Z3Solver solver;
 
-  ExprPtr<int8_t> x = any<int8_t>("x");
+  Term<int8_t> x = any<int8_t>("x");
   solver.add('\0' <= x);
 
   std::stringstream out;
@@ -765,7 +765,7 @@ TEST(SmtZ3Test, BinaryBvUnsignedOperatorLEQ)
 {
   Z3Solver solver;
 
-  ExprPtr<uint8_t> x = any<uint8_t>("x");
+  Term<uint8_t> x = any<uint8_t>("x");
   solver.add('\0' <= x);
 
   std::stringstream out;
@@ -777,7 +777,7 @@ TEST(SmtZ3Test, BinaryBvSignedOperatorGEQ)
 {
   Z3Solver solver;
 
-  ExprPtr<int8_t> x = any<int8_t>("x");
+  Term<int8_t> x = any<int8_t>("x");
   solver.add('\0' >= x);
 
   std::stringstream out;
@@ -789,7 +789,7 @@ TEST(SmtZ3Test, BinaryBvUnsignedOperatorGEQ)
 {
   Z3Solver solver;
 
-  ExprPtr<uint8_t> x = any<uint8_t>("x");
+  Term<uint8_t> x = any<uint8_t>("x");
   solver.add('\0' >= x);
 
   std::stringstream out;
@@ -801,7 +801,7 @@ TEST(SmtZ3Test, BinaryIntOperatorLSS)
 {
   Z3Solver solver;
 
-  ExprPtr<sort::Int> x = any<sort::Int>("x");
+  Term<sort::Int> x = any<sort::Int>("x");
   solver.add(0 < x);
 
   std::stringstream out;
@@ -813,7 +813,7 @@ TEST(SmtZ3Test, BinaryIntOperatorGTR)
 {
   Z3Solver solver;
 
-  ExprPtr<sort::Int> x = any<sort::Int>("x");
+  Term<sort::Int> x = any<sort::Int>("x");
   solver.add(0 > x);
 
   std::stringstream out;
@@ -825,7 +825,7 @@ TEST(SmtZ3Test, BinaryIntOperatorNEQ)
 {
   Z3Solver solver;
 
-  ExprPtr<sort::Int> x = any<sort::Int>("x");
+  Term<sort::Int> x = any<sort::Int>("x");
   solver.add(0 != x);
 
   std::stringstream out;
@@ -837,7 +837,7 @@ TEST(SmtZ3Test, BinaryIntOperatorLEQ)
 {
   Z3Solver solver;
 
-  ExprPtr<sort::Int> x = any<sort::Int>("x");
+  Term<sort::Int> x = any<sort::Int>("x");
   solver.add(0 <= x);
 
   std::stringstream out;
@@ -849,7 +849,7 @@ TEST(SmtZ3Test, BinaryIntOperatorGEQ)
 {
   Z3Solver solver;
 
-  ExprPtr<sort::Int> x = any<sort::Int>("x");
+  Term<sort::Int> x = any<sort::Int>("x");
   solver.add(0 >= x);
 
   std::stringstream out;
@@ -926,32 +926,32 @@ TEST(SmtZ3Test, UnsafeAdd)
   const Sort& func_sort = internal::sort<sort::Func<int64_t, int64_t>>();
   const UnsafeDecl const_decl("x", bv_sort);
   const UnsafeDecl func_decl("f", func_sort);
-  const UnsafeExprPtr seven_ptr(literal(bv_sort, 7));
-  const UnsafeExprPtr x_ptr(constant(const_decl));
-  const UnsafeExprPtr app_ptr(apply(func_decl, seven_ptr));
+  const UnsafeTerm seven_term(literal(bv_sort, 7));
+  const UnsafeTerm x_term(constant(const_decl));
+  const UnsafeTerm app_term(apply(func_decl, seven_term));
 
-  UnsafeExprPtrs ptrs;
-  ptrs.push_back(seven_ptr);
-  ptrs.push_back(x_ptr);
-  ptrs.push_back(app_ptr);
+  UnsafeTerms terms;
+  terms.push_back(seven_term);
+  terms.push_back(x_term);
+  terms.push_back(app_term);
 
-  const UnsafeExprPtr distinct_ptr(distinct(std::move(ptrs)));
+  const UnsafeTerm distinct_term(distinct(std::move(terms)));
 
   const Sort& array_sort = internal::sort<sort::Array<uint32_t, int64_t>>();
   const Sort& index_sort = internal::sort<uint32_t>();
   const UnsafeDecl array_decl("array", array_sort);
   const UnsafeDecl index_decl("index", index_sort);
-  const UnsafeExprPtr array_ptr(constant(array_decl));
-  const UnsafeExprPtr index_ptr(constant(index_decl));
-  const UnsafeExprPtr store_ptr(store(array_ptr, index_ptr, app_ptr));
-  const UnsafeExprPtr select_ptr(select(store_ptr, index_ptr));
+  const UnsafeTerm array_term(constant(array_decl));
+  const UnsafeTerm index_term(constant(index_decl));
+  const UnsafeTerm store_term(store(array_term, index_term, app_term));
+  const UnsafeTerm select_term(select(store_term, index_term));
 
-  const UnsafeExprPtr eq_ptr(select_ptr == x_ptr);
-  const UnsafeExprPtr and_ptr(eq_ptr && distinct_ptr);
+  const UnsafeTerm eq_term(select_term == x_term);
+  const UnsafeTerm and_term(eq_term && distinct_term);
 
   s.push();
   {
-    s.unsafe_add(and_ptr);
+    s.unsafe_add(and_term);
     EXPECT_EQ(unsat, s.check());
 
     std::stringstream out;
@@ -964,28 +964,28 @@ TEST(SmtZ3Test, UnsafeAdd)
 
   s.push();
   {
-    s.unsafe_add(seven_ptr != 7);
+    s.unsafe_add(seven_term != 7);
     EXPECT_EQ(unsat, s.check());
   }
   s.pop();
 
   s.push();
   {
-    s.unsafe_add(7 == seven_ptr);
+    s.unsafe_add(7 == seven_term);
     EXPECT_EQ(sat, s.check());
   }
   s.pop();
 
   s.push();
   {
-    s.unsafe_add(x_ptr == x_ptr + 1);
+    s.unsafe_add(x_term == x_term + 1);
     EXPECT_EQ(unsat, s.check());
   }
   s.pop();
 
   s.push();
   {
-    s.unsafe_add(x_ptr + 1 == x_ptr);
+    s.unsafe_add(x_term + 1 == x_term);
     EXPECT_EQ(unsat, s.check());
   }
   s.pop();

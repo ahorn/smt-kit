@@ -65,25 +65,25 @@ TEST(SmtTest, SortInference)
   STATIC_EXPECT_TRUE((internal::sort<sort::Array<sort::Int, NestedArray>>().sorts(1).sorts(1).is_bool()));
 }
 
-TEST(SmtTest, ExprPtrFold)
+TEST(SmtTest, TermFold)
 {
-  STATIC_EXPECT_TRUE((std::is_same<internal::ExprPtrFold<long, sort::Int>::Type,
-    std::tuple<ExprPtr<long>, ExprPtr<sort::Int>>>::value));
+  STATIC_EXPECT_TRUE((std::is_same<internal::TermFold<long, sort::Int>::Type,
+    std::tuple<Term<long>, Term<sort::Int>>>::value));
 
-  STATIC_EXPECT_TRUE((std::is_same<internal::ExprPtrFold<long, sort::Int, sort::Real>::Type,
-    std::tuple<ExprPtr<long>, ExprPtr<sort::Int>, ExprPtr<sort::Real>>>::value));
+  STATIC_EXPECT_TRUE((std::is_same<internal::TermFold<long, sort::Int, sort::Real>::Type,
+    std::tuple<Term<long>, Term<sort::Int>, Term<sort::Real>>>::value));
 
-  STATIC_EXPECT_TRUE((std::is_same<internal::ExprPtrFoldExceptLast<long, sort::Int>::Type,
-    std::tuple<ExprPtr<long>>>::value));
+  STATIC_EXPECT_TRUE((std::is_same<internal::TermFoldExceptLast<long, sort::Int>::Type,
+    std::tuple<Term<long>>>::value));
 
-  STATIC_EXPECT_TRUE((std::is_same<internal::ExprPtrFoldExceptLast<long, sort::Int, sort::Real>::Type,
-    std::tuple<ExprPtr<long>, ExprPtr<sort::Int>>>::value));
+  STATIC_EXPECT_TRUE((std::is_same<internal::TermFoldExceptLast<long, sort::Int, sort::Real>::Type,
+    std::tuple<Term<long>, Term<sort::Int>>>::value));
 
-  internal::ExprPtrFoldExceptLast<long, sort::Int>::Type(
-    std::make_tuple(ExprPtr<long>(nullptr)));
+  internal::TermFoldExceptLast<long, sort::Int>::Type(
+    std::make_tuple(Term<long>(nullptr)));
 
-  internal::ExprPtrFold<long, sort::Int>::Type(
-    std::make_tuple(ExprPtr<long>(nullptr), ExprPtr<sort::Int>(nullptr)));
+  internal::TermFold<long, sort::Int>::Type(
+    std::make_tuple(Term<long>(nullptr), Term<sort::Int>(nullptr)));
 }
 
 struct SomethingElse {};
@@ -294,17 +294,17 @@ TEST(SmtTest, FuncDecl)
 TEST(SmtTest, UnaryFuncAppExpr)
 {
   const Decl<sort::Func<long, sort::Int>> func_decl("f");
-  const ExprPtr<long> arg_ptr(new LiteralExpr<long>(7L));
+  const Term<long> arg_term(new LiteralExpr<long>(7L));
 
-  const FuncAppExpr<long, sort::Int> app(func_decl, std::make_tuple(arg_ptr));
+  const FuncAppExpr<long, sort::Int> app(func_decl, std::make_tuple(arg_term));
 
   EXPECT_EQ(FUNC_APP_EXPR_KIND, app.expr_kind());
   EXPECT_EQ(func_decl, app.func_decl());
 
   STATIC_EXPECT_TRUE((std::tuple_size<FuncAppExpr<long, sort::Int>::DomainPtrs>::value == 1));
-  const FuncAppExpr<long, sort::Int>::DomainPtrs& arg_ptrs = app.arg_ptrs();
-  ExprPtr<long> get0_arg_ptr(std::get<0>(arg_ptrs));
-  EXPECT_EQ(LITERAL_EXPR_KIND, get0_arg_ptr.expr_kind());
+  const FuncAppExpr<long, sort::Int>::DomainPtrs& arg_terms = app.args();
+  Term<long> get0_arg_term(std::get<0>(arg_terms));
+  EXPECT_EQ(LITERAL_EXPR_KIND, get0_arg_term.expr_kind());
 
   EXPECT_FALSE(app.sort().is_bool());
   EXPECT_TRUE(app.sort().is_int());
@@ -317,21 +317,21 @@ TEST(SmtTest, UnaryFuncAppExpr)
 TEST(SmtTest, BinaryFuncAppExpr)
 {
   const Decl<sort::Func<long, sort::Int, sort::Real>> func_decl("g");
-  const ExprPtr<long> larg_ptr(new LiteralExpr<long>(7L));
-  const ExprPtr<sort::Int> rarg_ptr(any<sort::Int>("x"));
+  const Term<long> larg_term(new LiteralExpr<long>(7L));
+  const Term<sort::Int> rarg_term(any<sort::Int>("x"));
 
   const FuncAppExpr<long, sort::Int, sort::Real> app(func_decl,
-    std::make_tuple(larg_ptr, rarg_ptr));
+    std::make_tuple(larg_term, rarg_term));
 
   EXPECT_EQ(FUNC_APP_EXPR_KIND, app.expr_kind());
   EXPECT_EQ(func_decl, app.func_decl());
 
   STATIC_EXPECT_TRUE((std::tuple_size<FuncAppExpr<long, sort::Int, sort::Real>::DomainPtrs>::value == 2));
-  const FuncAppExpr<long, sort::Int, sort::Real>::DomainPtrs& arg_ptrs = app.arg_ptrs();
-  ExprPtr<long> get0_arg_ptr(std::get<0>(arg_ptrs));
-  EXPECT_EQ(LITERAL_EXPR_KIND, get0_arg_ptr.expr_kind());
-  ExprPtr<sort::Int> get1_arg_ptr(std::get<1>(arg_ptrs));
-  EXPECT_EQ(CONSTANT_EXPR_KIND, get1_arg_ptr.expr_kind());
+  const FuncAppExpr<long, sort::Int, sort::Real>::DomainPtrs& arg_terms = app.args();
+  Term<long> get0_arg_term(std::get<0>(arg_terms));
+  EXPECT_EQ(LITERAL_EXPR_KIND, get0_arg_term.expr_kind());
+  Term<sort::Int> get1_arg_term(std::get<1>(arg_terms));
+  EXPECT_EQ(CONSTANT_EXPR_KIND, get1_arg_term.expr_kind());
 
   EXPECT_FALSE(app.sort().is_bool());
   EXPECT_FALSE(app.sort().is_int());
@@ -346,12 +346,12 @@ TEST(SmtTest, Apply)
   const Decl<sort::Func<long, sort::Real>> bv_unary_func_decl("f");
   const Decl<sort::Func<sort::Int, sort::Real>> math_unary_func_decl("g");
   const Decl<sort::Func<long, sort::Int, sort::Real>> binary_func_decl("h");
-  const ExprPtr<long> larg_ptr(new LiteralExpr<long>(7L));
-  const ExprPtr<sort::Int> rarg_ptr(any<sort::Int>("x"));
+  const Term<long> larg_term(new LiteralExpr<long>(7L));
+  const Term<sort::Int> rarg_term(any<sort::Int>("x"));
 
-  const ExprPtr<sort::Real> app_ptr0 = apply(binary_func_decl,
-    std::make_tuple(larg_ptr, rarg_ptr));
-  const Expr<sort::Real>& app0 = app_ptr0.ref();
+  const Term<sort::Real> app_term0 = apply(binary_func_decl,
+    std::make_tuple(larg_term, rarg_term));
+  const Expr<sort::Real>& app0 = app_term0.ref();
 
   EXPECT_EQ(FUNC_APP_EXPR_KIND, app0.expr_kind());
   EXPECT_FALSE(app0.sort().is_bool());
@@ -361,8 +361,8 @@ TEST(SmtTest, Apply)
   EXPECT_FALSE(app0.sort().is_func());
   EXPECT_FALSE(app0.sort().is_array());
 
-  const ExprPtr<sort::Real> app_ptr1 = apply(bv_unary_func_decl, larg_ptr);
-  const Expr<sort::Real>& app1 = app_ptr1.ref();
+  const Term<sort::Real> app_term1 = apply(bv_unary_func_decl, larg_term);
+  const Expr<sort::Real>& app1 = app_term1.ref();
 
   EXPECT_EQ(FUNC_APP_EXPR_KIND, app1.expr_kind());
   EXPECT_FALSE(app1.sort().is_bool());
@@ -372,8 +372,8 @@ TEST(SmtTest, Apply)
   EXPECT_FALSE(app1.sort().is_func());
   EXPECT_FALSE(app1.sort().is_array());
 
-  const ExprPtr<sort::Real> app_ptr2 = apply(bv_unary_func_decl, 7L);
-  const Expr<sort::Real>& app2 = app_ptr2.ref();
+  const Term<sort::Real> app_term2 = apply(bv_unary_func_decl, 7L);
+  const Expr<sort::Real>& app2 = app_term2.ref();
 
   EXPECT_EQ(FUNC_APP_EXPR_KIND, app2.expr_kind());
   EXPECT_FALSE(app2.sort().is_bool());
@@ -383,8 +383,8 @@ TEST(SmtTest, Apply)
   EXPECT_FALSE(app2.sort().is_func());
   EXPECT_FALSE(app2.sort().is_array());
 
-  const ExprPtr<sort::Real> app_ptr3 = apply(math_unary_func_decl, 7);
-  const Expr<sort::Real>& app3 = app_ptr3.ref();
+  const Term<sort::Real> app_term3 = apply(math_unary_func_decl, 7);
+  const Expr<sort::Real>& app3 = app_term3.ref();
 
   EXPECT_EQ(FUNC_APP_EXPR_KIND, app3.expr_kind());
   EXPECT_FALSE(app3.sort().is_bool());
@@ -394,8 +394,8 @@ TEST(SmtTest, Apply)
   EXPECT_FALSE(app3.sort().is_func());
   EXPECT_FALSE(app3.sort().is_array());
 
-  const ExprPtr<sort::Real> app_ptr4 = apply(math_unary_func_decl, 7L);
-  const Expr<sort::Real>& app4 = app_ptr4.ref();
+  const Term<sort::Real> app_term4 = apply(math_unary_func_decl, 7L);
+  const Expr<sort::Real>& app4 = app_term4.ref();
 
   EXPECT_EQ(FUNC_APP_EXPR_KIND, app4.expr_kind());
   EXPECT_FALSE(app4.sort().is_bool());
@@ -405,9 +405,9 @@ TEST(SmtTest, Apply)
   EXPECT_FALSE(app4.sort().is_func());
   EXPECT_FALSE(app4.sort().is_array());
 
-  const ExprPtr<sort::Real> app_ptr5 = apply(binary_func_decl,
-    larg_ptr, rarg_ptr);
-  const Expr<sort::Real>& app5 = app_ptr5.ref();
+  const Term<sort::Real> app_term5 = apply(binary_func_decl,
+    larg_term, rarg_term);
+  const Expr<sort::Real>& app5 = app_term5.ref();
 
   EXPECT_EQ(FUNC_APP_EXPR_KIND, app5.expr_kind());
   EXPECT_FALSE(app5.sort().is_bool());
@@ -420,21 +420,21 @@ TEST(SmtTest, Apply)
 
 TEST(SmtTest, Literal)
 {
-  const ExprPtr<sort::Bool> ffexpr_ptr = literal<sort::Bool>(false);
+  const Term<sort::Bool> ffexpr_term = literal<sort::Bool>(false);
   const LiteralExpr<sort::Bool, bool>& ffexpr =
-    static_cast<const LiteralExpr<sort::Bool, bool>&>(ffexpr_ptr.ref());
+    static_cast<const LiteralExpr<sort::Bool, bool>&>(ffexpr_term.ref());
   EXPECT_FALSE(ffexpr.literal());
 
-  const ExprPtr<sort::Bool> ttexpr_ptr = literal<sort::Bool>(true);
+  const Term<sort::Bool> ttexpr_term = literal<sort::Bool>(true);
   const LiteralExpr<sort::Bool, bool>& ttexpr =
-    static_cast<const LiteralExpr<sort::Bool, bool>&>(ttexpr_ptr.ref());
+    static_cast<const LiteralExpr<sort::Bool, bool>&>(ttexpr_term.ref());
   EXPECT_TRUE(ttexpr.literal());
 }
 
 TEST(SmtTest, Any)
 {
-  const ExprPtr<long> e0_ptr = any<long>("x");
-  const ConstantExpr<long>& e0 = static_cast<const ConstantExpr<long>&>(e0_ptr.ref());
+  const Term<long> e0_term = any<long>("x");
+  const ConstantExpr<long>& e0 = static_cast<const ConstantExpr<long>&>(e0_term.ref());
   const Decl<long>& d0 = e0.decl();
 
   EXPECT_FALSE(d0.sort().is_bool());
@@ -446,9 +446,9 @@ TEST(SmtTest, Any)
   EXPECT_EQ(sizeof(long) * 8, d0.sort().bv_size());
   EXPECT_EQ("x", d0.symbol());
 
-  const ExprPtr<sort::Int> e1_ptr = any<sort::Int>("y");
+  const Term<sort::Int> e1_term = any<sort::Int>("y");
   const ConstantExpr<sort::Int>& e1 =
-    static_cast<const ConstantExpr<sort::Int>&>(e1_ptr.ref());
+    static_cast<const ConstantExpr<sort::Int>&>(e1_term.ref());
   const Decl<sort::Int>& d1 = e1.decl();
 
   EXPECT_FALSE(d1.sort().is_bool());
@@ -459,10 +459,10 @@ TEST(SmtTest, Any)
   EXPECT_FALSE(d1.sort().is_func());
   EXPECT_EQ("y", d1.symbol());
 
-  const ExprPtr<sort::Array<sort::Int, sort::Bool>> e2_ptr =
+  const Term<sort::Array<sort::Int, sort::Bool>> e2_term =
     any<sort::Array<sort::Int, sort::Bool>>("z");
   const ConstantExpr<sort::Array<sort::Int, sort::Bool>>& e2 =
-    static_cast<const ConstantExpr<sort::Array<sort::Int, sort::Bool>>&>(e2_ptr.ref());
+    static_cast<const ConstantExpr<sort::Array<sort::Int, sort::Bool>>&>(e2_term.ref());
   const Decl<sort::Array<sort::Int, sort::Bool>>& d2 = e2.decl();
 
   EXPECT_FALSE(d2.sort().is_bool());
@@ -492,9 +492,9 @@ TEST(SmtTest, Any)
 
 TEST(SmtTest, UnaryExpr)
 {
-  const ExprPtr<long> e0_ptr(literal<long>(42L));
-  const UnaryExpr<NOT, long> e1(e0_ptr);
-  const ExprPtr<long> operand_ptr(e1.operand_ptr());
+  const Term<long> e0_term(literal<long>(42L));
+  const UnaryExpr<NOT, long> e1(e0_term);
+  const Term<long> operand(e1.operand());
 
   EXPECT_EQ(UNARY_EXPR_KIND, e1.expr_kind());
   EXPECT_FALSE(e1.sort().is_bool());
@@ -505,10 +505,10 @@ TEST(SmtTest, UnaryExpr)
   EXPECT_FALSE(e1.sort().is_func());
   EXPECT_EQ(sizeof(long) * 8, e1.sort().bv_size());
 
-  EXPECT_EQ(e0_ptr.addr(), operand_ptr.addr());
+  EXPECT_EQ(e0_term.addr(), operand.addr());
 
-  const ExprPtr<sort::Bool> e2_ptr(literal<sort::Bool>(true));
-  const UnaryExpr<LNOT, sort::Bool> e3(e2_ptr);
+  const Term<sort::Bool> e2_term(literal<sort::Bool>(true));
+  const UnaryExpr<LNOT, sort::Bool> e3(e2_term);
 
   EXPECT_EQ(UNARY_EXPR_KIND, e3.expr_kind());
   EXPECT_TRUE(e3.sort().is_bool());
@@ -521,11 +521,11 @@ TEST(SmtTest, UnaryExpr)
 
 TEST(SmtTest, BinaryExpr)
 {
-  const ExprPtr<long> e0_ptr(literal<long>(42L));
-  const ExprPtr<long> e1_ptr(literal<long>(7L));
-  const BinaryExpr<ADD, long> e2(e0_ptr, e1_ptr);
-  const ExprPtr<long> loperand_ptr(e2.loperand_ptr());
-  const ExprPtr<long> roperand_ptr(e2.roperand_ptr());
+  const Term<long> e0_term(literal<long>(42L));
+  const Term<long> e1_term(literal<long>(7L));
+  const BinaryExpr<ADD, long> e2(e0_term, e1_term);
+  const Term<long> loperand(e2.loperand());
+  const Term<long> roperand(e2.roperand());
 
   EXPECT_EQ(BINARY_EXPR_KIND, e2.expr_kind());
   EXPECT_FALSE(e2.sort().is_bool());
@@ -536,10 +536,10 @@ TEST(SmtTest, BinaryExpr)
   EXPECT_FALSE(e2.sort().is_func());
   EXPECT_EQ(sizeof(long) * 8, e2.sort().bv_size());
 
-  EXPECT_EQ(e0_ptr.addr(), loperand_ptr.addr());
-  EXPECT_EQ(e1_ptr.addr(), roperand_ptr.addr());
+  EXPECT_EQ(e0_term.addr(), loperand.addr());
+  EXPECT_EQ(e1_term.addr(), roperand.addr());
 
-  const BinaryExpr<LSS, long, sort::Bool> e3(e0_ptr, e1_ptr);
+  const BinaryExpr<LSS, long, sort::Bool> e3(e0_term, e1_term);
 
   EXPECT_EQ(BINARY_EXPR_KIND, e3.expr_kind());
   EXPECT_TRUE(e3.sort().is_bool());
@@ -549,9 +549,9 @@ TEST(SmtTest, BinaryExpr)
   EXPECT_FALSE(e3.sort().is_array());
   EXPECT_FALSE(e3.sort().is_func());
 
-  const ExprPtr<sort::Bool> e4_ptr(literal<sort::Bool>(true));
-  const ExprPtr<sort::Bool> e5_ptr(literal<sort::Bool>(false));
-  const BinaryExpr<LAND, sort::Bool> e6(e4_ptr, e5_ptr);
+  const Term<sort::Bool> e4_term(literal<sort::Bool>(true));
+  const Term<sort::Bool> e5_term(literal<sort::Bool>(false));
+  const BinaryExpr<LAND, sort::Bool> e6(e4_term, e5_term);
 
   EXPECT_EQ(BINARY_EXPR_KIND, e6.expr_kind());
   EXPECT_TRUE(e6.sort().is_bool());
@@ -562,40 +562,40 @@ TEST(SmtTest, BinaryExpr)
   EXPECT_FALSE(e6.sort().is_func());
 }
 
-TEST(SmtTest, ExprPtrs)
+TEST(SmtTest, Terms)
 {
-  const ExprPtr<long> e0_ptr(literal<long>(42L));
-  const ExprPtr<long> e1_ptr(literal<long>(7L));
-  const ExprPtr<long> e2_ptr(any<long>("x"));
+  const Term<long> e0_term(literal<long>(42L));
+  const Term<long> e1_term(literal<long>(7L));
+  const Term<long> e2_term(any<long>("x"));
 
-  ExprPtrs<long> operand_ptrs(3);
-  operand_ptrs.push_back(e0_ptr);
-  operand_ptrs.push_back(e1_ptr);
-  operand_ptrs.push_back(e2_ptr);
+  Terms<long> operand_terms(3);
+  operand_terms.push_back(e0_term);
+  operand_terms.push_back(e1_term);
+  operand_terms.push_back(e2_term);
 
-  EXPECT_EQ(3, operand_ptrs.size());
-  EXPECT_EQ(e0_ptr.addr(), operand_ptrs.at(0).addr());
-  EXPECT_EQ(e1_ptr.addr(), operand_ptrs.at(1).addr());
-  EXPECT_EQ(e2_ptr.addr(), operand_ptrs.at(2).addr());
+  EXPECT_EQ(3, operand_terms.size());
+  EXPECT_EQ(e0_term.addr(), operand_terms.at(0).addr());
+  EXPECT_EQ(e1_term.addr(), operand_terms.at(1).addr());
+  EXPECT_EQ(e2_term.addr(), operand_terms.at(2).addr());
 }
 
 TEST(SmtTest, NaryExpr)
 {
-  const ExprPtr<long> e0_ptr(literal<long>(42L));
-  const ExprPtr<long> e1_ptr(literal<long>(7L));
-  const ExprPtr<long> e2_ptr(any<long>("x"));
+  const Term<long> e0_term(literal<long>(42L));
+  const Term<long> e1_term(literal<long>(7L));
+  const Term<long> e2_term(any<long>("x"));
 
-  ExprPtrs<long> operand_ptrs(3);
-  operand_ptrs.push_back(e0_ptr);
-  operand_ptrs.push_back(e1_ptr);
-  operand_ptrs.push_back(e2_ptr);
+  Terms<long> operand_terms(3);
+  operand_terms.push_back(e0_term);
+  operand_terms.push_back(e1_term);
+  operand_terms.push_back(e2_term);
 
-  const NaryExpr<ADD, long> e3(operand_ptrs);
+  const NaryExpr<ADD, long> e3(operand_terms);
 
   EXPECT_EQ(3, e3.size());
-  EXPECT_EQ(e0_ptr.addr(), e3.operand_ptr(0).addr());
-  EXPECT_EQ(e1_ptr.addr(), e3.operand_ptr(1).addr());
-  EXPECT_EQ(e2_ptr.addr(), e3.operand_ptr(2).addr());
+  EXPECT_EQ(e0_term.addr(), e3.operand(0).addr());
+  EXPECT_EQ(e1_term.addr(), e3.operand(1).addr());
+  EXPECT_EQ(e2_term.addr(), e3.operand(2).addr());
 
   EXPECT_EQ(NARY_EXPR_KIND, e3.expr_kind());
   EXPECT_FALSE(e3.sort().is_bool());
@@ -609,19 +609,19 @@ TEST(SmtTest, NaryExpr)
 
 TEST(SmtTest, Distinct)
 {
-  const ExprPtr<long> e0_ptr(literal<long>(42L));
-  const ExprPtr<long> e1_ptr(literal<long>(7L));
-  const ExprPtr<long> e2_ptr(any<long>("x"));
+  const Term<long> e0_term(literal<long>(42L));
+  const Term<long> e1_term(literal<long>(7L));
+  const Term<long> e2_term(any<long>("x"));
 
-  ExprPtrs<long> operand_ptrs(3);
-  operand_ptrs.push_back(e0_ptr);
-  operand_ptrs.push_back(e1_ptr);
-  operand_ptrs.push_back(e2_ptr);
+  Terms<long> operand_terms(3);
+  operand_terms.push_back(e0_term);
+  operand_terms.push_back(e1_term);
+  operand_terms.push_back(e2_term);
 
-  ExprPtr<sort::Bool> e3_ptr(distinct(std::move(operand_ptrs)));
+  Term<sort::Bool> e3_term(distinct(std::move(operand_terms)));
 
   const NaryExpr<NEQ, long, sort::Bool>& e3 =
-    static_cast<const NaryExpr<NEQ, long, sort::Bool>&>(e3_ptr.ref());
+    static_cast<const NaryExpr<NEQ, long, sort::Bool>&>(e3_term.ref());
   EXPECT_EQ(3, e3.size());
   EXPECT_EQ(NARY_EXPR_KIND, e3.expr_kind());
   EXPECT_TRUE(e3.sort().is_bool());
@@ -634,171 +634,171 @@ TEST(SmtTest, Distinct)
 
 TEST(SmtTest, ConstArrayExpr)
 {
-  const ExprPtr<sort::Int> init_ptr(literal<sort::Int>(7));
-  const ConstArrayExpr<sort::Int, sort::Int> e0(init_ptr);
+  const Term<sort::Int> init_term(literal<sort::Int>(7));
+  const ConstArrayExpr<sort::Int, sort::Int> e0(init_term);
 
   EXPECT_EQ(CONST_ARRAY_EXPR_KIND, e0.expr_kind());
-  EXPECT_EQ(init_ptr.addr(), e0.init_ptr().addr());
+  EXPECT_EQ(init_term.addr(), e0.init().addr());
 }
 
 TEST(SmtTest, ArraySelectExpr)
 {
-  const ExprPtr<sort::Array<sort::Int, sort::Bool>> array_ptr(
+  const Term<sort::Array<sort::Int, sort::Bool>> array_term(
     any<sort::Array<sort::Int, sort::Bool>>("x"));
 
-  const ExprPtr<sort::Int> index_ptr(any<sort::Int>("i"));
-  const ArraySelectExpr<sort::Int, sort::Bool> select(array_ptr, index_ptr);
+  const Term<sort::Int> index_term(any<sort::Int>("i"));
+  const ArraySelectExpr<sort::Int, sort::Bool> select(array_term, index_term);
 
   EXPECT_EQ(ARRAY_SELECT_EXPR_KIND, select.expr_kind());
-  EXPECT_EQ(array_ptr.addr(), select.array_ptr().addr());
-  EXPECT_EQ(index_ptr.addr(), select.index_ptr().addr());
+  EXPECT_EQ(array_term.addr(), select.array().addr());
+  EXPECT_EQ(index_term.addr(), select.index().addr());
 }
 
 TEST(SmtTest, ArrayStoreExpr)
 {
-  const ExprPtr<sort::Array<sort::Int, sort::Bool>> array_ptr(
+  const Term<sort::Array<sort::Int, sort::Bool>> array_term(
     any<sort::Array<sort::Int, sort::Bool>>("x"));
 
-  const ExprPtr<sort::Int> index_ptr(any<sort::Int>("i"));
-  const ExprPtr<sort::Bool> value_ptr(literal<sort::Bool>(true));
-  const ArrayStoreExpr<sort::Int, sort::Bool> store(array_ptr, index_ptr, value_ptr);
+  const Term<sort::Int> index_term(any<sort::Int>("i"));
+  const Term<sort::Bool> value_term(literal<sort::Bool>(true));
+  const ArrayStoreExpr<sort::Int, sort::Bool> store(array_term, index_term, value_term);
 
   EXPECT_EQ(ARRAY_STORE_EXPR_KIND, store.expr_kind());
-  EXPECT_EQ(array_ptr.addr(), store.array_ptr().addr());
-  EXPECT_EQ(index_ptr.addr(), store.index_ptr().addr());
-  EXPECT_EQ(value_ptr.addr(), store.value_ptr().addr());
+  EXPECT_EQ(array_term.addr(), store.array().addr());
+  EXPECT_EQ(index_term.addr(), store.index().addr());
+  EXPECT_EQ(value_term.addr(), store.value().addr());
 }
 
 TEST(SmtTest, Select)
 {
-  const ExprPtr<sort::Array<sort::Int, sort::Bool>> array_ptr(
+  const Term<sort::Array<sort::Int, sort::Bool>> array_term(
     any<sort::Array<sort::Int, sort::Bool>>("x"));
 
-  const ExprPtr<sort::Int> index_ptr(any<sort::Int>("i"));
-  const ExprPtr<sort::Bool> select_ptr = select(array_ptr, index_ptr);
+  const Term<sort::Int> index_term(any<sort::Int>("i"));
+  const Term<sort::Bool> select_term = select(array_term, index_term);
 
-  EXPECT_EQ(ARRAY_SELECT_EXPR_KIND, select_ptr.expr_kind());
+  EXPECT_EQ(ARRAY_SELECT_EXPR_KIND, select_term.expr_kind());
 }
 
 TEST(SmtTest, Store)
 {
-  const ExprPtr<sort::Array<sort::Int, sort::Bool>> array_ptr(
+  const Term<sort::Array<sort::Int, sort::Bool>> array_term(
     any<sort::Array<sort::Int, sort::Bool>>("x"));
 
-  const ExprPtr<sort::Int> index_ptr(any<sort::Int>("i"));
-  const ExprPtr<sort::Bool> value_ptr(literal<sort::Bool>(true));
-  const ExprPtr<sort::Array<sort::Int, sort::Bool>> store_ptr = store(array_ptr, index_ptr, value_ptr);
+  const Term<sort::Int> index_term(any<sort::Int>("i"));
+  const Term<sort::Bool> value_term(literal<sort::Bool>(true));
+  const Term<sort::Array<sort::Int, sort::Bool>> store_term = store(array_term, index_term, value_term);
 
-  EXPECT_EQ(ARRAY_STORE_EXPR_KIND, store_ptr.expr_kind());
+  EXPECT_EQ(ARRAY_STORE_EXPR_KIND, store_term.expr_kind());
 }
 
 TEST(SmtTest, BvUnaryOperatorNOT)
 {
-  const ExprPtr<long> e0_ptr(any<long>("i"));
-  const ExprPtr<long> e1_ptr(~e0_ptr);
+  const Term<long> e0_term(any<long>("i"));
+  const Term<long> e1_term(~e0_term);
   const UnaryExpr<NOT, long>& e2 =
-    static_cast<const UnaryExpr<NOT, long>&>(e1_ptr.ref());
+    static_cast<const UnaryExpr<NOT, long>&>(e1_term.ref());
 
   EXPECT_EQ(UNARY_EXPR_KIND, e2.expr_kind());
   EXPECT_FALSE(e2.sort().is_bool());
   EXPECT_TRUE(e2.sort().is_bv());
-  EXPECT_EQ(e0_ptr.addr(), e2.operand_ptr().addr());
+  EXPECT_EQ(e0_term.addr(), e2.operand().addr());
 }
 
 TEST(SmtTest, BvUnaryOperatorSUB)
 {
-  const ExprPtr<long> e0_ptr(literal<long>(42L));
-  const ExprPtr<long> e1_ptr(-e0_ptr);
+  const Term<long> e0_term(literal<long>(42L));
+  const Term<long> e1_term(-e0_term);
   const UnaryExpr<SUB, long>& e2 =
-    static_cast<const UnaryExpr<SUB, long>&>(e1_ptr.ref());
+    static_cast<const UnaryExpr<SUB, long>&>(e1_term.ref());
 
   EXPECT_EQ(UNARY_EXPR_KIND, e2.expr_kind());
   EXPECT_FALSE(e2.sort().is_bool());
   EXPECT_TRUE(e2.sort().is_bv());
-  EXPECT_EQ(e0_ptr.addr(), e2.operand_ptr().addr());
+  EXPECT_EQ(e0_term.addr(), e2.operand().addr());
 }
 
 #define SMT_TEST_BUILTIN_BV_BINARY_OP(op, opcode)                              \
   TEST(SmtTest, BvBinaryOperator##opcode)                                      \
   {                                                                            \
-    const ExprPtr<long> e0_ptr(any<long>("i"));                                \
-    const ExprPtr<long> e1_ptr(literal<long>(42L));                            \
-    const ExprPtr<long> e2_ptr(e0_ptr op e1_ptr);                              \
+    const Term<long> e0_term(any<long>("i"));                                  \
+    const Term<long> e1_term(literal<long>(42L));                              \
+    const Term<long> e2_term(e0_term op e1_term);                              \
     const BinaryExpr<opcode, long>& e3 =                                       \
-      static_cast<const BinaryExpr<opcode, long>&>(e2_ptr.ref());              \
+      static_cast<const BinaryExpr<opcode, long>&>(e2_term.ref());             \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e3.expr_kind());                               \
     EXPECT_FALSE(e3.sort().is_bool());                                         \
     EXPECT_TRUE(e3.sort().is_bv());                                            \
     EXPECT_TRUE(e3.sort().is_signed());                                        \
-    EXPECT_EQ(e0_ptr.addr(), e3.loperand_ptr().addr());                        \
-    EXPECT_EQ(e1_ptr.addr(), e3.roperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e3.loperand().addr());                           \
+    EXPECT_EQ(e1_term.addr(), e3.roperand().addr());                           \
                                                                                \
-    const ExprPtr<long> e4_ptr(e0_ptr op 7L);                                  \
+    const Term<long> e4_term(e0_term op 7L);                                   \
     const BinaryExpr<opcode, long>& e5 =                                       \
-      static_cast<const BinaryExpr<opcode, long>&>(e4_ptr.ref());              \
+      static_cast<const BinaryExpr<opcode, long>&>(e4_term.ref());             \
     const LiteralExpr<long>& rexpr =                                           \
-      static_cast<const LiteralExpr<long>&>(e5.roperand_ptr().ref());          \
+      static_cast<const LiteralExpr<long>&>(e5.roperand().ref());              \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e5.expr_kind());                               \
     EXPECT_FALSE(e5.sort().is_bool());                                         \
     EXPECT_TRUE(e5.sort().is_bv());                                            \
     EXPECT_TRUE(e5.sort().is_signed());                                        \
-    EXPECT_EQ(e0_ptr.addr(), e5.loperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e5.loperand().addr());                           \
     EXPECT_EQ(7L, rexpr.literal());                                            \
                                                                                \
-    const ExprPtr<long> e6_ptr(7L op e0_ptr);                                  \
+    const Term<long> e6_term(7L op e0_term);                                   \
     const BinaryExpr<opcode, long>& e7 =                                       \
-      static_cast<const BinaryExpr<opcode, long>&>(e6_ptr.ref());              \
+      static_cast<const BinaryExpr<opcode, long>&>(e6_term.ref());             \
     const LiteralExpr<long>& lexpr =                                           \
-      static_cast<const LiteralExpr<long>&>(e7.loperand_ptr().ref());          \
+      static_cast<const LiteralExpr<long>&>(e7.loperand().ref());              \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e7.expr_kind());                               \
     EXPECT_FALSE(e7.sort().is_bool());                                         \
     EXPECT_TRUE(e7.sort().is_bv());                                            \
     EXPECT_TRUE(e7.sort().is_signed());                                        \
     EXPECT_EQ(7L, lexpr.literal());                                            \
-    EXPECT_EQ(e0_ptr.addr(), e7.roperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e7.roperand().addr());                           \
   }                                                                            \
 
 #define SMT_TEST_BUILTIN_BV_BINARY_REL(op, opcode)                             \
   TEST(SmtTest, BvBinaryRelation##opcode)                                      \
   {                                                                            \
-    const ExprPtr<long> e0_ptr(any<long>("i"));                                \
-    const ExprPtr<long> e1_ptr(literal<long>(42L));                            \
-    const ExprPtr<sort::Bool> e2_ptr(e0_ptr op e1_ptr);                        \
+    const Term<long> e0_term(any<long>("i"));                                  \
+    const Term<long> e1_term(literal<long>(42L));                              \
+    const Term<sort::Bool> e2_term(e0_term op e1_term);                        \
     const BinaryExpr<opcode, long, sort::Bool>& e3 =                           \
-      static_cast<const BinaryExpr<opcode, long, sort::Bool>&>(e2_ptr.ref());  \
+      static_cast<const BinaryExpr<opcode, long, sort::Bool>&>(e2_term.ref()); \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e3.expr_kind());                               \
     EXPECT_TRUE(e3.sort().is_bool());                                          \
     EXPECT_FALSE(e3.sort().is_bv());                                           \
-    EXPECT_EQ(e0_ptr.addr(), e3.loperand_ptr().addr());                        \
-    EXPECT_EQ(e1_ptr.addr(), e3.roperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e3.loperand().addr());                           \
+    EXPECT_EQ(e1_term.addr(), e3.roperand().addr());                           \
                                                                                \
-    const ExprPtr<sort::Bool> e4_ptr(e0_ptr op 7L);                            \
+    const Term<sort::Bool> e4_term(e0_term op 7L);                             \
     const BinaryExpr<opcode, long, sort::Bool>& e5 =                           \
-      static_cast<const BinaryExpr<opcode, long, sort::Bool>&>(e4_ptr.ref());  \
+      static_cast<const BinaryExpr<opcode, long, sort::Bool>&>(e4_term.ref()); \
     const LiteralExpr<long>& rexpr =                                           \
-      static_cast<const LiteralExpr<long>&>(e5.roperand_ptr().ref());          \
+      static_cast<const LiteralExpr<long>&>(e5.roperand().ref());              \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e5.expr_kind());                               \
     EXPECT_TRUE(e5.sort().is_bool());                                          \
     EXPECT_FALSE(e5.sort().is_bv());                                           \
-    EXPECT_EQ(e0_ptr.addr(), e5.loperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e5.loperand().addr());                           \
     EXPECT_EQ(7L, rexpr.literal());                                            \
                                                                                \
-    const ExprPtr<sort::Bool> e6_ptr(7L op e0_ptr);                            \
+    const Term<sort::Bool> e6_term(7L op e0_term);                             \
     const BinaryExpr<opcode, long, sort::Bool>& e7 =                           \
-      static_cast<const BinaryExpr<opcode, long, sort::Bool>&>(e6_ptr.ref());  \
+      static_cast<const BinaryExpr<opcode, long, sort::Bool>&>(e6_term.ref()); \
     const LiteralExpr<long>& lexpr =                                           \
-      static_cast<const LiteralExpr<long>&>(e7.loperand_ptr().ref());          \
+      static_cast<const LiteralExpr<long>&>(e7.loperand().ref());              \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e7.expr_kind());                               \
     EXPECT_TRUE(e7.sort().is_bool());                                          \
     EXPECT_FALSE(e7.sort().is_bv());                                           \
     EXPECT_EQ(7L, lexpr.literal());                                            \
-    EXPECT_EQ(e0_ptr.addr(), e7.roperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e7.roperand().addr());                           \
   }                                                                            \
 
 SMT_TEST_BUILTIN_BV_BINARY_OP(-, SUB)
@@ -820,93 +820,93 @@ SMT_TEST_BUILTIN_BV_BINARY_REL(==, EQL)
 #define SMT_TEST_BUILTIN_MATH_BINARY_OP(op, opcode)                            \
   TEST(SmtTest, MathBinaryOperator##opcode)                                    \
   {                                                                            \
-    const ExprPtr<sort::Int> e0_ptr(any<sort::Int>("i"));                      \
-    const ExprPtr<sort::Int> e1_ptr(literal<sort::Int>(42L));                  \
-    const ExprPtr<sort::Int> e2_ptr(e0_ptr op e1_ptr);                         \
+    const Term<sort::Int> e0_term(any<sort::Int>("i"));                        \
+    const Term<sort::Int> e1_term(literal<sort::Int>(42L));                    \
+    const Term<sort::Int> e2_term(e0_term op e1_term);                         \
     const BinaryExpr<opcode, sort::Int>& e3 =                                  \
-      static_cast<const BinaryExpr<opcode, sort::Int>&>(e2_ptr.ref());         \
+      static_cast<const BinaryExpr<opcode, sort::Int>&>(e2_term.ref());        \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e3.expr_kind());                               \
     EXPECT_FALSE(e3.sort().is_bool());                                         \
     EXPECT_TRUE(e3.sort().is_int());                                           \
     EXPECT_FALSE(e3.sort().is_bv());                                           \
-    EXPECT_EQ(e0_ptr.addr(), e3.loperand_ptr().addr());                        \
-    EXPECT_EQ(e1_ptr.addr(), e3.roperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e3.loperand().addr());                           \
+    EXPECT_EQ(e1_term.addr(), e3.roperand().addr());                           \
                                                                                \
-    const ExprPtr<sort::Int> e4_ptr(e0_ptr op 7L);                             \
+    const Term<sort::Int> e4_term(e0_term op 7L);                              \
     const BinaryExpr<opcode, sort::Int>& e5 =                                  \
-      static_cast<const BinaryExpr<opcode, sort::Int>&>(e4_ptr.ref());         \
+      static_cast<const BinaryExpr<opcode, sort::Int>&>(e4_term.ref());        \
     const LiteralExpr<sort::Int, long>& rexpr =                                \
-      static_cast<const LiteralExpr<sort::Int,long>&>(e5.roperand_ptr().ref());\
+      static_cast<const LiteralExpr<sort::Int,long>&>(e5.roperand().ref());    \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e5.expr_kind());                               \
     EXPECT_FALSE(e5.sort().is_bool());                                         \
     EXPECT_TRUE(e5.sort().is_int());                                           \
     EXPECT_FALSE(e5.sort().is_bv());                                           \
-    EXPECT_EQ(e0_ptr.addr(), e5.loperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e5.loperand().addr());                           \
     EXPECT_EQ(7L, rexpr.literal());                                            \
                                                                                \
-    const ExprPtr<sort::Int> e6_ptr(7L op e0_ptr);                             \
+    const Term<sort::Int> e6_term(7L op e0_term);                              \
     const BinaryExpr<opcode, sort::Int>& e7 =                                  \
-      static_cast<const BinaryExpr<opcode, sort::Int>&>(e6_ptr.ref());         \
+      static_cast<const BinaryExpr<opcode, sort::Int>&>(e6_term.ref());        \
     const LiteralExpr<sort::Int, long>& lexpr =                                \
       static_cast<const LiteralExpr<sort::Int, long>&>(                        \
-        e7.loperand_ptr().ref());                                              \
+        e7.loperand().ref());                                                  \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e7.expr_kind());                               \
     EXPECT_FALSE(e7.sort().is_bool());                                         \
     EXPECT_TRUE(e7.sort().is_int());                                           \
     EXPECT_FALSE(e7.sort().is_bv());                                           \
     EXPECT_EQ(7L, lexpr.literal());                                            \
-    EXPECT_EQ(e0_ptr.addr(), e7.roperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e7.roperand().addr());                           \
   }                                                                            \
 
 #define SMT_TEST_BUILTIN_MATH_BINARY_REL(op, opcode)                           \
   TEST(SmtTest, MathBinaryRelation##opcode)                                    \
   {                                                                            \
-    const ExprPtr<sort::Int> e0_ptr(any<sort::Int>("i"));                      \
-    const ExprPtr<sort::Int> e1_ptr(literal<sort::Int>(42L));                  \
-    const ExprPtr<sort::Bool> e2_ptr(e0_ptr op e1_ptr);                        \
+    const Term<sort::Int> e0_term(any<sort::Int>("i"));                        \
+    const Term<sort::Int> e1_term(literal<sort::Int>(42L));                    \
+    const Term<sort::Bool> e2_term(e0_term op e1_term);                        \
     const BinaryExpr<opcode, sort::Int, sort::Bool>& e3 =                      \
       static_cast<const BinaryExpr<opcode, sort::Int, sort::Bool>&>(           \
-        e2_ptr.ref());                                                         \
+        e2_term.ref());                                                        \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e3.expr_kind());                               \
     EXPECT_TRUE(e3.sort().is_bool());                                          \
     EXPECT_FALSE(e3.sort().is_int());                                          \
     EXPECT_FALSE(e3.sort().is_bv());                                           \
-    EXPECT_EQ(e0_ptr.addr(), e3.loperand_ptr().addr());                        \
-    EXPECT_EQ(e1_ptr.addr(), e3.roperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e3.loperand().addr());                           \
+    EXPECT_EQ(e1_term.addr(), e3.roperand().addr());                           \
                                                                                \
-    const ExprPtr<sort::Bool> e4_ptr(e0_ptr op 7L);                            \
+    const Term<sort::Bool> e4_term(e0_term op 7L);                             \
     const BinaryExpr<opcode, sort::Int, sort::Bool>& e5 =                      \
       static_cast<const BinaryExpr<opcode, sort::Int, sort::Bool>&>(           \
-        e4_ptr.ref());                                                         \
+        e4_term.ref());                                                        \
     const LiteralExpr<sort::Int, long>& rexpr =                                \
       static_cast<const LiteralExpr<sort::Int, long>&>(                        \
-        e5.roperand_ptr().ref());                                              \
+        e5.roperand().ref());                                                  \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e5.expr_kind());                               \
     EXPECT_TRUE(e5.sort().is_bool());                                          \
     EXPECT_FALSE(e5.sort().is_int());                                          \
     EXPECT_FALSE(e5.sort().is_bv());                                           \
-    EXPECT_EQ(e0_ptr.addr(), e5.loperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e5.loperand().addr());                           \
     EXPECT_EQ(7L, rexpr.literal());                                            \
                                                                                \
-    const ExprPtr<sort::Bool> e6_ptr(7L op e0_ptr);                            \
+    const Term<sort::Bool> e6_term(7L op e0_term);                             \
     const BinaryExpr<opcode, sort::Int, sort::Bool>& e7 =                      \
       static_cast<const BinaryExpr<opcode, sort::Int, sort::Bool>&>(           \
-        e6_ptr.ref());                                                         \
+        e6_term.ref());                                                        \
     const LiteralExpr<sort::Int, long>& lexpr =                                \
       static_cast<const LiteralExpr<sort::Int, long>&>(                        \
-        e7.loperand_ptr().ref());                                              \
+        e7.loperand().ref());                                                  \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e7.expr_kind());                               \
     EXPECT_TRUE(e7.sort().is_bool());                                          \
     EXPECT_FALSE(e7.sort().is_int());                                          \
     EXPECT_FALSE(e7.sort().is_bv());                                           \
     EXPECT_EQ(7L, lexpr.literal());                                            \
-    EXPECT_EQ(e0_ptr.addr(), e7.roperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e7.roperand().addr());                           \
   }                                                                            \
 
 SMT_TEST_BUILTIN_MATH_BINARY_OP(-, SUB)
@@ -924,57 +924,57 @@ SMT_TEST_BUILTIN_MATH_BINARY_REL(==, EQL)
 
 TEST(SmtTest, BoolUnaryOperatorLNOT)
 {
-  const ExprPtr<sort::Bool> e0_ptr(any<sort::Bool>("x"));
-  const ExprPtr<sort::Bool> e1_ptr(!e0_ptr);
+  const Term<sort::Bool> e0_term(any<sort::Bool>("x"));
+  const Term<sort::Bool> e1_term(!e0_term);
   const UnaryExpr<LNOT, sort::Bool>& e2 =
-    static_cast<const UnaryExpr<LNOT, sort::Bool>&>(e1_ptr.ref());
+    static_cast<const UnaryExpr<LNOT, sort::Bool>&>(e1_term.ref());
 
   EXPECT_EQ(UNARY_EXPR_KIND, e2.expr_kind());
   EXPECT_TRUE(e2.sort().is_bool());
   EXPECT_FALSE(e2.sort().is_bv());
-  EXPECT_EQ(e0_ptr.addr(), e2.operand_ptr().addr());
+  EXPECT_EQ(e0_term.addr(), e2.operand().addr());
 }
 
 #define SMT_TEST_BUILTIN_BOOL_BINARY_OP(op, opcode)                            \
   TEST(SmtTest, BoolBinaryOperator##opcode)                                    \
   {                                                                            \
-    const ExprPtr<sort::Bool> e0_ptr(any<sort::Bool>("x"));                    \
-    const ExprPtr<sort::Bool> e1_ptr(literal<sort::Bool>(true));               \
-    const ExprPtr<sort::Bool> e2_ptr(e0_ptr op e1_ptr);                        \
+    const Term<sort::Bool> e0_term(any<sort::Bool>("x"));                      \
+    const Term<sort::Bool> e1_term(literal<sort::Bool>(true));                 \
+    const Term<sort::Bool> e2_term(e0_term op e1_term);                        \
     const BinaryExpr<opcode, sort::Bool>& e3 =                                 \
-      static_cast<const BinaryExpr<opcode, sort::Bool>&>(e2_ptr.ref());        \
+      static_cast<const BinaryExpr<opcode, sort::Bool>&>(e2_term.ref());       \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e3.expr_kind());                               \
     EXPECT_TRUE(e3.sort().is_bool());                                          \
     EXPECT_FALSE(e3.sort().is_bv());                                           \
-    EXPECT_EQ(e0_ptr.addr(), e3.loperand_ptr().addr());                        \
-    EXPECT_EQ(e1_ptr.addr(), e3.roperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e3.loperand().addr());                           \
+    EXPECT_EQ(e1_term.addr(), e3.roperand().addr());                           \
                                                                                \
-    const ExprPtr<sort::Bool> e4_ptr(e0_ptr op true);                          \
+    const Term<sort::Bool> e4_term(e0_term op true);                           \
     const BinaryExpr<opcode, sort::Bool>& e5 =                                 \
-      static_cast<const BinaryExpr<opcode, sort::Bool>&>(e4_ptr.ref());        \
+      static_cast<const BinaryExpr<opcode, sort::Bool>&>(e4_term.ref());       \
     const LiteralExpr<sort::Bool, bool>& rexpr =                               \
       static_cast<const LiteralExpr<sort::Bool, bool>&>(                       \
-        e5.roperand_ptr().ref());                                              \
+        e5.roperand().ref());                                                  \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e5.expr_kind());                               \
     EXPECT_TRUE(e5.sort().is_bool());                                          \
     EXPECT_FALSE(e5.sort().is_bv());                                           \
-    EXPECT_EQ(e0_ptr.addr(), e5.loperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e5.loperand().addr());                           \
     EXPECT_TRUE(rexpr.literal());                                              \
                                                                                \
-    const ExprPtr<sort::Bool> e6_ptr(false op e0_ptr);                         \
+    const Term<sort::Bool> e6_term(false op e0_term);                          \
     const BinaryExpr<opcode, sort::Bool>& e7 =                                 \
-      static_cast<const BinaryExpr<opcode, sort::Bool>&>(e6_ptr.ref());        \
+      static_cast<const BinaryExpr<opcode, sort::Bool>&>(e6_term.ref());       \
     const LiteralExpr<sort::Bool, bool>& lexpr =                               \
       static_cast<const LiteralExpr<sort::Bool, bool>&>(                       \
-        e7.loperand_ptr().ref());                                              \
+        e7.loperand().ref());                                                  \
                                                                                \
     EXPECT_EQ(BINARY_EXPR_KIND, e7.expr_kind());                               \
     EXPECT_TRUE(e7.sort().is_bool());                                          \
     EXPECT_FALSE(e7.sort().is_bv());                                           \
     EXPECT_FALSE(lexpr.literal());                                             \
-    EXPECT_EQ(e0_ptr.addr(), e7.roperand_ptr().addr());                        \
+    EXPECT_EQ(e0_term.addr(), e7.roperand().addr());                           \
   }                                                                            \
 
 SMT_TEST_BUILTIN_BOOL_BINARY_OP(&&, LAND)
@@ -984,22 +984,22 @@ SMT_TEST_BUILTIN_BOOL_BINARY_OP(!=, NEQ)
 
 TEST(SmtTest, Identity)
 {
-  const ExprPtr<sort::Bool> ttexpr_ptr = Identity<LAND, sort::Bool>::expr_ptr;
+  const Term<sort::Bool> ttexpr_term = Identity<LAND, sort::Bool>::term;
   const LiteralExpr<sort::Bool, bool>& ttexpr =
-    static_cast<const LiteralExpr<sort::Bool, bool>&>(ttexpr_ptr.ref());
+    static_cast<const LiteralExpr<sort::Bool, bool>&>(ttexpr_term.ref());
   EXPECT_TRUE(ttexpr.literal());
 }
 
 TEST(SmtTest, Signedness)
 {
-  const ExprPtr<unsigned> e0_ptr(any<unsigned>("x"));
-  const ExprPtr<unsigned> e1_ptr(e0_ptr + 1);
-  const ExprPtr<unsigned> e2_ptr(2 + e0_ptr);
+  const Term<unsigned> e0_term(any<unsigned>("x"));
+  const Term<unsigned> e1_term(e0_term + 1);
+  const Term<unsigned> e2_term(2 + e0_term);
 
-  EXPECT_TRUE(e1_ptr.sort().is_bv());
-  EXPECT_FALSE(e1_ptr.sort().is_signed());
-  EXPECT_TRUE(e2_ptr.sort().is_bv());
-  EXPECT_FALSE(e2_ptr.sort().is_signed());
+  EXPECT_TRUE(e1_term.sort().is_bv());
+  EXPECT_FALSE(e1_term.sort().is_signed());
+  EXPECT_TRUE(e2_term.sort().is_bv());
+  EXPECT_FALSE(e2_term.sort().is_signed());
 }
 
 TEST(SmtTest, UnsafeExpr)
@@ -1010,69 +1010,69 @@ TEST(SmtTest, UnsafeExpr)
   const UnsafeDecl const_decl("x", bv_sort);
   const UnsafeDecl func_decl("f", func_sort);
 
-  const UnsafeExprPtr seven_ptr(literal(bv_sort, 7));
-  EXPECT_TRUE(seven_ptr.sort().is_bv());
-  EXPECT_EQ(bv_long_size, seven_ptr.sort().bv_size());
+  const UnsafeTerm seven_term(literal(bv_sort, 7));
+  EXPECT_TRUE(seven_term.sort().is_bv());
+  EXPECT_EQ(bv_long_size, seven_term.sort().bv_size());
 
-  const UnsafeExprPtr x_ptr(constant(const_decl));
-  EXPECT_TRUE(x_ptr.sort().is_bv());
-  EXPECT_EQ(bv_long_size, x_ptr.sort().bv_size());
+  const UnsafeTerm x_term(constant(const_decl));
+  EXPECT_TRUE(x_term.sort().is_bv());
+  EXPECT_EQ(bv_long_size, x_term.sort().bv_size());
 
-  const UnsafeExprPtr app_ptr(apply(func_decl, seven_ptr));
-  EXPECT_TRUE(app_ptr.sort().is_bv());
-  EXPECT_EQ(bv_long_size, app_ptr.sort().bv_size());
+  const UnsafeTerm app_term(apply(func_decl, seven_term));
+  EXPECT_TRUE(app_term.sort().is_bv());
+  EXPECT_EQ(bv_long_size, app_term.sort().bv_size());
 
-  UnsafeExprPtrs ptrs;
-  ptrs.push_back(seven_ptr);
-  ptrs.push_back(x_ptr);
-  ptrs.push_back(app_ptr);
+  UnsafeTerms terms;
+  terms.push_back(seven_term);
+  terms.push_back(x_term);
+  terms.push_back(app_term);
 
-  const UnsafeExprPtr distinct_ptr(distinct(std::move(ptrs)));
-  EXPECT_TRUE(distinct_ptr.sort().is_bool());
+  const UnsafeTerm distinct_term(distinct(std::move(terms)));
+  EXPECT_TRUE(distinct_term.sort().is_bool());
 
   const Sort& array_sort = internal::sort<sort::Array<size_t, long>>();
   const Sort& index_sort = internal::sort<size_t>();
   const UnsafeDecl array_decl("array", array_sort);
   const UnsafeDecl index_decl("index", index_sort);
-  const UnsafeExprPtr array_ptr(constant(array_decl));
-  EXPECT_TRUE(array_ptr.sort().is_array());
-  EXPECT_TRUE(array_ptr.sort().sorts(0).is_bv());
-  EXPECT_TRUE(array_ptr.sort().sorts(1).is_bv());
-  EXPECT_EQ(sizeof(size_t) * 8, array_ptr.sort().sorts(0).bv_size());
-  EXPECT_EQ(bv_long_size, array_ptr.sort().sorts(1).bv_size());
+  const UnsafeTerm array_term(constant(array_decl));
+  EXPECT_TRUE(array_term.sort().is_array());
+  EXPECT_TRUE(array_term.sort().sorts(0).is_bv());
+  EXPECT_TRUE(array_term.sort().sorts(1).is_bv());
+  EXPECT_EQ(sizeof(size_t) * 8, array_term.sort().sorts(0).bv_size());
+  EXPECT_EQ(bv_long_size, array_term.sort().sorts(1).bv_size());
 
-  const UnsafeExprPtr index_ptr(constant(index_decl));
-  EXPECT_TRUE(index_ptr.sort().is_bv());
-  EXPECT_EQ(sizeof(size_t) * 8, index_ptr.sort().bv_size());
+  const UnsafeTerm index_term(constant(index_decl));
+  EXPECT_TRUE(index_term.sort().is_bv());
+  EXPECT_EQ(sizeof(size_t) * 8, index_term.sort().bv_size());
 
-  const UnsafeExprPtr store_ptr(store(array_ptr, index_ptr, app_ptr));
-  EXPECT_TRUE(store_ptr.sort().is_array());
-  EXPECT_TRUE(store_ptr.sort().sorts(0).is_bv());
-  EXPECT_TRUE(store_ptr.sort().sorts(1).is_bv());
-  EXPECT_EQ(sizeof(size_t) * 8, store_ptr.sort().sorts(0).bv_size());
-  EXPECT_EQ(bv_long_size, store_ptr.sort().sorts(1).bv_size());
+  const UnsafeTerm store_term(store(array_term, index_term, app_term));
+  EXPECT_TRUE(store_term.sort().is_array());
+  EXPECT_TRUE(store_term.sort().sorts(0).is_bv());
+  EXPECT_TRUE(store_term.sort().sorts(1).is_bv());
+  EXPECT_EQ(sizeof(size_t) * 8, store_term.sort().sorts(0).bv_size());
+  EXPECT_EQ(bv_long_size, store_term.sort().sorts(1).bv_size());
 
-  const UnsafeExprPtr select_ptr(select(store_ptr, index_ptr));
-  EXPECT_TRUE(select_ptr.sort().is_bv());
-  EXPECT_EQ(bv_long_size, select_ptr.sort().bv_size());
+  const UnsafeTerm select_term(select(store_term, index_term));
+  EXPECT_TRUE(select_term.sort().is_bv());
+  EXPECT_EQ(bv_long_size, select_term.sort().bv_size());
 
-  const UnsafeExprPtr eq_ptr(select_ptr == x_ptr);
-  EXPECT_TRUE(eq_ptr.sort().is_bool());
+  const UnsafeTerm eq_term(select_term == x_term);
+  EXPECT_TRUE(eq_term.sort().is_bool());
 
-  const UnsafeExprPtr and_ptr(eq_ptr && distinct_ptr);
-  EXPECT_TRUE(and_ptr.sort().is_bool());
+  const UnsafeTerm and_term(eq_term && distinct_term);
+  EXPECT_TRUE(and_term.sort().is_bool());
 
-  const UnsafeExprPtr ladd_ptr(7 + x_ptr);
-  EXPECT_TRUE(ladd_ptr.sort().is_bv());
-  EXPECT_EQ(bv_long_size, ladd_ptr.sort().bv_size());
+  const UnsafeTerm ladd_term(7 + x_term);
+  EXPECT_TRUE(ladd_term.sort().is_bv());
+  EXPECT_EQ(bv_long_size, ladd_term.sort().bv_size());
 
-  const UnsafeExprPtr radd_ptr(x_ptr + 8);
-  EXPECT_TRUE(radd_ptr.sort().is_bv());
-  EXPECT_EQ(bv_long_size, radd_ptr.sort().bv_size());
+  const UnsafeTerm radd_term(x_term + 8);
+  EXPECT_TRUE(radd_term.sort().is_bv());
+  EXPECT_EQ(bv_long_size, radd_term.sort().bv_size());
 
-  const UnsafeExprPtr llss_ptr(7 < x_ptr);
-  EXPECT_TRUE(llss_ptr.sort().is_bool());
+  const UnsafeTerm llss_term(7 < x_term);
+  EXPECT_TRUE(llss_term.sort().is_bool());
 
-  const UnsafeExprPtr rlss_ptr(x_ptr < 8);
-  EXPECT_TRUE(rlss_ptr.sort().is_bool());
+  const UnsafeTerm rlss_term(x_term < 8);
+  EXPECT_TRUE(rlss_term.sort().is_bool());
 }
