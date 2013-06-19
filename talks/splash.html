@@ -132,7 +132,7 @@ auto new_array = smt::store(array, index, update_term);</pre>
         </p>
         <div class="code">
           <pre>const smt::Decl&lt;smt::Func&lt;smt::Int, smt::Int&gt;&gt; func_decl("f");
-auto x = smt::any<smt::Int>("x");
+auto x = smt::any&lt;smt::Int&gt;("x");
 
 auto formula = smt::apply(func_decl, x) == 7;     // f(x) = 7</pre>
         </div>
