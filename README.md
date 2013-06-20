@@ -7,7 +7,7 @@ to create [SMT-LIB][smt-lib] 2.0 formulas for Z3 and MathSAT5.
 
 ## Prerequisite
 
-For SMT Kit to work, SMT solvers that must be installed separately.
+For SMT Kit to work, SMT solvers must be installed separately.
 Read their software licences carefully.
 
 Currently, SMT Kit supports [Z3][z3] and [MathSAT5][msat]. Installation
