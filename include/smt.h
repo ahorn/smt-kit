@@ -964,22 +964,22 @@ class FuncAppExpr
   public Expr<typename sort::Func<T...>::Range>
 {
 public:
-  typedef typename internal::TermFoldExceptLast<T...>::Type DomainPtrs;
+  typedef typename internal::TermFoldExceptLast<T...>::Type Args;
 
 private:
   const Decl<sort::Func<T...>> m_func_decl;
-  const DomainPtrs m_args;
+  const Args m_args;
 
 public:
   FuncAppExpr(
     Decl<sort::Func<T...>> func_decl,
-    DomainPtrs args)
+    Args args)
   : UnsafeExpr(FUNC_APP_EXPR_KIND,
       internal::sort<typename sort::Func<T...>::Range>()),
     UnsafeFuncAppExpr<std::tuple_size<typename
         internal::TermFoldExceptLast<T...>::Type>::value>(
       func_decl,
-      internal::to_array<UnsafeTerm, DomainPtrs>(args)),
+      internal::to_array<UnsafeTerm, Args>(args)),
     Expr<typename sort::Func<T...>::Range>(FUNC_APP_EXPR_KIND),
     m_func_decl(func_decl),
     m_args(args) {}
@@ -989,7 +989,7 @@ public:
     return m_func_decl;
   }
 
-  const DomainPtrs& args() const
+  const Args& args() const
   {
     return m_args;
   }
@@ -1064,7 +1064,7 @@ Term<Range> apply(
 template<typename... T>
 Term<typename sort::Func<T...>::Range> apply(
   const Decl<sort::Func<T...>>& func_decl,
-  const typename FuncAppExpr<T...>::DomainPtrs& args)
+  const typename FuncAppExpr<T...>::Args& args)
 {
   return Term<typename sort::Func<T...>::Range>(
     new FuncAppExpr<T...>(func_decl, args));

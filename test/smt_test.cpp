@@ -301,8 +301,8 @@ TEST(SmtTest, UnaryFuncAppExpr)
   EXPECT_EQ(FUNC_APP_EXPR_KIND, app.expr_kind());
   EXPECT_EQ(func_decl, app.func_decl());
 
-  STATIC_EXPECT_TRUE((std::tuple_size<FuncAppExpr<long, sort::Int>::DomainPtrs>::value == 1));
-  const FuncAppExpr<long, sort::Int>::DomainPtrs& arg_terms = app.args();
+  STATIC_EXPECT_TRUE((std::tuple_size<FuncAppExpr<long, sort::Int>::Args>::value == 1));
+  const FuncAppExpr<long, sort::Int>::Args& arg_terms = app.args();
   Term<long> get0_arg_term(std::get<0>(arg_terms));
   EXPECT_EQ(LITERAL_EXPR_KIND, get0_arg_term.expr_kind());
 
@@ -326,8 +326,8 @@ TEST(SmtTest, BinaryFuncAppExpr)
   EXPECT_EQ(FUNC_APP_EXPR_KIND, app.expr_kind());
   EXPECT_EQ(func_decl, app.func_decl());
 
-  STATIC_EXPECT_TRUE((std::tuple_size<FuncAppExpr<long, sort::Int, sort::Real>::DomainPtrs>::value == 2));
-  const FuncAppExpr<long, sort::Int, sort::Real>::DomainPtrs& arg_terms = app.args();
+  STATIC_EXPECT_TRUE((std::tuple_size<FuncAppExpr<long, sort::Int, sort::Real>::Args>::value == 2));
+  const FuncAppExpr<long, sort::Int, sort::Real>::Args& arg_terms = app.args();
   Term<long> get0_arg_term(std::get<0>(arg_terms));
   EXPECT_EQ(LITERAL_EXPR_KIND, get0_arg_term.expr_kind());
   Term<sort::Int> get1_arg_term(std::get<1>(arg_terms));
