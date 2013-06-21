@@ -857,7 +857,7 @@ TEST(SmtZ3Test, BinaryIntOperatorGEQ)
   EXPECT_EQ("(>= 0 x)", out.str());
 }
 
-TEST(SmtZ3Test, Functional)
+TEST(SmtZ3Test, AutoConfig)
 {
   Z3Solver solver;
 
@@ -885,6 +885,63 @@ TEST(SmtZ3Test, Functional)
     EXPECT_EQ(smt::unsat, solver.check());
   }
   solver.pop();
+
+  EXPECT_EQ(smt::sat, solver.check());
+
+  solver.push();
+  {
+    solver.add(3 == y);
+    EXPECT_EQ(smt::sat, solver.check());
+  }
+  solver.pop();
+
+  EXPECT_EQ(smt::sat, solver.check());
+
+  solver.push();
+  {
+    solver.add(0 > y);
+    EXPECT_EQ(smt::unsat, solver.check());
+  }
+  solver.pop();
+
+  EXPECT_EQ(smt::sat, solver.check());
+}
+
+TEST(SmtZ3Test, QF_BV)
+{
+  Z3Solver solver(QF_BV_LOGIC);
+
+  auto x = any<long>("x");
+  solver.add(0 < x);
+
+  EXPECT_EQ(smt::sat, solver.check());
+
+  solver.push();
+  {
+    solver.add(3 == x);
+    EXPECT_EQ(smt::sat, solver.check());
+  }
+  solver.pop();
+
+  EXPECT_EQ(smt::sat, solver.check());
+
+  solver.push();
+
+  {
+    solver.add(0 > x);
+    EXPECT_EQ(smt::unsat, solver.check());
+  }
+  solver.pop();
+
+  EXPECT_EQ(smt::sat, solver.check());
+}
+
+TEST(SmtZ3Test, QF_IDL)
+{
+  Z3Solver solver(QF_IDL_LOGIC);
+
+  auto y = any<sort::Int>("y");
+  solver.add(0 < y);
 
   EXPECT_EQ(smt::sat, solver.check());
 

@@ -18,6 +18,203 @@
 namespace smt
 {
 
+/// Standard acronyms of logic declarations in SMT-LIB 2.0
+
+/// \see_also http://smtlib.cs.uiowa.edu/logics.html
+enum Logic : unsigned
+{
+  /// Closed formulas built over arbitrary expansions of the Ints and ArraysEx
+  /// signatures with free sort and function symbols, but with the following 
+  /// restrictions:
+  /// - all terms of sort Int are linear, that is, have no occurrences of the
+  ///  function symbols *, /, div, mod, and abs
+  /// - all array terms have sort (Array Int Int).
+  ///
+  /// This logic extends QF_AUFLIA by allowing quantifiers.
+  AUFLIA_LOGIC,
+
+  /// Closed formulas built over arbitrary expansions of the Reals_Ints and
+  /// ArraysEx signatures with free sort and function symbols, but with the
+  /// following restrictions:
+  /// - all terms of sort Int are linear, that is, have no occurrences of the
+  ///   function symbols *, /, div, mod, and abs
+  /// - all terms of sort Real are linear, that is, have no occurrences of the
+  ///  function symbols * and /
+  /// - all array terms have sort 
+  ///  (Array Int Real) or 
+  ///  (Array Int (Array Int Real)).
+  AUFLIRA_LOGIC,
+
+  /// Closed formulas built over arbitrary expansions of the Reals_Ints and
+  /// ArraysEx signatures with free sort and function symbols.
+  AUFNIRA_LOGIC,
+
+  /// Closed formulas built over arbitrary expansions of the Reals signature
+  /// with free constant symbols, but containing only linear atoms, that is, 
+  /// atoms with no occurrences of the function symbols * and /
+  LRA_LOGIC,
+
+  /// Closed quantifier-free formulas built over the Fixed_Size_BitVectors and
+  /// ArraysEx signatures, with the restriction that all array terms have sort of
+  /// the form (Array (_ BitVec i) (_ BitVec j)) for some i, j > 0.
+  QF_ABV_LOGIC,
+
+  /// Closed quantifier-free formulas built over an arbitrary expansion of the
+  /// Fixed_Size_BitVectors and ArraysEx signatures with free sort and function
+  /// symbols, but with the restriction that all array terms have sort of the 
+  /// form (Array (_ BitVec i) (_ BitVec j)) for some i, j > 0.
+  QF_AUFBV_LOGIC,
+
+  /// Closed quantifier-free formulas built over arbitrary expansions of
+  /// the Fixed_Size_BitVectors signature with free sort and function symbols.
+  QF_UFBV_LOGIC,
+
+  /// Closed quantifier-free formulas built over arbitrary expansions of the
+  /// Ints and ArraysEx signatures with free sort and function symbols, but
+  /// with the following restrictions:
+  /// - all terms of sort Int are linear, that is, have no occurrences of the
+  ///  function symbols *, /, div, mod, and abs
+  /// - all array terms have sort (Array Int Int).
+  QF_AUFLIA_LOGIC,
+
+  /// Closed quantifier-free formulas built over an arbitrary expansion of
+  /// the ArraysEx signature with free sort and constant symbols.
+  QF_AX_LOGIC,
+
+  /// Closed quantifier-free formulas built over an arbitrary expansion of the
+  /// Fixed_Size_BitVectors signature with free constant symbols over the sorts
+  /// (_ BitVec m) for 0 < m.  Formulas in ite terms must satisfy the same
+  /// restriction as well, with the exception that they need not be closed 
+  /// (because they may be in the scope of a let binder).
+  QF_BV_LOGIC,
+
+  /// Closed quantifier-free formulas with atoms of the form:
+  /// - q
+  /// - (op (- x y) n),
+  /// - (op (- x y) (- n)), or
+  /// - (op x y)
+  /// where
+  ///  - q is a variable or free constant symbol of sort Bool,
+  ///  - op is <, <=, >, >=, =, or distinct,
+  ///  - x, y are free constant symbols of sort Int, 
+  ///  - n is a numeral. 
+  QF_IDL_LOGIC,
+
+  /// Closed quantifier-free formulas with atoms of the form:
+  /// - p
+  /// - (op (- x y) c),
+  /// - (op x y),
+  /// - (op (- (+ x ... x) (+ y ... y)) c) with n > 1 occurrences of x and of y,
+  /// where
+  ///  - p is a variable or free constant symbol of sort Bool,
+  ///  - c is an expression of the form m or (- m) for some numeral m,
+  ///  - op is <, <=, >, >=, =, or distinct,
+  ///  - x, y are free constant symbols of sort Real. 
+  QF_RDL_LOGIC,
+
+  /// Closed quantifier-free formulas built over an arbitrary expansion of the
+  /// Ints signature with free constant symbols, but whose terms of sort Int 
+  /// are all linear, that is, have no occurrences of the function symbols
+  /// *, /, div, mod, and abs
+  QF_LIA_LOGIC,
+
+  /// Closed quantifier-free formulas built over arbitrary expansions of 
+  /// the Reals signature with free constant symbols, but containing only
+  /// linear atoms, that is, atoms with no occurrences of the function
+  /// symbols * and /
+  QF_LRA_LOGIC,
+
+  /// Closed quantifier-free formulas built over an arbitrary expansion of the
+  /// Ints signature with free constant symbols.
+  QF_NIA_LOGIC,
+
+  /// Closed quantifier-free formulas built over arbitrary expansions of 
+  /// the Reals signature with free constant symbols.
+  QF_NRA_LOGIC,
+
+  /// Closed quantifier-free formulas built over an arbitrary expansion of
+  /// the Core signature with free sort and function symbols.
+  QF_UF_LOGIC,
+
+  /// Closed quantifier-free formulas built over an arbitrary expansion with 
+  /// free sort and function symbols of the signature consisting of 
+  /// - all the sort and function symbols of Core and
+  /// - the following symbols of Int:
+  ///
+  ///   :sorts ((Int 0))
+  ///  :funs ((NUMERAL Int) 
+  ///         (- Int Int Int)
+  ///         (+ Int Int Int) 
+  ///         (<= Int Int Bool)
+  ///         (< Int Int Bool)
+  ///         (>= Int Int Bool)
+  ///         (> Int Int Bool)
+  ///        )
+  ///
+  /// Additionally, for every term of the form (op t1 t2) with op in {+, -}, 
+  /// at least one of t1 and t2 is a numeral.
+  QF_UFIDL_LOGIC,
+
+  /// Closed quantifier-free formulas built over arbitrary expansions of the
+  /// Ints signatures with free sort and function symbols, but with the 
+  /// following restrictions:
+  /// - all terms of sort Int are linear, that is, have no occurrences of the
+  ///   function symbols *, /, div, mod, and abs
+  QF_UFLIA_LOGIC,
+
+  /// Closed quantifier-free formulas built over arbitrary expansions of the 
+  /// Reals signature with free sort and function symbols, but containing 
+  /// only linear atoms, that is, atoms with no occurrences of the function
+  /// symbols * and /
+  QF_UFLRA_LOGIC,
+
+  /// Closed quantifier-free formulas built over arbitrary expansions of 
+  /// the Reals signature with free sort and function symbols.
+  QF_UFNRA_LOGIC,
+
+  /// Closed formulas built over arbitrary expansions of the Reals signature 
+  /// with free sort and function symbols, but containing only linear atoms, 
+  /// that is, atoms with no occurrences of the function symbols * and /
+  UFLRA_LOGIC,
+
+  /// Closed formulas built over an arbitrary expansion of the Ints signature
+  /// with free sort and function symbols.
+  UFNIA_LOGIC,
+};
+
+struct Logics
+{
+  // index must be a logic acronym enum value
+  static constexpr const char* const acronyms[] =
+  {
+    "AUFLIA",
+    "AUFLIRA",
+    "AUFNIRA",
+    "LRA",
+    "QF_ABV",
+    "QF_AUFBV",
+    "QF_UFBV",
+    "QF_AUFLIA",
+    "QF_AX",
+    "QF_BV",
+    "QF_IDL",
+    "QF_RDL",
+    "QF_LIA",
+    "QF_LRA",
+    "QF_NIA",
+    "QF_NRA",
+    "QF_UF",
+    "QF_UFIDL",
+    "QF_UFLIA",
+    "QF_UFLRA",
+    "QF_UFNRA",
+    "UFLRA",
+    "UFNIA"
+  };
+
+  Logics() = delete;
+};
+
 enum Opcode : unsigned char
 {
   LNOT, // !
@@ -535,6 +732,11 @@ private:
   virtual Error __unsafe_add(const UnsafeTerm& condition) = 0;
   virtual CheckResult __check() = 0;
 
+protected:
+  // Subclasses must have a constructor with a Logic enum value as argument
+  Solver()
+  : m_stats{0} {}
+
 public:
   Error encode_constant(
     const UnsafeDecl& decl);
@@ -589,9 +791,6 @@ public:
   void unsafe_add(const UnsafeTerm& condition);
 
   CheckResult check();
-
-  Solver()
-  : m_stats{0} {}
 
   virtual ~Solver() {}
 };

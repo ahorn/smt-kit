@@ -534,8 +534,20 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   }
 
 public:
-  MsatSolver() :
-    m_config(msat_create_config()),
+  /// Auto configure MathSAT5
+  MsatSolver()
+  : m_config(msat_create_config()),
+    m_env(msat_create_env(m_config)),
+    m_term()
+  {
+    assert(!MSAT_ERROR_CONFIG(m_config));
+    assert(!MSAT_ERROR_ENV(m_env));
+
+    MSAT_MAKE_ERROR_TERM(m_term);
+  }
+
+  MsatSolver(Logic logic)
+  : m_config(msat_create_default_config(Logics::acronyms[logic])),
     m_env(msat_create_env(m_config)),
     m_term()
   {

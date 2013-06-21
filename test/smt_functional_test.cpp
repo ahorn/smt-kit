@@ -26,7 +26,8 @@ TEST(SmtFunctionalTest, DeMorgan)
   z3_solver.add(lhs != rhs);
   EXPECT_EQ(smt::unsat, z3_solver.check());
 
-  smt::MsatSolver msat_solver;
+  // Should always explicitly specify the logic!
+  smt::MsatSolver msat_solver(smt::QF_BV_LOGIC);
   msat_solver.add(lhs != rhs);
   EXPECT_EQ(smt::unsat, msat_solver.check());
 }

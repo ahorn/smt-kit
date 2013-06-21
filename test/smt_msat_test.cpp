@@ -1250,3 +1250,113 @@ TEST(SmtMsatTest, UnsafeAdd)
   }
   s.pop();
 }
+
+// Usually there isn't a theory to mix bit vectors and integers.
+// But MathSAT5 is likely to internally convert these sorts. This
+// is generally only acceptable for early prototyping.
+TEST(SmtMsatTest, AutoConfig)
+{
+  MsatSolver solver;
+
+  auto x = any<long>("x");
+  solver.add(0 < x);
+
+  auto y = any<sort::Int>("y");
+  solver.add(0 < y);
+
+  EXPECT_EQ(smt::sat, solver.check());
+
+  solver.push();
+  {
+    solver.add(3 == x);
+    EXPECT_EQ(smt::sat, solver.check());
+  }
+  solver.pop();
+
+  EXPECT_EQ(smt::sat, solver.check());
+
+  solver.push();
+
+  {
+    solver.add(0 > x);
+    EXPECT_EQ(smt::unsat, solver.check());
+  }
+  solver.pop();
+
+  EXPECT_EQ(smt::sat, solver.check());
+
+  solver.push();
+  {
+    solver.add(3 == y);
+    EXPECT_EQ(smt::sat, solver.check());
+  }
+  solver.pop();
+
+  EXPECT_EQ(smt::sat, solver.check());
+
+  solver.push();
+  {
+    solver.add(0 > y);
+    EXPECT_EQ(smt::unsat, solver.check());
+  }
+  solver.pop();
+
+  EXPECT_EQ(smt::sat, solver.check());
+}
+
+TEST(SmtMsatTest, QF_BV)
+{
+  MsatSolver solver(QF_BV_LOGIC);
+
+  auto x = any<long>("x");
+  solver.add(0 < x);
+
+  EXPECT_EQ(smt::sat, solver.check());
+
+  solver.push();
+  {
+    solver.add(3 == x);
+    EXPECT_EQ(smt::sat, solver.check());
+  }
+  solver.pop();
+
+  EXPECT_EQ(smt::sat, solver.check());
+
+  solver.push();
+
+  {
+    solver.add(0 > x);
+    EXPECT_EQ(smt::unsat, solver.check());
+  }
+  solver.pop();
+
+  EXPECT_EQ(smt::sat, solver.check());
+}
+
+TEST(SmtMsatTest, QF_IDL)
+{
+  MsatSolver solver(QF_IDL_LOGIC);
+
+  auto y = any<sort::Int>("y");
+  solver.add(0 < y);
+
+  EXPECT_EQ(smt::sat, solver.check());
+
+  solver.push();
+  {
+    solver.add(3 == y);
+    EXPECT_EQ(smt::sat, solver.check());
+  }
+  solver.pop();
+
+  EXPECT_EQ(smt::sat, solver.check());
+
+  solver.push();
+  {
+    solver.add(0 > y);
+    EXPECT_EQ(smt::unsat, solver.check());
+  }
+  solver.pop();
+
+  EXPECT_EQ(smt::sat, solver.check());
+}

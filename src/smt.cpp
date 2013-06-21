@@ -7,6 +7,8 @@
 namespace smt
 {
 
+constexpr const char* const Logics::acronyms[23];
+
 static constexpr size_t MAX_BV_SIZE = 1024;
 static const Sort* bv_sorts[2][MAX_BV_SIZE] = { nullptr };
 

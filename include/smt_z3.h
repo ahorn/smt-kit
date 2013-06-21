@@ -466,9 +466,15 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
 public:
+  /// Auto configure Z3
   Z3Solver()
   : m_z3_context(),
     m_z3_solver(m_z3_context),
+    m_z3_expr(m_z3_context) {}
+
+  Z3Solver(Logic logic)
+  : m_z3_context(),
+    m_z3_solver(m_z3_context, Logics::acronyms[logic]),
     m_z3_expr(m_z3_context) {}
 
   z3::context& context()

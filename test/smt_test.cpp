@@ -7,6 +7,36 @@ using namespace smt;
 #define STATIC_EXPECT_TRUE(condition) static_assert((condition), "")
 #define STATIC_EXPECT_FALSE(condition) static_assert(!(condition), "")
 
+TEST(SmtTest, Logics)
+{
+  STATIC_EXPECT_TRUE("AUFLIA" == Logics::acronyms[AUFLIA_LOGIC]);
+  STATIC_EXPECT_TRUE("AUFLIRA" == Logics::acronyms[AUFLIRA_LOGIC]);
+  STATIC_EXPECT_TRUE("AUFNIRA" == Logics::acronyms[AUFNIRA_LOGIC]);
+  STATIC_EXPECT_TRUE("LRA" == Logics::acronyms[LRA_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_ABV" == Logics::acronyms[QF_ABV_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_AUFBV" == Logics::acronyms[QF_AUFBV_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_UFBV" == Logics::acronyms[QF_UFBV_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_AUFLIA" == Logics::acronyms[QF_AUFLIA_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_AX" == Logics::acronyms[QF_AX_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_BV" == Logics::acronyms[QF_BV_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_IDL" == Logics::acronyms[QF_IDL_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_RDL" == Logics::acronyms[QF_RDL_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_LIA" == Logics::acronyms[QF_LIA_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_LRA" == Logics::acronyms[QF_LRA_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_NIA" == Logics::acronyms[QF_NIA_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_NRA" == Logics::acronyms[QF_NRA_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_UF" == Logics::acronyms[QF_UF_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_UFIDL" == Logics::acronyms[QF_UFIDL_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_UFLIA" == Logics::acronyms[QF_UFLIA_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_UFLRA" == Logics::acronyms[QF_UFLRA_LOGIC]);
+  STATIC_EXPECT_TRUE("QF_UFNRA" == Logics::acronyms[QF_UFNRA_LOGIC]);
+  STATIC_EXPECT_TRUE("UFLRA" == Logics::acronyms[UFLRA_LOGIC]);
+  STATIC_EXPECT_TRUE("UFNIA" == Logics::acronyms[UFNIA_LOGIC]);
+
+  // sanity check
+  STATIC_EXPECT_FALSE("Foo" == Logics::acronyms[UFNIA_LOGIC]);
+}
+
 TEST(SmtTest, SortInference)
 {
   STATIC_EXPECT_TRUE(internal::sort<bool>().is_bv());
