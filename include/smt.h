@@ -23,6 +23,12 @@ namespace smt
 /// \see_also http://smtlib.cs.uiowa.edu/logics.html
 enum Logic : unsigned
 {
+  /// Linear Integer Arithmetic with Uninterpreted Functions and Arrays
+
+  /// Summary: quantified formulas to be tested for satisfiability modulo a
+  /// background theory combining linear integer arithmetic, uninterpreted
+  /// function and predicate symbols, and extensional arrays.
+  ///
   /// Closed formulas built over arbitrary expansions of the Ints and ArraysEx
   /// signatures with free sort and function symbols, but with the following 
   /// restrictions:
@@ -33,6 +39,12 @@ enum Logic : unsigned
   /// This logic extends QF_AUFLIA by allowing quantifiers.
   AUFLIA_LOGIC,
 
+  /// Arrays, Uninterpreted Functions, and Linear Arithmetic
+
+  /// Summary: quantifier formulas with arrays of reals indexed by integers
+  /// (Array1), arrays of Array1 indexed by integers (Array2), and linear
+  /// arithmetic over the integers and reals.
+  ///
   /// Closed formulas built over arbitrary expansions of the Reals_Ints and
   /// ArraysEx signatures with free sort and function symbols, but with the
   /// following restrictions:
@@ -45,42 +57,74 @@ enum Logic : unsigned
   ///  (Array Int (Array Int Real)).
   AUFLIRA_LOGIC,
 
+  /// Arrays, Uninterpreted Functions, and Nonlinear Arithmetic
+
+  /// Summary: quantifier formulas with arrays of reals indexed by integers
+  /// (Array1), arrays of Array1 indexed by integers (Array2), and
+  /// nonlinear arithmetic over the integers and reals.
+  ///
   /// Closed formulas built over arbitrary expansions of the Reals_Ints and
   /// ArraysEx signatures with free sort and function symbols.
   AUFNIRA_LOGIC,
+
+  /// Linear Real Arithmetic
 
   /// Closed formulas built over arbitrary expansions of the Reals signature
   /// with free constant symbols, but containing only linear atoms, that is, 
   /// atoms with no occurrences of the function symbols * and /
   LRA_LOGIC,
 
+  /// Bit-vectors with Arrays
+
   /// Closed quantifier-free formulas built over the Fixed_Size_BitVectors and
   /// ArraysEx signatures, with the restriction that all array terms have sort of
   /// the form (Array (_ BitVec i) (_ BitVec j)) for some i, j > 0.
   QF_ABV_LOGIC,
 
+  /// Bit-vectors with Arrays and Uninterpreted Functions
+
+  /// Summary: quantifier-free formulas over bit vectors of fixed size, with
+  /// arrays and uninterpreted functions and predicate symbols.
+  /// 
   /// Closed quantifier-free formulas built over an arbitrary expansion of the
   /// Fixed_Size_BitVectors and ArraysEx signatures with free sort and function
   /// symbols, but with the restriction that all array terms have sort of the 
   /// form (Array (_ BitVec i) (_ BitVec j)) for some i, j > 0.
   QF_AUFBV_LOGIC,
 
+  /// Uninterpreted Functions with bit vectors
+
   /// Closed quantifier-free formulas built over arbitrary expansions of
   /// the Fixed_Size_BitVectors signature with free sort and function symbols.
   QF_UFBV_LOGIC,
 
+  /// Linear Integer Arithmetic with Uninterpreted Functions and Arrays
+
+  /// Summary: quantifier-free formulas to be tested for satisfiability modulo
+  /// a background theory combining linear integer arithmetic, uninterpreted
+  /// function and predicate symbols, and extensional arrays.
+  ///
   /// Closed quantifier-free formulas built over arbitrary expansions of the
   /// Ints and ArraysEx signatures with free sort and function symbols, but
   /// with the following restrictions:
   /// - all terms of sort Int are linear, that is, have no occurrences of the
-  ///  function symbols *, /, div, mod, and abs
+  ///   function symbols *, /, div, mod, and abs
   /// - all array terms have sort (Array Int Int).
   QF_AUFLIA_LOGIC,
 
+  /// Arrays with Extensionality
+
+  /// Summary: quantifier-free formulas to be tested for satisfiability modulo
+  /// a background theory of arrays which includes the extensionality axiom.
+  ///
   /// Closed quantifier-free formulas built over an arbitrary expansion of
   /// the ArraysEx signature with free sort and constant symbols.
   QF_AX_LOGIC,
 
+  /// Fixed-size Bit-vectors
+
+  /// Summary:  quantifier-free formulas over bit vectors of fixed size.
+  ///
   /// Closed quantifier-free formulas built over an arbitrary expansion of the
   /// Fixed_Size_BitVectors signature with free constant symbols over the sorts
   /// (_ BitVec m) for 0 < m.  Formulas in ite terms must satisfy the same
@@ -88,6 +132,13 @@ enum Logic : unsigned
   /// (because they may be in the scope of a let binder).
   QF_BV_LOGIC,
 
+  /// Integer Difference Logic
+
+  /// Summary:  quantifier-free formulas to be tested for satisfiability modulo
+  /// a background theory of integer arithmetic.  The syntax of atomic formulas
+  /// is restricted to difference logic, i.e. x - y op c, where op is either
+  /// equality or inequality and c is an integer constant.
+  ///
   /// Closed quantifier-free formulas with atoms of the form:
   /// - q
   /// - (op (- x y) n),
@@ -100,6 +151,11 @@ enum Logic : unsigned
   ///  - n is a numeral. 
   QF_IDL_LOGIC,
 
+  /// Real Difference Logic
+
+  /// Summary: like QF_IDL, except that the background theory is real
+  /// arithmetic.
+  ///
   /// Closed quantifier-free formulas with atoms of the form:
   /// - p
   /// - (op (- x y) c),
@@ -112,49 +168,84 @@ enum Logic : unsigned
   ///  - x, y are free constant symbols of sort Real. 
   QF_RDL_LOGIC,
 
+  /// Linear Integer Arithmetic
+
+  /// Summary: quantifier-free formulas to be tested for satisfiability modulo
+  /// a background theory of integer arithmetic.  The syntax of atomic formulas
+  /// is restricted to contain only linear terms.
+  ///
   /// Closed quantifier-free formulas built over an arbitrary expansion of the
   /// Ints signature with free constant symbols, but whose terms of sort Int 
   /// are all linear, that is, have no occurrences of the function symbols
   /// *, /, div, mod, and abs
   QF_LIA_LOGIC,
 
+  /// Linear Real Arithmetic
+
+  /// Summary: like QF_LIA, except that the background theory is real
+  /// arithmetic.
+  ///
   /// Closed quantifier-free formulas built over arbitrary expansions of 
   /// the Reals signature with free constant symbols, but containing only
   /// linear atoms, that is, atoms with no occurrences of the function
   /// symbols * and /
   QF_LRA_LOGIC,
 
+  /// Nonlinear Integer Arithmetic
+
+  /// Summary: quantifier-free formulas to be tested for satisfiability modulo
+  /// a background theory of integer arithmetic.  There is no restriction to
+  /// linear terms.
+  ///
   /// Closed quantifier-free formulas built over an arbitrary expansion of the
   /// Ints signature with free constant symbols.
   QF_NIA_LOGIC,
+
+  /// Nonlinear Real Arithmetic
 
   /// Closed quantifier-free formulas built over arbitrary expansions of 
   /// the Reals signature with free constant symbols.
   QF_NRA_LOGIC,
 
+  /// Uninterpreted Functions
+
+  /// Summary:  quantifier-free formulas whose satisfiability is to be decided
+  /// modulo the empty theory. Each formula may introduce its own uninterpreted
+  /// function and predicate symbols.
+  ///
   /// Closed quantifier-free formulas built over an arbitrary expansion of
   /// the Core signature with free sort and function symbols.
   QF_UF_LOGIC,
 
+  /// Integer Difference Logic with Uninterpreted Functions
+
+  /// Summary: a logic which is similar to QF_IDL, except that it also allows
+  /// uninterpreted functions and predicates.
+  ///
   /// Closed quantifier-free formulas built over an arbitrary expansion with 
   /// free sort and function symbols of the signature consisting of 
   /// - all the sort and function symbols of Core and
   /// - the following symbols of Int:
   ///
   ///   :sorts ((Int 0))
-  ///  :funs ((NUMERAL Int) 
-  ///         (- Int Int Int)
-  ///         (+ Int Int Int) 
-  ///         (<= Int Int Bool)
-  ///         (< Int Int Bool)
-  ///         (>= Int Int Bool)
-  ///         (> Int Int Bool)
-  ///        )
+  ///   :funs ((NUMERAL Int) 
+  ///          (- Int Int Int)
+  ///          (+ Int Int Int) 
+  ///          (<= Int Int Bool)
+  ///          (< Int Int Bool)
+  ///          (>= Int Int Bool)
+  ///          (> Int Int Bool)
+  ///         )
   ///
   /// Additionally, for every term of the form (op t1 t2) with op in {+, -}, 
   /// at least one of t1 and t2 is a numeral.
   QF_UFIDL_LOGIC,
 
+  /// Linear Integer Arithmetic with Uninterpreted Functions
+
+  /// Summary:  a logic which is similar to QF_LIA, except that it also allows
+  /// uninterpreted functions and predicates.
+  ///
   /// Closed quantifier-free formulas built over arbitrary expansions of the
   /// Ints signatures with free sort and function symbols, but with the 
   /// following restrictions:
@@ -162,21 +253,41 @@ enum Logic : unsigned
   ///   function symbols *, /, div, mod, and abs
   QF_UFLIA_LOGIC,
 
+  /// Linear Real Arithmetic with Uninterpreted Functions
+
+  /// Summary: similar to QF_LRA, except that it also allows uninterpreted
+  /// functions and predicates.
+  ///
   /// Closed quantifier-free formulas built over arbitrary expansions of the 
   /// Reals signature with free sort and function symbols, but containing 
   /// only linear atoms, that is, atoms with no occurrences of the function
   /// symbols * and /
   QF_UFLRA_LOGIC,
 
+  /// Nonlinear Real Arithmetic with Uninterpreted Functions
+
+  /// Summary: similar to QF_NRA, except that it also allows uninterpreted
+  /// functions and predicates.
+  /// 
   /// Closed quantifier-free formulas built over arbitrary expansions of 
   /// the Reals signature with free sort and function symbols.
   QF_UFNRA_LOGIC,
 
+  /// Linear Real Arithmetic with Uninterpreted Functions
+
+  /// Summary:  similar to QF_LRA, except that it also allows uninterpreted
+  /// functions and predicates.
+  ///
   /// Closed formulas built over arbitrary expansions of the Reals signature 
   /// with free sort and function symbols, but containing only linear atoms, 
   /// that is, atoms with no occurrences of the function symbols * and /
   UFLRA_LOGIC,
 
+  /// Uninterpreted Functions and Nonlinear Arithmetic
+
+  /// Summary: quantifier formulas with uninterpreted functions and nonlinear
+  /// integer arithmetic.
+  ///
   /// Closed formulas built over an arbitrary expansion of the Ints signature
   /// with free sort and function symbols.
   UFNIA_LOGIC,
