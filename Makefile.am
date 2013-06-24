@@ -91,4 +91,6 @@ test_smt_SOURCES = \
   test/smt_functional_test.cpp
 
 test_smt_CPPFLAGS = -I$(srcdir)/include -I$(top_srcdir)/gtest/include
-test_smt_LDADD = $(top_builddir)/gtest/lib/libgtest_main.la lib/libsmt.la
+test_smt_LDADD = $(top_builddir)/gtest/lib/libgtest.la \
+  $(top_builddir)/gtest/lib/libgtest_main.la \
+  lib/libsmt.la
