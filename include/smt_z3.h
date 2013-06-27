@@ -397,12 +397,17 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     const Sort& sort,
     const UnsafeTerms& args) override
   {
+    Error err;
+
     if (opcode == NEQ) {
       // SMT-LIB 2.0 distinct variadic function, formula size O(N)
       size_t i = 0, args_size = args.size();
       Z3_ast asts[args_size];
       for (const UnsafeTerm& arg : args) {
-        arg.encode(*this);
+        err = arg.encode(*this);
+        if (err) {
+          return err;
+        }
         asts[i] = m_z3_expr;
         Z3_inc_ref(m_z3_context, asts[i]);
 
