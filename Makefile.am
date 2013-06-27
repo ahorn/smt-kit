@@ -59,7 +59,8 @@ pkginclude_HEADERS = \
   include/smt \
   include/smt.h \
   include/smt_z3.h \
-  include/smt_msat.h
+  include/smt_msat.h \
+  include/smt_cvc4.h 
 
 # Build rules for functional and unit tests.
 # Recall the Automake naming conventions:
@@ -88,6 +89,7 @@ test_smt_SOURCES = \
   test/smt_test.cpp \
   test/smt_z3_test.cpp \
   test/smt_msat_test.cpp \
+  test/smt_cvc4_test.cpp \
   test/smt_functional_test.cpp
 
 test_smt_CPPFLAGS = -I$(srcdir)/include -I$(top_srcdir)/gtest/include

@@ -1,0 +1,31 @@
+CVC4 is published under a permissive open-source BSD-style license.
+Build instructions can be found online:
+
+  http://cvc4.cs.nyu.edu/wiki/Building_CVC4_from_source
+
+On OS X (10.8) with Mac Ports, a recent JDK and standard development
+tools already installed, we successfully built CVC4 with these commands:
+
+  git clone https://github.com/CVC4/CVC4.git
+  cd CVC4
+  git checkout tags/1.2
+  ./autogen.sh
+  mkdir target
+  sudo port selfupdate
+  sudo port upgrade outdated
+  contrib/mac-build
+  ./configure --prefix=`pwd`/target \
+              --with-antlr-dir=`pwd`/antlr-3.4 \
+              ANTLR=`pwd`/antlr-3.4/bin/antlr3 \
+              CPPFLAGS=-I/opt/local/include \
+              LDFLAGS=-L/opt/local/lib
+  make
+  make check
+  make install
+
+Note that the configuration above will use the default compiler. On our system,
+we found that setting a non-default compiler (e.g. CXX=g++-mp-4.8 and CXX=clang++)
+results in regression errors.
+
+If you encounter other problems during the build, there are several helpful
+Wiki pages, e.g. http://cvc4.cs.nyu.edu/wiki/Build_Problems.
