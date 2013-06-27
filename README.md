@@ -1,7 +1,7 @@
 # SMT Kit
 
 SMT Kit is (an optionally type-safe) C++11 domain-specific language
-to create [SMT-LIB][smt-lib] 2.0 formulas for Z3 and MathSAT5.
+to create [SMT-LIB][smt-lib] 2.0 formulas for Z3, MathSAT5 and CVC4.
 
 [smt-lib]: http://www.smt-lib.org/
 
