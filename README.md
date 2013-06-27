@@ -49,6 +49,7 @@ For advanced usage information on other configure options refer to the
 First, `#include <smt>`. An example with built-in operators follows:
 
 ```C++
+// Symbol names must be globally unique
 smt::Term<smt::Bool> x = smt::any<smt::Bool>("x");
 smt::Term<smt::Bool> y = smt::any<smt::Bool>("y");
 smt::Term<smt::Bool> lhs = !(x && y);
@@ -63,6 +64,12 @@ smt::MsatSolver msat_solver(smt::QF_BV_LOGIC);
 msat_solver.add(lhs != rhs);
 assert(smt::unsat == msat_solver.check());
 ```
+
+The compiler will check the arguments of SMT functions at compile-time.
+For example, the above example will not compile if the SMT constant `y`
+were to be an integer. However, these compile-time checks do not apply to
+logic signatures. For example, when `smt::QF_BV_LOGIC` is specified but
+arrays are also used, there won't be a compile-time error.
 
 Several more examples including incremental solving, function applications
 and array logic expressions can be found in the [functional tests][api].
