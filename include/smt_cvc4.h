@@ -393,12 +393,12 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
         if (sort.is_signed()) {
           kind = CVC4::kind::BITVECTOR_SDIV;
         } else {
-          kind = CVC4::kind::BITVECTOR_UDIV_TOTAL;
+          kind = CVC4::kind::BITVECTOR_UDIV;
         }
       } else if (sort.is_int()) {
-        kind = CVC4::kind::INTS_DIVISION_TOTAL;
+        kind = CVC4::kind::INTS_DIVISION;
       } else if (sort.is_real()) {
-        kind = CVC4::kind::DIVISION_TOTAL;
+        kind = CVC4::kind::DIVISION;
       } else {
         return UNSUPPORT_ERROR;
       }
@@ -408,10 +408,10 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
         if (sort.is_signed()) {
           kind = CVC4::kind::BITVECTOR_SREM;
         } else {
-          kind = CVC4::kind::BITVECTOR_UREM_TOTAL;
+          kind = CVC4::kind::BITVECTOR_UREM;
         }
       } else if (sort.is_int()) {
-        kind = CVC4::kind::INTS_MODULUS_TOTAL;
+        kind = CVC4::kind::INTS_MODULUS;
       } else {
         return UNSUPPORT_ERROR;
       }
