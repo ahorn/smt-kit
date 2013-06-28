@@ -10,12 +10,4 @@
 #include "smt_msat.h"
 #include "smt_cvc4.h"
 
-namespace smt
-{
-
-// smt::Bool etc. is as unambiguous as smt::sort::Bool
-using namespace sort;
-
-}
-
 #endif

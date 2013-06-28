@@ -524,7 +524,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     return OK;
   }
 
-  virtual Error __add(const Term<sort::Bool>& condition) override
+  virtual Error __add(const Bool& condition) override
   {
     return __unsafe_add(condition);
   }

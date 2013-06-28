@@ -12,7 +12,7 @@ TEST(SmtMsatTest, PositiveBvLiteral)
   MsatSolver s;
 
   constexpr size_t long_bv_size = sizeof(long) * 8;
-  const Term<long> e0 = literal<long>(42);
+  const Bv<long> e0 = literal<Bv<long>>(42);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -69,7 +69,7 @@ TEST(SmtMsatTest, NegativeBvLiteral)
   MsatSolver s;
 
   constexpr size_t long_bv_size = sizeof(long) * 8;
-  const Term<long> e0 = literal<long>(-42);
+  const Bv<long> e0 = literal<Bv<long>>(-42);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -156,7 +156,7 @@ TEST(SmtMsatTest, PositiveIntLiteral)
 {
   MsatSolver s;
 
-  const Term<sort::Int> e0 = literal<sort::Int>(42L);
+  const Int e0 = literal<Int>(42L);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -177,7 +177,7 @@ TEST(SmtMsatTest, NegativeIntLiteral)
 {
   MsatSolver s;
 
-  const Term<sort::Int> e0 = literal<sort::Int>(-42L);
+  const Int e0 = literal<Int>(-42L);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -198,7 +198,7 @@ TEST(SmtMsatTest, BoolFalseLiteral)
 {
   MsatSolver s;
 
-  const Term<sort::Bool> e0 = literal<sort::Bool>(false);
+  const Bool e0 = literal<Bool>(false);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -219,7 +219,7 @@ TEST(SmtMsatTest, BoolTrueLiteral)
 {
   MsatSolver s;
 
-  const Term<sort::Bool> e0 = literal<sort::Bool>(true);
+  const Bool e0 = literal<Bool>(true);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -240,7 +240,7 @@ TEST(SmtMsatTest, BvDeclExpr)
 {
   MsatSolver s;
 
-  const Term<long> e0 = any<long>("x");
+  const Bv<long> e0 = any<Bv<long>>("x");
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -317,7 +317,7 @@ TEST(SmtMsatTest, IntDeclExpr)
 {
   MsatSolver s;
 
-  const Term<sort::Int> e0 = any<sort::Int>("x");
+  const Int e0 = any<Int>("x");
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -393,8 +393,7 @@ TEST(SmtMsatTest, ArrayDecl)
 {
   MsatSolver s;
 
-  const Term<sort::Array<size_t, int>> e0 =
-    any<sort::Array<size_t, int>>("array");
+  const Array<Bv<size_t>, Bv<int>> e0 = any<Array<Bv<size_t>, Bv<int>>>("array");
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -418,9 +417,9 @@ TEST(SmtMsatTest, UnaryFuncAppExpr)
 {
   MsatSolver s;
 
-  Decl<sort::Func<sort::Int, sort::Bool>> func_decl("f");
-  const Term<sort::Int> e0 = any<sort::Int>("x");
-  const Term<sort::Bool> e1 = apply(func_decl, e0);
+  Decl<Func<Int, Bool>> func_decl("f");
+  const Int e0 = any<Int>("x");
+  const Bool e1 = apply(func_decl, e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -439,10 +438,10 @@ TEST(SmtMsatTest, BinaryFuncAppExpr)
 {
   MsatSolver s;
 
-  Decl<sort::Func<sort::Int, long, sort::Bool>> func_decl("f");
-  const Term<sort::Int> e0 = any<sort::Int>("x");
-  const Term<long> e1 = any<long>("y");
-  const Term<sort::Bool> e2 = apply(func_decl, e0, e1);
+  Decl<Func<Int, Bv<long>, Bool>> func_decl("f");
+  const Int e0 = any<Int>("x");
+  const Bv<long> e1 = any<Bv<long>>("y");
+  const Bool e2 = apply(func_decl, e0, e1);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));
 
@@ -461,10 +460,9 @@ TEST(SmtMsatTest, ArraySelectExpr)
 {
   MsatSolver s;
 
-  const Term<sort::Array<uint64_t, sort::Int>> e0 =
-    any<sort::Array<uint64_t, sort::Int>>("array");
-  const Term<uint64_t> e1 = any<uint64_t>("x");
-  const Term<sort::Int> e2 = select(e0, e1);
+  const Array<Bv<uint64_t>, Int> e0 = any<Array<Bv<uint64_t>, Int>>("array");
+  const Bv<uint64_t> e1 = any<Bv<uint64_t>>("x");
+  const Int e2 = select(e0, e1);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));
 
@@ -483,11 +481,10 @@ TEST(SmtMsatTest, ArrayStoreExpr)
 {
   MsatSolver s;
 
-  const Term<sort::Array<uint64_t, sort::Int>> e0 =
-    any<sort::Array<uint64_t, sort::Int>>("array");
-  const Term<uint64_t> e1 = any<uint64_t>("x");
-  const Term<sort::Int> e2 = any<sort::Int>("y");
-  const Term<sort::Array<uint64_t, sort::Int>> e3 = store(e0, e1, e2);
+  const Array<Bv<uint64_t>, Int> e0 = any<Array<Bv<uint64_t>, Int>>("array");
+  const Bv<uint64_t> e1 = any<Bv<uint64_t>>("x");
+  const Int e2 = any<Int>("y");
+  const Array<Bv<uint64_t>, Int> e3 = store(e0, e1, e2);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e3).encode(s));
 
@@ -513,8 +510,8 @@ TEST(SmtMsatTest, BvSignedOperatorNOT)
   MsatSolver s;
 
    constexpr size_t long_bv_size = sizeof(int64_t) * 8;
-  const Term<int64_t> e0 = any<int64_t>("x");
-  const Term<int64_t> e1(~e0);
+  const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
+  const Bv<int64_t> e1(~e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -536,8 +533,8 @@ TEST(SmtMsatTest, BvUnsignedOperatorNOT)
   MsatSolver s;
 
    constexpr size_t long_bv_size = sizeof(uint64_t) * 8;
-  const Term<uint64_t> e0 = any<uint64_t>("x");
-  const Term<uint64_t> e1(~e0);
+  const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
+  const Bv<uint64_t> e1(~e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -559,8 +556,8 @@ TEST(SmtMsatTest, BvUnsignedOperatorNOT)
     MsatSolver s;                                                       \
                                                                         \
     constexpr size_t long_bv_size = sizeof(sign long) * 8;              \
-    const Term<sign long> e0 = any<sign long>("x");                     \
-    const Term<sign long> e1(literal op e0);                            \
+    const Bv<sign long> e0 = any<Bv<sign long>>("x");                   \
+    const Bv<sign long> e1(literal op e0);                              \
                                                                         \
     EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));               \
                                                                         \
@@ -587,8 +584,8 @@ TEST(SmtMsatTest, BvSignedOperatorSUB)
   MsatSolver s;
 
   constexpr size_t long_bv_size = sizeof(int64_t) * 8;
-  const Term<int64_t> e0 = any<int64_t>("x");
-  const Term<int64_t> e1(42L - e0);
+  const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
+  const Bv<int64_t> e1(42L - e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -617,8 +614,8 @@ TEST(SmtMsatTest, BvUnsignedOperatorSUB)
   MsatSolver s;
 
   constexpr size_t long_bv_size = sizeof(uint64_t) * 8;
-  const Term<uint64_t> e0 = any<uint64_t>("x");
-  const Term<uint64_t> e1(42L - e0);
+  const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
+  const Bv<uint64_t> e1(42L - e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -646,8 +643,8 @@ TEST(SmtMsatTest, BvSignedBinaryOperatorEQL)
 {
   MsatSolver s;
 
-  const Term<int64_t> e0 = any<int64_t>("x");
-  const Term<sort::Bool> e1(42 == e0);
+  const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
+  const Bool e1(42 == e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -666,8 +663,8 @@ TEST(SmtMsatTest, BvSignedBinaryOperatorLSS)
 {
   MsatSolver s;
 
-  const Term<int64_t> e0 = any<int64_t>("x");
-  const Term<sort::Bool> e1(42 < e0);
+  const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
+  const Bool e1(42 < e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -686,8 +683,8 @@ TEST(SmtMsatTest, BvSignedBinaryOperatorGTR)
 {
   MsatSolver s;
 
-  const Term<int64_t> e0 = any<int64_t>("x");
-  const Term<sort::Bool> e1(42 > e0);
+  const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
+  const Bool e1(42 > e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -706,8 +703,8 @@ TEST(SmtMsatTest, BvSignedBinaryOperatorNEQ)
 {
   MsatSolver s;
 
-  const Term<int64_t> e0 = any<int64_t>("x");
-  const Term<sort::Bool> e1(42 != e0);
+  const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
+  const Bool e1(42 != e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -726,8 +723,8 @@ TEST(SmtMsatTest, BvSignedBinaryOperatorLEQ)
 {
   MsatSolver s;
 
-  const Term<int64_t> e0 = any<int64_t>("x");
-  const Term<sort::Bool> e1(42 <= e0);
+  const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
+  const Bool e1(42 <= e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -746,8 +743,8 @@ TEST(SmtMsatTest, BvSignedBinaryOperatorGEQ)
 {
   MsatSolver s;
 
-  const Term<int64_t> e0 = any<int64_t>("x");
-  const Term<sort::Bool> e1(42 >= e0);
+  const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
+  const Bool e1(42 >= e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -766,8 +763,8 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorEQL)
 {
   MsatSolver s;
 
-  const Term<uint64_t> e0 = any<uint64_t>("x");
-  const Term<sort::Bool> e1(42 == e0);
+  const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
+  const Bool e1(42 == e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -786,8 +783,8 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorLSS)
 {
   MsatSolver s;
 
-  const Term<uint64_t> e0 = any<uint64_t>("x");
-  const Term<sort::Bool> e1(42 < e0);
+  const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
+  const Bool e1(42 < e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -806,8 +803,8 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorGTR)
 {
   MsatSolver s;
 
-  const Term<uint64_t> e0 = any<uint64_t>("x");
-  const Term<sort::Bool> e1(42 > e0);
+  const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
+  const Bool e1(42 > e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -826,8 +823,8 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorNEQ)
 {
   MsatSolver s;
 
-  const Term<uint64_t> e0 = any<uint64_t>("x");
-  const Term<sort::Bool> e1(42 != e0);
+  const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
+  const Bool e1(42 != e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -846,8 +843,8 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorLEQ)
 {
   MsatSolver s;
 
-  const Term<uint64_t> e0 = any<uint64_t>("x");
-  const Term<sort::Bool> e1(42 <= e0);
+  const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
+  const Bool e1(42 <= e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -866,8 +863,8 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorGEQ)
 {
   MsatSolver s;
 
-  const Term<uint64_t> e0 = any<uint64_t>("x");
-  const Term<sort::Bool> e1(42 >= e0);
+  const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
+  const Bool e1(42 >= e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -887,8 +884,8 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorGEQ)
   {                                                                     \
     MsatSolver s;                                                       \
                                                                         \
-    const Term<sort::Int> e0 = any<sort::Int>("x");                     \
-    const Term<sort::Int> e1(42 op e0);                                 \
+    const Int e0 = any<Int>("x");                                       \
+    const Int e1(42 op e0);                                             \
                                                                         \
     EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));               \
                                                                         \
@@ -911,8 +908,8 @@ TEST(SmtMsatTest, MathBinaryOperatorEQL)
 {
   MsatSolver s;
 
-  const Term<sort::Int> e0 = any<sort::Int>("x");
-  const Term<sort::Bool> e1(42 == e0);
+  const Int e0 = any<Int>("x");
+  const Bool e1(42 == e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -931,8 +928,8 @@ TEST(SmtMsatTest, MathBinaryOperatorLSS)
 {
   MsatSolver s;
 
-  const Term<sort::Int> e0 = any<sort::Int>("x");
-  const Term<sort::Bool> e1(42 < e0);
+  const Int e0 = any<Int>("x");
+  const Bool e1(42 < e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -951,8 +948,8 @@ TEST(SmtMsatTest, MathBinaryOperatorGTR)
 {
   MsatSolver s;
 
-  const Term<sort::Int> e0 = any<sort::Int>("x");
-  const Term<sort::Bool> e1(42 > e0);
+  const Int e0 = any<Int>("x");
+  const Bool e1(42 > e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -971,8 +968,8 @@ TEST(SmtMsatTest, MathBinaryOperatorNEQ)
 {
   MsatSolver s;
 
-  const Term<sort::Int> e0 = any<sort::Int>("x");
-  const Term<sort::Bool> e1(42 != e0);
+  const Int e0 = any<Int>("x");
+  const Bool e1(42 != e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -991,8 +988,8 @@ TEST(SmtMsatTest, MathBinaryOperatorLEQ)
 {
   MsatSolver s;
 
-  const Term<sort::Int> e0 = any<sort::Int>("x");
-  const Term<sort::Bool> e1(42 <= e0);
+  const Int e0 = any<Int>("x");
+  const Bool e1(42 <= e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -1011,8 +1008,8 @@ TEST(SmtMsatTest, MathBinaryOperatorGEQ)
 {
   MsatSolver s;
 
-  const Term<sort::Int> e0 = any<sort::Int>("x");
-  const Term<sort::Bool> e1(42 >= e0);
+  const Int e0 = any<Int>("x");
+  const Bool e1(42 >= e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -1031,8 +1028,8 @@ TEST(SmtMsatTest, BoolUnaryOperatorLNOT)
 {
   MsatSolver s;
 
-  const Term<sort::Bool> e0 = any<sort::Bool>("x");
-  const Term<sort::Bool> e1(!e0);
+  const Bool e0 = any<Bool>("x");
+  const Bool e1(!e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -1052,9 +1049,9 @@ TEST(SmtMsatTest, BoolUnaryOperatorLNOT)
   {                                                                     \
     MsatSolver s;                                                       \
                                                                         \
-    const Term<sort::Bool> e0 = any<sort::Bool>("x");                   \
-    const Term<sort::Bool> e1 = any<sort::Bool>("y");                   \
-    const Term<sort::Bool> e2(e0 op e1);                                \
+    const Bool e0 = any<Bool>("x");                                     \
+    const Bool e1 = any<Bool>("y");                                     \
+    const Bool e2(e0 op e1);                                            \
                                                                         \
     EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));               \
                                                                         \
@@ -1077,9 +1074,9 @@ TEST(SmtMsatTest, LogicalImplication)
 {
   MsatSolver s;
 
-  const Term<sort::Bool> e0 = any<sort::Bool>("x");
-  const Term<sort::Bool> e1 = any<sort::Bool>("y");
-  const Term<sort::Bool> e2(implies(e0, e1));
+  const Bool e0 = any<Bool>("x");
+  const Bool e1 = any<Bool>("y");
+  const Bool e2(implies(e0, e1));
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));
 
@@ -1099,7 +1096,7 @@ TEST(SmtMsatTest, Reset)
   MsatSolver s;
 
   EXPECT_EQ(sat, s.check());
-  s.add(literal<sort::Bool>(false));
+  s.add(literal<Bool>(false));
   EXPECT_EQ(unsat, s.check());
   s.reset();
   EXPECT_EQ(sat, s.check());
@@ -1109,17 +1106,17 @@ TEST(SmtMsatTest, Distinct)
 {
   MsatSolver s;
 
-  const Term<long> x = any<long>("x");
-  const Term<long> y = any<long>("y");
-  const Term<long> z = any<long>("z");
-  const Term<long> w = any<long>("w");
+  const Bv<long> x = any<Bv<long>>("x");
+  const Bv<long> y = any<Bv<long>>("y");
+  const Bv<long> z = any<Bv<long>>("z");
+  const Bv<long> w = any<Bv<long>>("w");
 
-  Terms<long> operand_terms(3);
+  Terms<Bv<long>> operand_terms(3);
   operand_terms.push_back(x);
   operand_terms.push_back(y);
   operand_terms.push_back(z);
 
-  Term<sort::Bool> d(distinct(std::move(operand_terms)));
+  Bool d(distinct(std::move(operand_terms)));
 
   static_cast<UnsafeTerm>(d).encode(s);
   char *str = msat_term_repr(s.term());
@@ -1178,8 +1175,8 @@ TEST(SmtMsatTest, UnsafeAdd)
 {
   MsatSolver s;
 
-  const Sort& bv_sort = internal::sort<int64_t>();
-  const Sort& func_sort = internal::sort<sort::Func<int64_t, int64_t>>();
+  const Sort& bv_sort = internal::sort<Bv<int64_t>>();
+  const Sort& func_sort = internal::sort<Func<Bv<int64_t>, Bv<int64_t>>>();
   const UnsafeDecl const_decl("x", bv_sort);
   const UnsafeDecl func_decl("f", func_sort);
   const UnsafeTerm seven_term(literal(bv_sort, 7));
@@ -1193,8 +1190,8 @@ TEST(SmtMsatTest, UnsafeAdd)
 
   const UnsafeTerm distinct_term(distinct(std::move(terms)));
 
-  const Sort& array_sort = internal::sort<sort::Array<uint32_t, int64_t>>();
-  const Sort& index_sort = internal::sort<uint32_t>();
+  const Sort& array_sort = internal::sort<Array<Bv<uint32_t>, Bv<int64_t>>>();
+  const Sort& index_sort = internal::sort<Bv<uint32_t>>();
   const UnsafeDecl array_decl("array", array_sort);
   const UnsafeDecl index_decl("index", index_sort);
   const UnsafeTerm array_term(constant(array_decl));
@@ -1258,10 +1255,10 @@ TEST(SmtMsatTest, AutoConfig)
 {
   MsatSolver solver;
 
-  auto x = any<long>("x");
+  auto x = any<Bv<long>>("x");
   solver.add(0 < x);
 
-  auto y = any<sort::Int>("y");
+  auto y = any<Int>("y");
   solver.add(0 < y);
 
   EXPECT_EQ(smt::sat, solver.check());
@@ -1308,7 +1305,7 @@ TEST(SmtMsatTest, QF_BV)
 {
   MsatSolver solver(QF_BV_LOGIC);
 
-  auto x = any<long>("x");
+  auto x = any<Bv<long>>("x");
   solver.add(0 < x);
 
   EXPECT_EQ(smt::sat, solver.check());
@@ -1337,7 +1334,7 @@ TEST(SmtMsatTest, QF_IDL)
 {
   MsatSolver solver(QF_IDL_LOGIC);
 
-  auto y = any<sort::Int>("y");
+  auto y = any<Int>("y");
   solver.add(0 < y);
 
   EXPECT_EQ(smt::sat, solver.check());

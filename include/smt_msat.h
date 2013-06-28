@@ -468,7 +468,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   {
     if (opcode == NEQ) {
       // pair-wise disequality, formula size O(N^2)
-      const Sort& bool_sort = internal::sort<sort::Bool>();
+      const Sort& bool_sort = internal::sort<Bool>();
       msat_term distinct_term = msat_make_true(m_env);
       assert(!MSAT_ERROR_TERM(distinct_term));
       for (UnsafeTerms::const_iterator outer = args.cbegin();
@@ -516,7 +516,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     return OK;
   }
 
-  virtual Error __add(const Term<sort::Bool>& condition) override
+  virtual Error __add(const Bool& condition) override
   {
     return __unsafe_add(condition);
   }

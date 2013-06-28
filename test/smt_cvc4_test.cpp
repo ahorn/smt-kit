@@ -13,7 +13,7 @@ TEST(SmtCVC4Test, PositiveBvLiteral)
 {
   CVC4Solver s;
 
-  const Term<int32_t> e0 = literal<int32_t>(42);
+  const Bv<int32_t> e0 = literal<Bv<int32_t>>(42);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -33,9 +33,9 @@ TEST(SmtCVC4Test, NegativeBvLiteral)
 {
   CVC4Solver s;
 
-  const Term<long> e0 = literal<long>(-42);
-  const Term<long> e1 = literal<long>(42);
-  const Term<long> e3 = literal<long>(0);
+  const Bv<long> e0 = literal<Bv<long>>(-42);
+  const Bv<long> e1 = literal<Bv<long>>(42);
+  const Bv<long> e3 = literal<Bv<long>>(0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -73,7 +73,7 @@ TEST(SmtCVC4Test, InternalStringBvLiteral)
   CVC4Solver s;
 
   constexpr long long v = std::numeric_limits<long long>::max();
-  const Term<long long> e0 = literal<long long>(v);
+  const Bv<long long> e0 = literal<Bv<long long>>(v);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -96,7 +96,7 @@ TEST(SmtCVC4Test, PositiveIntLiteral)
   CVC4::Expr expr;
   std::stringstream out;
 
-  const Term<sort::Int> e0 = literal<sort::Int>(42);
+  const Int e0 = literal<Int>(42);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -110,7 +110,7 @@ TEST(SmtCVC4Test, PositiveIntLiteral)
   out.str(std::string());
   out.clear();
 
-  const Term<sort::Int> e1 = literal<sort::Int>(42L);
+  const Int e1 = literal<Int>(42L);
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
   expr = s.expr();
@@ -127,7 +127,7 @@ TEST(SmtCVC4Test, NegativeIntLiteral)
   CVC4::Expr expr;
   std::stringstream out;
 
-  const Term<sort::Int> e0 = literal<sort::Int>(-42);
+  const Int e0 = literal<Int>(-42);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -141,7 +141,7 @@ TEST(SmtCVC4Test, NegativeIntLiteral)
   out.str(std::string());
   out.clear();
 
-  const Term<sort::Int> e1 = literal<sort::Int>(-42L);
+  const Int e1 = literal<Int>(-42L);
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
   expr = s.expr();
@@ -156,7 +156,7 @@ TEST(SmtCVC4Test, BoolTrueLiteral)
 {
   CVC4Solver s;
 
-  const Term<sort::Bool> e0 = literal<sort::Bool>(true);
+  const Bool e0 = literal<Bool>(true);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -173,7 +173,7 @@ TEST(SmtCVC4Test, BoolFalseLiteral)
 {
   CVC4Solver s;
 
-  const Term<sort::Bool> e0 = literal<sort::Bool>(false);
+  const Bool e0 = literal<Bool>(false);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -190,8 +190,7 @@ TEST(SmtCVC4Test, ArrayDecl)
 {
   CVC4Solver s;
 
-  const Term<sort::Array<size_t, int>> e0 =
-    any<sort::Array<size_t, int>>("array");
+  const Array<Bv<size_t>, Bv<int>> e0 = any<Array<Bv<size_t>, Bv<int>>>("array");
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
 
@@ -213,8 +212,8 @@ TEST(SmtCVC4Test, ConstArrayExpr)
 {
   CVC4Solver s;
 
-  const Term<sort::Int> init_term(new LiteralExpr<sort::Int, int>(7));
-  const ConstArrayExpr<sort::Int, sort::Int> e0(init_term);
+  const Int init_term(new LiteralExpr<Int, int>(7));
+  const ConstArrayExpr<Int, Int> e0(init_term);
 
   EXPECT_EQ(OK, e0.encode(s));
 
@@ -249,9 +248,9 @@ TEST(SmtCVC4Test, UnaryFuncAppExpr)
 {
   CVC4Solver s;
 
-  Decl<sort::Func<sort::Int, sort::Bool>> func_decl("f");
-  const Term<sort::Int> e0 = any<sort::Int>("x");
-  const Term<sort::Bool> e1 = apply(func_decl, e0);
+  Decl<Func<Int, Bool>> func_decl("f");
+  const Int e0 = any<Int>("x");
+  const Bool e1 = apply(func_decl, e0);
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
 
@@ -266,8 +265,8 @@ TEST(SmtCVC4Test, UnaryFuncAppExpr)
   {                                                                     \
     CVC4Solver s;                                                       \
                                                                         \
-    const Term<sign int> e0 = any<sign int>("x");                       \
-    const Term<sign int> e1(op e0);                                     \
+    const Bv<sign int> e0 = any<Bv<sign int>>("x");                     \
+    const Bv<sign int> e1(op e0);                                       \
                                                                         \
     EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));               \
                                                                         \
@@ -295,9 +294,9 @@ SMT_CVC4_TEST_BV_SIGNED_UNARY_OP(~, NOT, bvnot, CVC4::kind::BITVECTOR_NOT)
   {                                                                     \
     CVC4Solver s;                                                       \
                                                                         \
-    const Term<sign int> e0 = any<sign int>("x");                       \
-    const Term<sign int> e1 = any<sign int>("y");                       \
-    const Term<sort::Bool> e2(e0 op e1);                                \
+    const Bv<sign int> e0 = any<Bv<sign int>>("x");                     \
+    const Bv<sign int> e1 = any<Bv<sign int>>("y");                     \
+    const Bool e2(e0 op e1);                                            \
                                                                         \
     EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));               \
                                                                         \
@@ -336,9 +335,9 @@ SMT_CVC4_TEST_BV_UNSIGNED_BINARY_REL(>=, GEQ, bvuge, CVC4::kind::BITVECTOR_UGE)
   {                                                                     \
     CVC4Solver s;                                                       \
                                                                         \
-    const Term<sign int> e0 = any<sign int>("x");                       \
-    const Term<sign int> e1 = any<sign int>("y");                       \
-    const Term<sign int> e2(e0 op e1);                                  \
+    const Bv<sign int> e0 = any<Bv<sign int>>("x");                     \
+    const Bv<sign int> e1 = any<Bv<sign int>>("y");                     \
+    const Bv<sign int> e2(e0 op e1);                                    \
                                                                         \
     EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));               \
                                                                         \
@@ -376,8 +375,8 @@ SMT_CVC4_TEST_BV_UNSIGNED_BINARY_OP(%, REM, bvurem, CVC4::kind::BITVECTOR_UREM)
   {                                                                     \
     CVC4Solver s;                                                       \
                                                                         \
-    const Term<sort::Int> e0 = any<sort::Int>("x");                     \
-    const Term<sort::Int> e1(op e0);                                    \
+    const Int e0 = any<Int>("x");                                       \
+    const Int e1(op e0);                                                \
                                                                         \
     EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));               \
                                                                         \
@@ -397,9 +396,9 @@ SMT_CVC4_TEST_MATH_UNARY_OP(-, SUB, -, CVC4::kind::UMINUS)
   {                                                                     \
     CVC4Solver s;                                                       \
                                                                         \
-    const Term<sort::Int> e0 = any<sort::Int>("x");                     \
-    const Term<sort::Int> e1 = any<sort::Int>("y");                     \
-    const Term<sort::Bool> e2(e0 op e1);                                \
+    const Int e0 = any<Int>("x");                                       \
+    const Int e1 = any<Int>("y");                                       \
+    const Bool e2(e0 op e1);                                            \
                                                                         \
     EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));               \
                                                                         \
@@ -424,9 +423,9 @@ SMT_CVC4_TEST_MATH_BINARY_REL(>=, GEQ, >=, CVC4::kind::GEQ)
   {                                                                     \
     CVC4Solver s;                                                       \
                                                                         \
-    const Term<sort::Int> e0 = any<sort::Int>("x");                     \
-    const Term<sort::Int> e1 = any<sort::Int>("y");                     \
-    const Term<sort::Int> e2(e0 op e1);                                 \
+    const Int e0 = any<Int>("x");                                       \
+    const Int e1 = any<Int>("y");                                       \
+    const Int e2(e0 op e1);                                             \
                                                                         \
     EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));               \
                                                                         \
@@ -450,9 +449,9 @@ SMT_CVC4_TEST_MATH_BINARY_OP(%, REM, INTS_MODULUS, CVC4::kind::INTS_MODULUS)
   {                                                                     \
     CVC4Solver s;                                                       \
                                                                         \
-    const Term<sort::Bool> e0 = any<sort::Bool>("x");                   \
-    const Term<sort::Bool> e1 = any<sort::Bool>("y");                   \
-    const Term<sort::Bool> e2(e0 op e1);                                \
+    const Bool e0 = any<Bool>("x");                                     \
+    const Bool e1 = any<Bool>("y");                                     \
+    const Bool e2(e0 op e1);                                            \
                                                                         \
     EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));               \
                                                                         \
@@ -473,9 +472,9 @@ TEST(SmtCVC4Test, LogicalImplication)
 {
   CVC4Solver s;
 
-  const Term<sort::Bool> e0 = any<sort::Bool>("x");
-  const Term<sort::Bool> e1 = any<sort::Bool>("y");
-  const Term<sort::Bool> e2(implies(e0, e1));
+  const Bool e0 = any<Bool>("x");
+  const Bool e1 = any<Bool>("y");
+  const Bool e2(implies(e0, e1));
 
   EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));
   EXPECT_TRUE(s.expr().getType(true).isBoolean());
@@ -490,17 +489,17 @@ TEST(SmtCVC4Test, Distinct)
 {
   CVC4Solver s;
 
-  const Term<long> x = any<long>("x");
-  const Term<long> y = any<long>("y");
-  const Term<long> z = any<long>("z");
-  const Term<long> w = any<long>("w");
+  const Bv<long> x = any<Bv<long>>("x");
+  const Bv<long> y = any<Bv<long>>("y");
+  const Bv<long> z = any<Bv<long>>("z");
+  const Bv<long> w = any<Bv<long>>("w");
 
-  Terms<long> operand_terms(3);
+  Terms<Bv<long>> operand_terms(3);
   operand_terms.push_back(x);
   operand_terms.push_back(y);
   operand_terms.push_back(z);
 
-  Term<sort::Bool> d(distinct(std::move(operand_terms)));
+  Bool d(distinct(std::move(operand_terms)));
 
   static_cast<UnsafeTerm>(d).encode(s);
 
@@ -559,8 +558,8 @@ TEST(SmtCVC4Test, UnsafeAdd)
 {
   CVC4Solver s;
 
-  const Sort& bv_sort = internal::sort<int64_t>();
-  const Sort& func_sort = internal::sort<sort::Func<int64_t, int64_t>>();
+  const Sort& bv_sort = internal::sort<Bv<int64_t>>();
+  const Sort& func_sort = internal::sort<Func<Bv<int64_t>, Bv<int64_t>>>();
   const UnsafeDecl const_decl("x", bv_sort);
   const UnsafeDecl func_decl("f", func_sort);
   const UnsafeTerm seven_term(literal(bv_sort, 7));
@@ -574,8 +573,8 @@ TEST(SmtCVC4Test, UnsafeAdd)
 
   const UnsafeTerm distinct_term(distinct(std::move(terms)));
 
-  const Sort& array_sort = internal::sort<sort::Array<uint32_t, int64_t>>();
-  const Sort& index_sort = internal::sort<uint32_t>();
+  const Sort& array_sort = internal::sort<Array<Bv<uint32_t>, Bv<int64_t>>>();
+  const Sort& index_sort = internal::sort<Bv<uint32_t>>();
   const UnsafeDecl array_decl("array", array_sort);
   const UnsafeDecl index_decl("index", index_sort);
   const UnsafeTerm array_term(constant(array_decl));
@@ -636,10 +635,10 @@ TEST(SmtCVC4Test, AutoConfig)
 {
   CVC4Solver solver;
 
-  auto x = any<long>("x");
+  auto x = any<Bv<long>>("x");
   solver.add(0 < x);
 
-  auto y = any<sort::Int>("y");
+  auto y = any<Int>("y");
   solver.add(0 < y);
 
   EXPECT_EQ(smt::sat, solver.check());
@@ -686,7 +685,7 @@ TEST(SmtCVC4Test, QF_BV)
 {
   CVC4Solver solver(QF_BV_LOGIC);
 
-  auto x = any<long>("x");
+  auto x = any<Bv<long>>("x");
   solver.add(0 < x);
 
   EXPECT_EQ(smt::sat, solver.check());
@@ -715,7 +714,7 @@ TEST(SmtCVC4Test, QF_IDL)
 {
   CVC4Solver solver(QF_IDL_LOGIC);
 
-  auto y = any<sort::Int>("y");
+  auto y = any<Int>("y");
   solver.add(0 < y);
 
   EXPECT_EQ(smt::sat, solver.check());

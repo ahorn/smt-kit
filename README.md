@@ -50,10 +50,10 @@ First, `#include <smt>`. An example with built-in operators follows:
 
 ```C++
 // Symbol names must be globally unique
-smt::Term<smt::Bool> x = smt::any<smt::Bool>("x");
-smt::Term<smt::Bool> y = smt::any<smt::Bool>("y");
-smt::Term<smt::Bool> lhs = !(x && y);
-smt::Term<smt::Bool> rhs = !x || !y;
+smt::Bool x = smt::any<smt::Bool>("x");
+smt::Bool y = smt::any<smt::Bool>("y");
+smt::Bool lhs = !(x && y);
+smt::Bool rhs = !x || !y;
 
 smt::Z3Solver z3_solver;
 z3_solver.add(lhs != rhs);

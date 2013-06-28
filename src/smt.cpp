@@ -48,7 +48,7 @@ UnsafeTerm apply(
 UnsafeTerm distinct(UnsafeTerms&& terms)
 {
   return UnsafeTerm(new UnsafeNaryExpr(
-    internal::sort<sort::Bool>(), NEQ, std::move(terms)));
+    internal::sort<Bool>(), NEQ, std::move(terms)));
 }
 
 UnsafeTerm select(
@@ -63,14 +63,14 @@ UnsafeTerm implies(
   const UnsafeTerm& rarg)
 {
   return UnsafeTerm(new UnsafeBinaryExpr(
-    internal::sort<sort::Bool>(), IMP, larg, rarg));
+    internal::sort<Bool>(), IMP, larg, rarg));
 }
 
-Term<sort::Bool> implies(
-  const Term<sort::Bool>& larg,
-  const Term<sort::Bool>& rarg)
+Bool implies(
+  const Bool& larg,
+  const Bool& rarg)
 {
-  return Term<sort::Bool>(new BinaryExpr<IMP, sort::Bool>(larg, rarg));
+  return Bool(new BinaryExpr<IMP, Bool>(larg, rarg));
 }
 
 UnsafeTerm store(
@@ -233,7 +233,7 @@ void Solver::unsafe_add(const UnsafeTerm& condition)
   assert(err == OK);
 }
 
-void Solver::add(const Term<sort::Bool>& condition)
+void Solver::add(const Bool& condition)
 {
   const Error err = __unsafe_add(condition);
   assert(err == OK);
@@ -244,6 +244,6 @@ CheckResult Solver::check()
   return __check();
 }
 
-Term<sort::Bool> Identity<LAND, sort::Bool>::term(literal<sort::Bool>(true));
+Bool Identity<LAND, Bool>::term(literal<Bool>(true));
 
 }
