@@ -28,9 +28,8 @@ execute the following commands from the `smt-kit` folder:
     $ make test
     $ make install
 
-If `./configure` fails, you may have to set environment variables
-such as `CXX` and `CXXFLAGS`. For example, to compile on OS X with
-LLVM use the command `./configure CXX=clang++ CXXFLAGS=-stdlib=libc++`.
+If `./configure` fails, you may have to set environment variables. For example,
+to compile on OS X with clang++ use the command `./configure CXX=clang++`.
 But see also the troubleshooting section below.
 
 If `make test` fails, you can still install, but it is likely that some
@@ -49,7 +48,7 @@ For advanced usage information on other configure options refer to the
 First, `#include <smt>`. An example with built-in operators follows:
 
 ```C++
-// Symbol names must be globally unique
+// Symbols (e.g. "x") must be globally unique!
 smt::Bool x = smt::any<smt::Bool>("x");
 smt::Bool y = smt::any<smt::Bool>("y");
 smt::Bool lhs = !(x && y);
@@ -66,10 +65,10 @@ assert(smt::unsat == msat_solver.check());
 ```
 
 The compiler will check the arguments of SMT functions at compile-time.
-For example, the above example will not compile if the SMT constant `y`
-were to be an integer. However, these compile-time checks do not apply to
-logic signatures. For example, when `smt::QF_BV_LOGIC` is specified but
-arrays are also used, there won't be a compile-time error.
+For example, the above example will not compile if `y` is a `smt::Int`.
+However, these compile-time checks do not apply to logic signatures.
+For example, when `smt::QF_BV_LOGIC` is specified but `smt::Array`s are
+also used, there won't be a compile-time error.
 
 Several more examples including incremental solving, function applications
 and array logic expressions can be found in the [functional tests][api].
