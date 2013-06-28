@@ -62,6 +62,18 @@ AC_SUBST(PTHREAD_LIBS)
 # Work around for internal/gtest-port.h dependency on tr1/tuple
 AC_CHECK_DEFINED(__APPLE__, [CXXFLAGS="$CXXFLAGS -DGTEST_USE_OWN_TR1_TUPLE=1"])
 
+# If we compile with clang++, we'll use LLVM's C++11 standard library
+AC_COMPILE_IFELSE(
+[AC_LANG_PROGRAM([], [[
+#ifndef __clang__
+  not clang
+#endif
+]])],
+[CLANG=yes], [CLANG=no])
+AC_MSG_RESULT([$CLANG])
+
+AS_IF([test x$CLANG = xyes], [CXXFLAGS="$CXXFLAGS -stdlib=libc++"])
+
 # TODO(chandlerc@google.com) Check for the necessary system headers.
 
 # TODO(chandlerc@google.com) Check the types, structures, and other compiler
