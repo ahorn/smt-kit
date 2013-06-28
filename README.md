@@ -11,11 +11,12 @@ For SMT Kit to work, SMT solvers must be installed separately.
 Read their software licences carefully.
 
 Currently, SMT Kit supports [Z3][z3], [MathSAT5][msat] and [CVC4][cvc4].
-Installation instructions can be found in the `solvers` directory.
+Installation instructions can be found in the `solvers` [directory][solvers].
 
 [z3]: http://z3.codeplex.com/
 [msat]: http://mathsat.fbk.eu/
 [cvc4]: http://cvc4.cs.nyu.edu/
+[solvers]: tree/master/solvers
 
 ## Installation
 
