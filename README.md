@@ -16,7 +16,7 @@ Installation instructions can be found in the `solvers` [directory][solvers].
 [z3]: http://z3.codeplex.com/
 [msat]: http://mathsat.fbk.eu/
 [cvc4]: http://cvc4.cs.nyu.edu/
-[solvers]: tree/master/solvers
+[solvers]: solvers
 
 ## Installation
 
