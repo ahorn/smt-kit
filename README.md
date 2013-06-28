@@ -46,7 +46,7 @@ For advanced usage information on other configure options refer to the
 
 ## API Usage
 
-First, `#include <smt>`. An example with built-in operators follows:
+First, `#include <smt>`. An example with De Morgan's law follows:
 
 ```C++
 // Symbols (e.g. "x") must be globally unique!
@@ -63,6 +63,10 @@ assert(smt::unsat != z3_solver.check());
 smt::MsatSolver msat_solver(smt::QF_BV_LOGIC);
 msat_solver.add(lhs != rhs);
 assert(smt::unsat == msat_solver.check());
+
+smt::CVC4Solver cvc4_solver(smt::QF_AUFBV_LOGIC);
+cvc4_solver.add(lhs != rhs);
+EXPECT_EQ(smt::unsat, cvc4_solver.check());
 ```
 
 The compiler will check the arguments of SMT functions at compile-time.

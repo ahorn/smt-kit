@@ -32,7 +32,7 @@ TEST(SmtFunctionalTest, DeMorgan)
   msat_solver.add(lhs != rhs);
   EXPECT_EQ(smt::unsat, msat_solver.check());
 
-  smt::CVC4Solver cvc4_solver(smt::QF_BV_LOGIC);
+  smt::CVC4Solver cvc4_solver(smt::QF_AUFBV_LOGIC);
   cvc4_solver.add(lhs != rhs);
   EXPECT_EQ(smt::unsat, cvc4_solver.check());
 }
