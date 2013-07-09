@@ -74,6 +74,12 @@ versions are likely to be troublesome. To date, we have successfully
 compiled and tested the code on OS X with g++ 4.8.1 and clang++ 4.2.
 You should also always use the most recent version of the SMT solvers.
 
+If `make test` fails with an error that indicates that `libstdc++.so.6`
+or a specific version of `GLIBCXX` cannot be found, then check out GCC's
+[libstdcxx-faq][FAQ].
+
+[libstdcxx-faq]: http://gcc.gnu.org/onlinedocs/libstdc++/faq.html#faq.how_to_set_paths
+
 ## Bug Reports
 
 You are warmly invited to submit patches as Github pull request,
