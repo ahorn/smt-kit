@@ -8,5 +8,6 @@ looks there to link the SMT Kit source code.
 
 If you wish to compile SMT Kit with clang++, then download the MathSAT5
 binaries that are compiled against LLVM's C++11 standard library (libc++).
+(Note that the LLVM libc++ binaries won't work with g++.)
 
 This compiler portability issue has been reported to mathsat@fbk.eu.
