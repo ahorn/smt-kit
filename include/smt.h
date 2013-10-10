@@ -10,6 +10,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <cstddef>
 #include <cstdint>
 #include <cassert>
 #include <stdexcept>

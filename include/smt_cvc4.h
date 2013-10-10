@@ -5,16 +5,17 @@
 #ifndef __SMT_CVC4_H_
 #define __SMT_CVC4_H_
 
-#include <cvc4/expr/expr.h>
-#include <cvc4/expr/expr_manager.h>
-#include <cvc4/smt/smt_engine.h>
-
 // Conflicts with gtest headers, include gtest/gtest.h _after_ smt_cvc4.h!
 #undef EXPECT_TRUE
 #undef EXPECT_FALSE
 #undef Message
 
 #include "smt.h"
+
+// Include CVC4 headers _after_ smt.h due to dependency on cstddef with G++ 4.9
+#include <cvc4/expr/expr.h>
+#include <cvc4/expr/expr_manager.h>
+#include <cvc4/smt/smt_engine.h>
 
 #include <unordered_map>
 

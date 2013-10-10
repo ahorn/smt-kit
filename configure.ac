@@ -47,7 +47,7 @@ GMP_DIR="/opt/local"
 
 # Search for SMT and SAT solver libraries
 CXXFLAGS="$CXXFLAGS -I$Z3_DIR/src/api -I$Z3_DIR/src/api/c++ -I$MSAT_DIR/include -I$CVC4_DIR/target/include -I$GMP_DIR/include"
-LDFLAGS="$LDFLAGS -L$Z3_DIR/build -L$MSAT_DIR/lib -L$CVC4_DIR/target/lib -L$GMP_DIR/lib"
+LDFLAGS="$LDFLAGS -L$Z3_DIR/build -L$MSAT_DIR/lib -L$CVC4_DIR/target/lib -L$GMP_DIR/lib -lcvc4"
 
 AC_SEARCH_LIBS([Z3_mk_config], [z3], , AC_MSG_ERROR([Unable to find Z3 theorem prover]))
 AX_CXX_CHECK_LIB(cvc4, [CVC4::SmtEngine::push] , AC_MSG_ERROR([Unable to find CVC4 theorem prover]))
