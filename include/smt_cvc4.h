@@ -12,7 +12,7 @@
 
 #include "smt.h"
 
-// Include CVC4 headers _after_ smt.h due to dependency on cstddef with G++ 4.9
+// Include CVC4 headers _after_ smt.h due to dependency on cstddef with g++ 4.9
 #include <cvc4/expr/expr.h>
 #include <cvc4/expr/expr_manager.h>
 #include <cvc4/smt/smt_engine.h>

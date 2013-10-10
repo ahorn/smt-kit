@@ -71,7 +71,7 @@ For advanced usage information on other configure options refer to the
 
 Since SMT Kit uses advanced C++11 language features, older compiler
 versions are likely to be troublesome. To date, we have successfully
-compiled and tested the code on OS X with g++ 4.8.1 and clang++ 4.2.
+compiled and tested the code on OS X with g++ 4.8.1, g++ 4.9 and clang++ 4.2.
 You should also always use the most recent version of the SMT solvers.
 
 If `make test` fails with an error that indicates that `libstdc++.so.6`
