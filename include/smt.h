@@ -730,6 +730,7 @@ public:
 class UnsafeTerm;
 typedef std::vector<UnsafeTerm> UnsafeTerms;
 
+/// Note: subclasses usually provide pretty-printing functionality
 class Solver
 {
 public:
