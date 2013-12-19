@@ -229,6 +229,7 @@ void Solver::pop()
 
 void Solver::unsafe_add(const UnsafeTerm& condition)
 {
+  assert(condition.sort().is_bool());
   const Error err = __unsafe_add(condition);
   assert(err == OK);
 }
