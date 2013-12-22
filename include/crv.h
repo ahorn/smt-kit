@@ -737,15 +737,26 @@ private:
   static const std::string s_time_prefix;
   static const std::string s_rf_prefix;
 
-  // Returns `w == rf(r)`, i.e. `r` reads from `w`
-  static smt::Bool rf(const Event& w, const Event& r)
+  static std::string prefix_event_id(
+    const std::string& prefix,
+    const Event& e)
   {
-    assert(w.is_write());
-    assert(r.is_read());
+    return prefix + std::to_string(e.event_id);
+  }
 
-    std::string symbol_name(s_rf_prefix + std::to_string(r.event_id));
-    const TimeSort rf_app(smt::any<TimeSort>(std::move(symbol_name)));
-    return w.event_id == rf_app;
+  // Returns `x == prefix!y`, e.g. `y` reads from `x`
+  static smt::Bool flow_bool(
+    const std::string& prefix,
+    const Event& x,
+    const Event& y)
+  {
+    // check that events oppose each other,
+    // assuming data flow from x to y.
+    assert(x.kind - 1 == y.kind);
+
+    const TimeSort app(smt::any<TimeSort>(
+      prefix_event_id(prefix, y)));
+    return x.event_id == app;
   }
 
   smt::CVC4Solver m_solver;
@@ -758,8 +769,7 @@ private:
     TimeSort& time = m_time_map[e.event_id];
     if (time.is_null())
     {
-      std::string symbol_name(s_time_prefix + std::to_string(e.event_id));
-      time = smt::any<TimeSort>(std::move(symbol_name));
+      time = smt::any<TimeSort>(prefix_event_id(s_time_prefix, e));
       m_solver.add(m_epoch.happens_before(time));
     }
 
@@ -790,7 +800,7 @@ private:
           const Event& w = *w_iter;
 
           const smt::Bool wr_order(time(w).happens_before(time(r)));
-          const smt::Bool rf_bool(rf(w, r));
+          const smt::Bool rf_bool(flow_bool(s_rf_prefix, w, r));
           const smt::UnsafeTerm wr_equality(w.term == r.term);
 
           or_rf = rf_bool or or_rf;
@@ -828,9 +838,10 @@ private:
           {
             const Event& w_prime = **writes_prime_iter;
 
+            const smt::Bool rf_bool(flow_bool(s_rf_prefix, w, r));
             and_fr = and_fr and w.guard and
               smt::implies(
-                /* if */ rf(w, r) and time(w).happens_before(time(w_prime)),
+                /* if */ rf_bool and time(w).happens_before(time(w_prime)),
                 /* then */ time(r).happens_before(time(w_prime)));
           }
         }
@@ -859,6 +870,14 @@ private:
       and_ws = and_ws and smt::distinct(std::move(terms));
     }
     unsafe_add(and_ws);
+  }
+
+  void encode_memory_concurrency(const Tracer& tracer)
+  {
+    const PerAddressMap& per_address_map = tracer.per_address_map();
+    encode_read_from(per_address_map);
+    encode_from_read(per_address_map);
+    encode_write_serialization(per_address_map);
   }
 
   /*
@@ -912,11 +931,7 @@ public:
   void encode(const Tracer& tracer)
   {
     encode_thread_order(tracer.per_thread_map());
-
-    const PerAddressMap& per_address_map = tracer.per_address_map();
-    encode_read_from(per_address_map);
-    encode_from_read(per_address_map);
-    encode_write_serialization(per_address_map);
+    encode_memory_concurrency(tracer);
   }
 };
 
