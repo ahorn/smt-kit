@@ -26,6 +26,8 @@ enum EventKind : unsigned short
 {
   READ_EVENT = 1,
   WRITE_EVENT,
+  POP_EVENT,
+  PUSH_EVENT,
   THREAD_BEGIN_EVENT = 8,
   THREAD_END_EVENT
 };
@@ -66,6 +68,8 @@ public:
 
   bool is_read() const { return kind == READ_EVENT; }
   bool is_write() const { return kind == WRITE_EVENT; }
+  bool is_pop() const { return kind == POP_EVENT; }
+  bool is_push() const { return kind == PUSH_EVENT; }
   bool is_thread_begin() const { return kind == THREAD_BEGIN_EVENT; }
   bool is_thread_end() const { return kind == THREAD_END_EVENT; }
   bool is_sync() const { return 8 <= kind; }
@@ -79,6 +83,8 @@ struct EventKinds
 {
   EventIterList reads;
   EventIterList writes;
+  EventIterList pops;
+  EventIterList pushes;
 };
 
 typedef std::map<Address, EventKinds> PerAddressMap;
@@ -157,6 +163,12 @@ private:
       break;
     case WRITE_EVENT: 
       a.writes.push_back(e_iter);
+      break;
+    case POP_EVENT: 
+      a.pops.push_back(e_iter);
+      break;
+    case PUSH_EVENT: 
+      a.pushes.push_back(e_iter);
       break;
     case THREAD_BEGIN_EVENT: 
     case THREAD_END_EVENT: 
@@ -314,6 +326,14 @@ public:
   /// Uses lvalue's term for the new write event
   template<typename T>
   void append_write_event(const Lvalue<T>&);
+
+  /// Creates a new term for the pop event
+  template<typename T>
+  Rvalue<T> append_pop_event(const Lvalue<T>&);
+
+  /// Uses lvalue's term for the new push event
+  template<typename T>
+  void append_push_event(const Lvalue<T>&);
 };
 
 // Global for symbolic execution
@@ -526,6 +546,35 @@ void Tracer::append_write_event(const Lvalue<T>& lvalue)
 {
   append_event(
     Event(WRITE_EVENT,
+          m_event_id_cnt++,
+          m_thread_id_stack.top(),
+          lvalue.address,
+          lvalue.term,
+          m_guard));
+}
+
+template<typename T>
+Rvalue<T> Tracer::append_pop_event(const Lvalue<T>& lvalue)
+{
+  const EventIdentifier event_id(m_event_id_cnt);
+  typename Smt<T>::Sort term(make_value_symbol<T>());
+  // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
+  append_event(
+    Event(POP_EVENT,
+          event_id,
+          m_thread_id_stack.top(),
+          lvalue.address,
+          term,
+          m_guard));
+
+  return Rvalue<T>(std::move(term));
+}
+
+template<typename T>
+void Tracer::append_push_event(const Lvalue<T>& lvalue)
+{
+  append_event(
+    Event(PUSH_EVENT,
           m_event_id_cnt++,
           m_thread_id_stack.top(),
           lvalue.address,
@@ -758,6 +807,7 @@ class Encoder
 private:
   static const std::string s_time_prefix;
   static const std::string s_rf_prefix;
+  static const std::string s_pf_prefix;
 
   static std::string prefix_event_id(
     const std::string& prefix,
@@ -902,6 +952,120 @@ private:
     encode_write_serialization(per_address_map);
   }
 
+  void encode_pop_from(const PerAddressMap& per_address_map)
+  {
+    smt::UnsafeTerm and_pf(smt::literal<smt::Bool>(true));
+    for (const PerAddressMap::value_type& pair : per_address_map)
+    {
+      const EventKinds& a = pair.second;
+      for (const EventIter pop_iter : a.pops)
+      {
+        const Event& pop = *pop_iter;
+
+        smt::UnsafeTerm or_pf(smt::literal<smt::Bool>(false));
+        for (const EventIter push_iter : a.pushes)
+        {
+          const Event& push = *push_iter;
+          const smt::Bool pf_bool(flow_bool(s_pf_prefix, push, pop));
+          or_pf = pf_bool or or_pf;
+          and_pf = and_pf and
+            smt::implies(
+              /* if */ pf_bool,
+              /* then */ time(push).happens_before(time(pop)) and
+                         push.guard and push.term == pop.term);
+        }
+        and_pf = and_pf and pop.guard and or_pf;
+      }
+    }
+    unsafe_add(and_pf);
+  }
+
+  // Make sure "pop-from" is like an injective function
+  void encode_pop_from_injectivity(const PerAddressMap& per_address_map)
+  {
+    smt::UnsafeTerm and_pop_excl(smt::literal<smt::Bool>(true));
+    for (const PerAddressMap::value_type& pair : per_address_map)
+    {
+      const EventKinds& a = pair.second;
+      if (a.pops.size() < 2)
+        continue;
+
+      smt::Terms<TimeSort> terms(a.pops.size());
+      for (const EventIter pop_iter : a.pops)
+      {
+        const Event& pop = *pop_iter;
+        terms.push_back(
+          smt::any<TimeSort>(prefix_event_id(s_pf_prefix, pop)));
+      }
+
+      and_pop_excl = and_pop_excl and smt::distinct(std::move(terms));
+    }
+    unsafe_add(and_pop_excl);
+  }
+
+  void encode_stack_lifo_order(const PerAddressMap& per_address_map)
+  {
+    smt::UnsafeTerm and_stack(smt::literal<smt::Bool>(true));
+    for (const PerAddressMap::value_type& pair : per_address_map)
+    {
+      const EventKinds& a = pair.second;
+      for (const EventIter push_iter : a.pushes)
+      {
+        const Event& push = *push_iter;
+
+        for (const EventIter push_prime_iter : a.pushes)
+        {
+          const Event& push_prime = *push_prime_iter;
+          const smt::Bool pushes_order(
+            time(push).happens_before(time(push_prime)));
+
+          for (const EventIter pop_iter : a.pops)
+          {
+            const Event& pop = *pop_iter;
+            const smt::Bool pf_bool(flow_bool(s_pf_prefix, push, pop));
+
+            smt::UnsafeTerm or_pp(smt::literal<smt::Bool>(false));
+            for (const EventIter pop_prime_iter : a.pops)
+            {
+              const Event& pop_prime = *pop_prime_iter;
+              const smt::Bool pf_prime_bool(
+                flow_bool(s_pf_prefix, push_prime, pop_prime)),
+                pops_order(time(pop_prime).happens_before(time(pop)));
+
+              // build pf!pop' = push' for some pop'
+              or_pp = or_pp or pf_prime_bool;
+
+              // if pf!pop = push and pf!pop' = push' and
+              // t!push < t!push', then t!pop' < t!pop.
+              and_stack = and_stack and
+                smt::implies(
+                  pf_bool and pf_prime_bool and pushes_order,
+                  pops_order);
+            }
+
+            // if t!push < t!push' < t!pop and pf!pop = push and
+            // guard(push'), then there exists a pop' such that
+            // pf!pop' = push' (and t!pop' < t!pop by "pop-from").
+            and_stack = and_stack and
+              smt::implies(
+                pf_bool and push_prime.guard and pushes_order and
+                time(push_prime).happens_before(time(pop)), or_pp);
+          }
+        }
+      }
+    }
+    unsafe_add(and_stack);
+  }
+
+  // Encode partial order model of stack abstract data type (ADT)
+  void encode_stack_api(const Tracer& tracer)
+  {
+    const PerAddressMap& per_address_map = tracer.per_address_map();
+    encode_pop_from(per_address_map);
+    encode_pop_from_injectivity(per_address_map);
+    encode_stack_lifo_order(per_address_map);
+  }
+
   /*
    * Synchronization between threads (e.g. BEGIN/THREAD_END_EVENT) relies
    * on the fact that time(const Event&) builds an SMT variable whose
@@ -954,6 +1118,7 @@ public:
   {
     encode_thread_order(tracer.per_thread_map());
     encode_memory_concurrency(tracer);
+    encode_stack_api(tracer);
   }
 };
 

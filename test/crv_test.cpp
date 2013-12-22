@@ -347,3 +347,97 @@ TEST(CrvTest, UnsatFib5)
   EXPECT_EQ(smt::unsat, encoder.solver().check());
 }
 
+TEST(CrvTest, SatStackApi)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Lvalue<int> v;
+  v = 3;
+  tracer().append_push_event(v);
+  encoder.add(3 == tracer().append_pop_event(v));
+
+  encoder.encode(tracer());
+  EXPECT_EQ(smt::sat, encoder.solver().check());
+}
+
+TEST(CrvTest, UnsatStackApi)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Lvalue<int> v;
+  v = 3;
+  tracer().append_push_event(v);
+  encoder.add(3 != tracer().append_pop_event(v));
+
+  encoder.encode(tracer());
+  EXPECT_EQ(smt::unsat, encoder.solver().check());
+}
+
+TEST(CrvTest, SatStackLifo1)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Lvalue<int> v;
+  v = 3;
+  tracer().append_push_event(v);
+  v = 5;
+  tracer().append_push_event(v);
+  encoder.add(5 == tracer().append_pop_event(v));
+
+  encoder.encode(tracer());
+  EXPECT_EQ(smt::sat, encoder.solver().check());
+}
+
+TEST(CrvTest, UnsatStackLifo1)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Lvalue<int> v;
+  v = 3;
+  tracer().append_push_event(v);
+  v = 5;
+  tracer().append_push_event(v);
+  encoder.add(3 == tracer().append_pop_event(v));
+
+  encoder.encode(tracer());
+  EXPECT_EQ(smt::unsat, encoder.solver().check());
+}
+
+TEST(CrvTest, SatStackLifo2)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Lvalue<int> v;
+  v = 3;
+  tracer().append_push_event(v);
+  v = 5;
+  tracer().append_push_event(v);
+  tracer().append_pop_event(v);
+  encoder.add(3 == tracer().append_pop_event(v));
+
+  encoder.encode(tracer());
+  EXPECT_EQ(smt::sat, encoder.solver().check());
+}
+
+TEST(CrvTest, UnsatStackLifo2)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Lvalue<int> v;
+  v = 3;
+  tracer().append_push_event(v);
+  v = 5;
+  tracer().append_push_event(v);
+  tracer().append_pop_event(v);
+  encoder.add(3 != tracer().append_pop_event(v));
+
+  encoder.encode(tracer());
+  EXPECT_EQ(smt::unsat, encoder.solver().check());
+}
+
