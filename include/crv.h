@@ -605,6 +605,28 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     return crv::Rvalue<ReturnType>(larg.term op rarg.term);                     \
   }                                                                             \
                                                                                 \
+  template<typename U, typename V,                                              \
+    class Enable = typename std::enable_if<std::is_arithmetic<V>::value>::type> \
+  inline auto operator op(                                                      \
+    crv::Rvalue<U>&& larg,                                                      \
+    V literal)                                                                  \
+  -> crv::Rvalue<typename crv::internal::Return<smt::opcode, U, V>::Type>       \
+  {                                                                             \
+    typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
+    return crv::Rvalue<ReturnType>(larg.term op literal);                       \
+  }                                                                             \
+                                                                                \
+  template<typename U, typename V,                                              \
+    class Enable = typename std::enable_if<std::is_arithmetic<U>::value>::type> \
+  inline auto operator op(                                                      \
+    U literal,                                                                  \
+    crv::Rvalue<V>&& rarg)                                                      \
+  -> crv::Rvalue<typename crv::internal::Return<smt::opcode, U, V>::Type>       \
+  {                                                                             \
+    typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
+    return crv::Rvalue<ReturnType>(literal op rarg.term);                       \
+  }                                                                             \
+                                                                                \
   template<typename U, typename V>                                              \
   inline auto operator op(                                                      \
   const crv::Lvalue<U>& larg,                                                   \

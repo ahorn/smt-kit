@@ -148,6 +148,14 @@ TEST(CrvTest, Value)
   }
   EXPECT_EQ(2, tracer().events().size());
   {
+    make_temporary_rvalue<long>() + 7;
+  }
+  EXPECT_EQ(2, tracer().events().size());
+  {
+    7 + make_temporary_rvalue<long>();
+  }
+  EXPECT_EQ(2, tracer().events().size());
+  {
     make_temporary_rvalue<long>() + v0;
   }
   EXPECT_EQ(3, tracer().events().size());
