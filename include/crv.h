@@ -434,26 +434,20 @@ template<typename T>
 class Rvalue
 {
 public:
-  typename Smt<T>::Sort term;
+  const typename Smt<T>::Sort term;
 
-protected:
-  Rvalue()
-  : term() {}
-
-public:
   Rvalue(Rvalue&& other)
   : term(std::move(other.term)) {}
 
   explicit Rvalue(typename Smt<T>::Sort&& term_arg)
   : term(std::move(term_arg)) {}
-
-  virtual ~Rvalue() {}
 };
 
 template<typename T>
-class Lvalue : public Rvalue<T>
+class Lvalue
 {
 public:
+  typename Smt<T>::Sort term;
   const Address address;
 
   Lvalue();
@@ -461,19 +455,16 @@ public:
   Lvalue(Rvalue<T>&&);
   Lvalue(const Lvalue<T>&);
 
-  Lvalue(typename Smt<T>::Sort&& term_arg) = delete;
-
   Lvalue& operator=(T v)
   {
-    Rvalue<T>::term=smt::literal<typename Smt<T>::Sort>(v);
-
+    term = smt::literal<typename Smt<T>::Sort>(v);
     tracer().append_write_event(*this);
     return *this;
   }
 
   Lvalue& operator=(Rvalue<T>&& other)
   {
-    Rvalue<T>::term=std::move(other.term);
+    term = std::move(other.term);
     tracer().append_write_event(*this);
     return *this;
   }
@@ -481,8 +472,7 @@ public:
   Lvalue& operator=(const Lvalue& other)
   {
     Rvalue<T> new_rvalue = tracer().append_read_event(other);
-    Rvalue<T>::term=std::move(new_rvalue.term);
-
+    term = std::move(new_rvalue.term);
     tracer().append_write_event(*this);
     return *this;
   }
@@ -584,7 +574,7 @@ void Tracer::append_push_event(const Lvalue<T>& lvalue)
 
 template<typename T>
 Lvalue<T>::Lvalue()
-: Rvalue<T>(),
+: term(),
   address(reinterpret_cast<Address>(this))
 {
   tracer().append_nondet_write_event(*this);
@@ -592,7 +582,7 @@ Lvalue<T>::Lvalue()
 
 template<typename T>
 Lvalue<T>::Lvalue(T v)
-: Rvalue<T>(smt::literal<typename Smt<T>::Sort>(v)),
+: term(smt::literal<typename Smt<T>::Sort>(v)),
   address(reinterpret_cast<Address>(this))
 {
   tracer().append_write_event(*this);
@@ -600,7 +590,7 @@ Lvalue<T>::Lvalue(T v)
 
 template<typename T>
 Lvalue<T>::Lvalue(Rvalue<T>&& other)
-: Rvalue<T>(std::move(other)),
+: term(std::move(other.term)),
   address(reinterpret_cast<Address>(this))
 {
   tracer().append_write_event(*this);
@@ -608,12 +598,11 @@ Lvalue<T>::Lvalue(Rvalue<T>&& other)
 
 template<typename T>
 Lvalue<T>::Lvalue(const Lvalue<T>& other)
-: Rvalue<T>(),
+: term(),
   address(reinterpret_cast<Address>(this))
 {
   Rvalue<T> new_rvalue = tracer().append_read_event(other);
-  Rvalue<T>::term=std::move(new_rvalue.term);
-
+  term = std::move(new_rvalue.term);
   tracer().append_write_event(*this);
 }
 
