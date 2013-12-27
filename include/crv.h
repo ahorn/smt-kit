@@ -105,8 +105,8 @@ struct Flip
 typedef std::list<Flip> FlipList;
 typedef std::list<Flip>::const_iterator FlipIter;
 
-template<typename T> class Lvalue;
-template<typename T> class Rvalue;
+template<typename T> class External;
+template<typename T> class Internal;
 
 // Use smt::Bv<T> for bit-precision
 template<typename T>
@@ -260,7 +260,7 @@ public:
     return m_flip_cnt;
   }
 
-  bool append_guard(const Rvalue<bool>& rvalue);
+  bool append_guard(const Internal<bool>& internal);
 
   ThreadIdentifier append_thread_begin_event()
   {
@@ -317,23 +317,23 @@ public:
 
   /// Creates a new term for the read event
   template<typename T>
-  Rvalue<T> append_read_event(const Lvalue<T>&);
+  Internal<T> append_read_event(const External<T>&);
 
   /// Creates a new term for the write event
   template<typename T>
-  void append_nondet_write_event(const Lvalue<T>&);
+  void append_nondet_write_event(const External<T>&);
 
-  /// Uses lvalue's term for the new write event
+  /// Uses external's term for the new write event
   template<typename T>
-  void append_write_event(const Lvalue<T>&);
+  void append_write_event(const External<T>&);
 
   /// Creates a new term for the pop event
   template<typename T>
-  Rvalue<T> append_pop_event(const Lvalue<T>&);
+  Internal<T> append_pop_event(const External<T>&);
 
-  /// Uses lvalue's term for the new push event
+  /// Uses external's term for the new push event
   template<typename T>
-  void append_push_event(const Lvalue<T>&);
+  void append_push_event(const External<T>&);
 };
 
 // Global for symbolic execution
@@ -431,54 +431,79 @@ namespace internal
 }
 
 template<typename T>
-class Rvalue
+class Internal
 {
 public:
-  const typename Smt<T>::Sort term;
+  typename Smt<T>::Sort term;
 
-  Rvalue(Rvalue&& other)
+  Internal(const Internal& other)
+  : term(other.term) {}
+
+  Internal(Internal&& other)
   : term(std::move(other.term)) {}
 
-  explicit Rvalue(typename Smt<T>::Sort&& term_arg)
+  explicit Internal(typename Smt<T>::Sort&& term_arg)
   : term(std::move(term_arg)) {}
+
+  Internal(T v)
+  : term(smt::literal<typename Smt<T>::Sort>(v)) {}
+
+  Internal(const External<T>& other)
+  : term()
+  {
+    Internal<T> new_internal = tracer().append_read_event(other);
+    term = std::move(new_internal.term);
+  }
+
+  Internal& operator=(Internal<T>&& other)
+  {
+    term = std::move(other.term);
+    return *this;
+  }
+
+  Internal& operator=(const Internal& other)
+  {
+    term = other.term;
+    return *this;
+  }
 };
 
 template<typename T>
-class Lvalue
+class External
 {
 public:
   typename Smt<T>::Sort term;
   const Address address;
 
-  Lvalue();
-  Lvalue(T);
-  Lvalue(Rvalue<T>&&);
-  Lvalue(const Lvalue<T>&);
+  External();
+  External(T);
+  External(Internal<T>&&);
+  External(const External<T>&);
 
-  Lvalue& operator=(T v)
+  External& operator=(T v)
   {
     term = smt::literal<typename Smt<T>::Sort>(v);
     tracer().append_write_event(*this);
     return *this;
   }
 
-  Lvalue& operator=(Rvalue<T>&& other)
+  External& operator=(Internal<T>&& other)
   {
     term = std::move(other.term);
     tracer().append_write_event(*this);
     return *this;
   }
 
-  Lvalue& operator=(const Lvalue& other)
+  External& operator=(const External& other)
   {
-    Rvalue<T> new_rvalue = tracer().append_read_event(other);
-    term = std::move(new_rvalue.term);
+    Internal<T> new_internal = tracer().append_read_event(other);
+    term = std::move(new_internal.term);
     tracer().append_write_event(*this);
     return *this;
   }
 };
 
-bool Tracer::append_guard(const Rvalue<bool>& rvalue)
+bool Tracer::append_guard(const Internal<bool>& internal)
 {
   bool direction = true;
   if (m_flip_iter == m_flips.cend())
@@ -493,15 +518,15 @@ bool Tracer::append_guard(const Rvalue<bool>& rvalue)
   }
 
   if (direction)
-    m_guard = m_guard and rvalue.term;
+    m_guard = m_guard and internal.term;
   else
-    m_guard = m_guard and !rvalue.term;
+    m_guard = m_guard and !internal.term;
 
   return direction;
 }
 
 template<typename T>
-Rvalue<T> Tracer::append_read_event(const Lvalue<T>& lvalue)
+Internal<T> Tracer::append_read_event(const External<T>& external)
 {
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
@@ -510,41 +535,41 @@ Rvalue<T> Tracer::append_read_event(const Lvalue<T>& lvalue)
     Event(READ_EVENT,
           event_id,
           m_thread_id_stack.top(),
-          lvalue.address,
+          external.address,
           term,
           m_guard));
 
-  return Rvalue<T>(std::move(term));
+  return Internal<T>(std::move(term));
 }
 
 template<typename T>
-void Tracer::append_nondet_write_event(const Lvalue<T>& lvalue)
+void Tracer::append_nondet_write_event(const External<T>& external)
 {
-  assert(lvalue.term.is_null());
+  assert(external.term.is_null());
   const EventIdentifier event_id(m_event_id_cnt);
   append_event(
     Event(WRITE_EVENT,
           event_id,
           m_thread_id_stack.top(),
-          lvalue.address,
+          external.address,
           make_value_symbol<T>(),
           m_guard));
 }
 
 template<typename T>
-void Tracer::append_write_event(const Lvalue<T>& lvalue)
+void Tracer::append_write_event(const External<T>& external)
 {
   append_event(
     Event(WRITE_EVENT,
           m_event_id_cnt++,
           m_thread_id_stack.top(),
-          lvalue.address,
-          lvalue.term,
+          external.address,
+          external.term,
           m_guard));
 }
 
 template<typename T>
-Rvalue<T> Tracer::append_pop_event(const Lvalue<T>& lvalue)
+Internal<T> Tracer::append_pop_event(const External<T>& external)
 {
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
@@ -553,27 +578,27 @@ Rvalue<T> Tracer::append_pop_event(const Lvalue<T>& lvalue)
     Event(POP_EVENT,
           event_id,
           m_thread_id_stack.top(),
-          lvalue.address,
+          external.address,
           term,
           m_guard));
 
-  return Rvalue<T>(std::move(term));
+  return Internal<T>(std::move(term));
 }
 
 template<typename T>
-void Tracer::append_push_event(const Lvalue<T>& lvalue)
+void Tracer::append_push_event(const External<T>& external)
 {
   append_event(
     Event(PUSH_EVENT,
           m_event_id_cnt++,
           m_thread_id_stack.top(),
-          lvalue.address,
-          lvalue.term,
+          external.address,
+          external.term,
           m_guard));
 }
 
 template<typename T>
-Lvalue<T>::Lvalue()
+External<T>::External()
 : term(),
   address(reinterpret_cast<Address>(this))
 {
@@ -581,7 +606,7 @@ Lvalue<T>::Lvalue()
 }
 
 template<typename T>
-Lvalue<T>::Lvalue(T v)
+External<T>::External(T v)
 : term(smt::literal<typename Smt<T>::Sort>(v)),
   address(reinterpret_cast<Address>(this))
 {
@@ -589,7 +614,7 @@ Lvalue<T>::Lvalue(T v)
 }
 
 template<typename T>
-Lvalue<T>::Lvalue(Rvalue<T>&& other)
+External<T>::External(Internal<T>&& other)
 : term(std::move(other.term)),
   address(reinterpret_cast<Address>(this))
 {
@@ -597,12 +622,12 @@ Lvalue<T>::Lvalue(Rvalue<T>&& other)
 }
 
 template<typename T>
-Lvalue<T>::Lvalue(const Lvalue<T>& other)
+External<T>::External(const External<T>& other)
 : term(),
   address(reinterpret_cast<Address>(this))
 {
-  Rvalue<T> new_rvalue = tracer().append_read_event(other);
-  term = std::move(new_rvalue.term);
+  Internal<T> new_internal = tracer().append_read_event(other);
+  term = std::move(new_internal.term);
   tracer().append_write_event(*this);
 }
 
@@ -610,19 +635,27 @@ Lvalue<T>::Lvalue(const Lvalue<T>& other)
 
 #define CRV_BUILTIN_UNARY_OP(op, opcode)                                        \
   template<typename T>                                                          \
-  inline auto operator op(crv::Rvalue<T>&& arg)                                 \
-  -> crv::Rvalue<typename crv::internal::Return<smt::opcode, T>::Type>          \
+  inline auto operator op(const crv::Internal<T>& arg)                          \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, T>::Type>        \
   {                                                                             \
     typedef typename crv::internal::Return<smt::opcode, T>::Type ReturnType;    \
-    return crv::Rvalue<ReturnType>(op arg.term);                                \
+    return crv::Internal<ReturnType>(op arg.term);                              \
   }                                                                             \
                                                                                 \
   template<typename T>                                                          \
-  inline auto operator op(const crv::Lvalue<T>& arg)                            \
-  -> crv::Rvalue<typename crv::internal::Return<smt::opcode, T>::Type>          \
+  inline auto operator op(crv::Internal<T>&& arg)                               \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, T>::Type>        \
   {                                                                             \
-    crv::Rvalue<T> arg_rvalue = crv::tracer().append_read_event(arg);           \
-    return op std::move(arg_rvalue);                                            \
+    typedef typename crv::internal::Return<smt::opcode, T>::Type ReturnType;    \
+    return crv::Internal<ReturnType>(op std::move(arg.term));                   \
+  }                                                                             \
+                                                                                \
+  template<typename T>                                                          \
+  inline auto operator op(const crv::External<T>& arg)                          \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, T>::Type>        \
+  {                                                                             \
+    crv::Internal<T> arg_internal = crv::tracer().append_read_event(arg);       \
+    return op std::move(arg_internal);                                          \
   }                                                                             \
 
 CRV_BUILTIN_UNARY_OP(-, SUB)
@@ -635,89 +668,162 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
 #define CRV_BUILTIN_BINARY_OP(op, opcode)                                       \
   template<typename U, typename V>                                              \
   inline auto operator op(                                                      \
-    crv::Rvalue<U>&& larg,                                                      \
-    crv::Rvalue<V>&& rarg)                                                      \
-  -> crv::Rvalue<typename crv::internal::Return<smt::opcode, U, V>::Type>       \
+    const crv::Internal<U>& larg,                                               \
+    const crv::Internal<V>& rarg)                                               \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
-    return crv::Rvalue<ReturnType>(larg.term op rarg.term);                     \
+    return crv::Internal<ReturnType>(larg.term op rarg.term);                   \
+  }                                                                             \
+                                                                                \
+  template<typename U, typename V>                                              \
+  inline auto operator op(                                                      \
+    const crv::Internal<U>& larg,                                               \
+    crv::Internal<V>&& rarg)                                                    \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
+  {                                                                             \
+    typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
+    return crv::Internal<ReturnType>(larg.term op std::move(rarg.term));        \
+  }                                                                             \
+                                                                                \
+  template<typename U, typename V>                                              \
+  inline auto operator op(                                                      \
+    crv::Internal<U>&& larg,                                                    \
+    const crv::Internal<V>& rarg)                                               \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
+  {                                                                             \
+    typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
+    return crv::Internal<ReturnType>(std::move(larg.term) op rarg.term);        \
+  }                                                                             \
+                                                                                \
+  template<typename U, typename V>                                              \
+  inline auto operator op(                                                      \
+    crv::Internal<U>&& larg,                                                    \
+    crv::Internal<V>&& rarg)                                                    \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
+  {                                                                             \
+    typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
+    return crv::Internal<ReturnType>(                                           \
+      std::move(larg.term) op std::move(rarg.term));                            \
   }                                                                             \
                                                                                 \
   template<typename U, typename V,                                              \
     class Enable = typename std::enable_if<std::is_arithmetic<V>::value>::type> \
   inline auto operator op(                                                      \
-    crv::Rvalue<U>&& larg,                                                      \
+    const crv::Internal<U>& larg,                                               \
     V literal)                                                                  \
-  -> crv::Rvalue<typename crv::internal::Return<smt::opcode, U, V>::Type>       \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
-    return crv::Rvalue<ReturnType>(larg.term op literal);                       \
+    return crv::Internal<ReturnType>(larg.term op literal);                     \
+  }                                                                             \
+                                                                                \
+  template<typename U, typename V,                                              \
+    class Enable = typename std::enable_if<std::is_arithmetic<V>::value>::type> \
+  inline auto operator op(                                                      \
+    crv::Internal<U>&& larg,                                                    \
+    V literal)                                                                  \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
+  {                                                                             \
+    typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
+    return crv::Internal<ReturnType>(std::move(larg.term) op literal);          \
   }                                                                             \
                                                                                 \
   template<typename U, typename V,                                              \
     class Enable = typename std::enable_if<std::is_arithmetic<U>::value>::type> \
   inline auto operator op(                                                      \
     U literal,                                                                  \
-    crv::Rvalue<V>&& rarg)                                                      \
-  -> crv::Rvalue<typename crv::internal::Return<smt::opcode, U, V>::Type>       \
+    const crv::Internal<V>& rarg)                                               \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
-    return crv::Rvalue<ReturnType>(literal op rarg.term);                       \
-  }                                                                             \
-                                                                                \
-  template<typename U, typename V>                                              \
-  inline auto operator op(                                                      \
-  const crv::Lvalue<U>& larg,                                                   \
-  crv::Rvalue<V>&& rarg)                                                        \
-  -> crv::Rvalue<typename crv::internal::Return<smt::opcode, U, V>::Type>       \
-  {                                                                             \
-    crv::Rvalue<U> larg_rvalue = crv::tracer().append_read_event(larg);         \
-    return std::move(larg_rvalue) op std::move(rarg);                           \
-  }                                                                             \
-                                                                                \
-  template<typename U, typename V>                                              \
-  inline auto operator op(                                                      \
-    crv::Rvalue<U>&& larg,                                                      \
-    const crv::Lvalue<V>& rarg)                                                 \
-  -> crv::Rvalue<typename crv::internal::Return<smt::opcode, U, V>::Type>       \
-  {                                                                             \
-    crv::Rvalue<V> rarg_rvalue = crv::tracer().append_read_event(rarg);         \
-    return std::move(larg) op std::move(rarg_rvalue);                           \
-  }                                                                             \
-                                                                                \
-  template<typename U, typename V>                                              \
-  inline auto operator op(                                                      \
-    const crv::Lvalue<U>& larg,                                                 \
-    const crv::Lvalue<V>& rarg)                                                 \
-  -> crv::Rvalue<typename crv::internal::Return<smt::opcode, U, V>::Type>       \
-  {                                                                             \
-    crv::Rvalue<U> larg_rvalue = crv::tracer().append_read_event(larg);         \
-    crv::Rvalue<V> rarg_rvalue = crv::tracer().append_read_event(rarg);         \
-    return std::move(larg_rvalue) op std::move(rarg_rvalue);                    \
-  }                                                                             \
-                                                                                \
-  template<typename U, typename V,                                              \
-    class Enable = typename std::enable_if<std::is_arithmetic<V>::value>::type> \
-  inline auto operator op(                                                      \
-    const crv::Lvalue<U>& larg,                                                 \
-    V literal)                                                                  \
-  -> crv::Rvalue<typename crv::internal::Return<smt::opcode, U, V>::Type>       \
-  {                                                                             \
-    const crv::Rvalue<U> larg_rvalue = crv::tracer().append_read_event(larg);   \
-    typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
-    return crv::Rvalue<ReturnType>(larg_rvalue.term op literal);                \
+    return crv::Internal<ReturnType>(literal op rarg.term);                     \
   }                                                                             \
                                                                                 \
   template<typename U, typename V,                                              \
     class Enable = typename std::enable_if<std::is_arithmetic<U>::value>::type> \
   inline auto operator op(                                                      \
     U literal,                                                                  \
-    const crv::Lvalue<V>& rarg)                                                 \
-  -> crv::Rvalue<typename crv::internal::Return<smt::opcode, U, V>::Type>       \
+    crv::Internal<V>&& rarg)                                                    \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    const crv::Rvalue<V> rarg_rvalue = crv::tracer().append_read_event(rarg);   \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
-    return crv::Rvalue<ReturnType>(literal op rarg_rvalue.term);                \
+    return crv::Internal<ReturnType>(literal op std::move(rarg.term));          \
+  }                                                                             \
+                                                                                \
+  template<typename U, typename V>                                              \
+  inline auto operator op(                                                      \
+  const crv::External<U>& larg,                                                 \
+  const crv::Internal<V>& rarg)                                                 \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
+  {                                                                             \
+    crv::Internal<U> larg_internal = crv::tracer().append_read_event(larg);     \
+    return std::move(larg_internal) op rarg;                                    \
+  }                                                                             \
+                                                                                \
+  template<typename U, typename V>                                              \
+  inline auto operator op(                                                      \
+  const crv::External<U>& larg,                                                 \
+  crv::Internal<V>&& rarg)                                                      \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
+  {                                                                             \
+    crv::Internal<U> larg_internal = crv::tracer().append_read_event(larg);     \
+    return std::move(larg_internal) op std::move(rarg);                         \
+  }                                                                             \
+                                                                                \
+  template<typename U, typename V>                                              \
+  inline auto operator op(                                                      \
+    const crv::Internal<U>& larg,                                               \
+    const crv::External<V>& rarg)                                               \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
+  {                                                                             \
+    crv::Internal<V> rarg_internal = crv::tracer().append_read_event(rarg);     \
+    return larg op std::move(rarg_internal);                                    \
+  }                                                                             \
+                                                                                \
+  template<typename U, typename V>                                              \
+  inline auto operator op(                                                      \
+    crv::Internal<U>&& larg,                                                    \
+    const crv::External<V>& rarg)                                               \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
+  {                                                                             \
+    crv::Internal<V> rarg_internal = crv::tracer().append_read_event(rarg);     \
+    return std::move(larg) op std::move(rarg_internal);                         \
+  }                                                                             \
+                                                                                \
+  template<typename U, typename V>                                              \
+  inline auto operator op(                                                      \
+    const crv::External<U>& larg,                                               \
+    const crv::External<V>& rarg)                                               \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
+  {                                                                             \
+    crv::Internal<U> larg_internal = crv::tracer().append_read_event(larg);     \
+    crv::Internal<V> rarg_internal = crv::tracer().append_read_event(rarg);     \
+    return std::move(larg_internal) op std::move(rarg_internal);                \
+  }                                                                             \
+                                                                                \
+  template<typename U, typename V,                                              \
+    class Enable = typename std::enable_if<std::is_arithmetic<V>::value>::type> \
+  inline auto operator op(                                                      \
+    const crv::External<U>& larg,                                               \
+    V literal)                                                                  \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
+  {                                                                             \
+    crv::Internal<U> larg_internal = crv::tracer().append_read_event(larg);     \
+    typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
+    return crv::Internal<ReturnType>(std::move(larg_internal.term) op literal); \
+  }                                                                             \
+                                                                                \
+  template<typename U, typename V,                                              \
+    class Enable = typename std::enable_if<std::is_arithmetic<U>::value>::type> \
+  inline auto operator op(                                                      \
+    U literal,                                                                  \
+    const crv::External<V>& rarg)                                               \
+  -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
+  {                                                                             \
+    crv::Internal<V> rarg_internal = crv::tracer().append_read_event(rarg);     \
+    typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
+    return crv::Internal<ReturnType>(literal op std::move(rarg_internal.term)); \
   }                                                                             \
 
 CRV_BUILTIN_BINARY_OP(-, SUB)
@@ -1098,9 +1204,9 @@ public:
     return m_solver;
   }
 
-  void add(Rvalue<bool>&& c)
+  void add(Internal<bool>&& condition)
   {
-    unsafe_add(c.term);
+    unsafe_add(std::move(condition.term));
   }
 
   void encode(const Tracer& tracer)
@@ -1108,6 +1214,19 @@ public:
     encode_thread_order(tracer.per_thread_map());
     encode_memory_concurrency(tracer);
     encode_stack_api(tracer);
+  }
+
+  // Check condition without side effects on the solver
+  smt::CheckResult check(
+    Internal<bool>&& condition,
+    const Tracer& tracer)
+  {
+    m_solver.push();
+    add(std::move(condition));
+    encode(tracer);
+    const smt::CheckResult result = m_solver.check();
+    m_solver.pop();
+    return result;
   }
 };
 

@@ -6,10 +6,10 @@
 using namespace crv;
 
 template<typename T>
-static Rvalue<T> make_temporary_rvalue()
+static Internal<T> make_temporary_internal()
 {
   static unsigned s_symbol_cnt = 0;
-  return Rvalue<T>(smt::any<typename Smt<T>::Sort>(
+  return Internal<T>(smt::any<typename Smt<T>::Sort>(
     std::to_string(s_symbol_cnt++)));
 }
 
@@ -37,38 +37,38 @@ TEST(CrvTest, Tracer)
   Tracer tracer;
   EXPECT_TRUE(tracer.events().empty());
 
-  Lvalue<long> lvalue0;
-  Lvalue<long> lvalue1(lvalue0 + 3);
+  External<long> external0;
+  External<long> external1(external0 + 3);
 
-  // Lvalue<T> uses tracer() extern function
+  // External<T> uses tracer() extern function
   EXPECT_TRUE(tracer.events().empty());
 
-  tracer.append_nondet_write_event(lvalue0);
+  tracer.append_nondet_write_event(external0);
   EXPECT_EQ(1, tracer.events().size());
   EXPECT_EQ(1, tracer.per_address_map().size());
-  EXPECT_EQ(0, tracer.per_address_map().at(lvalue0.address).reads.size());
-  EXPECT_EQ(1, tracer.per_address_map().at(lvalue0.address).writes.size());
+  EXPECT_EQ(0, tracer.per_address_map().at(external0.address).reads.size());
+  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).writes.size());
 
-  tracer.append_read_event(lvalue0);
+  tracer.append_read_event(external0);
   EXPECT_EQ(2, tracer.events().size());
   EXPECT_EQ(1, tracer.per_address_map().size());
-  EXPECT_EQ(1, tracer.per_address_map().at(lvalue0.address).reads.size());
-  EXPECT_EQ(1, tracer.per_address_map().at(lvalue0.address).writes.size());
+  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).reads.size());
+  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).writes.size());
 
-  tracer.append_write_event(lvalue1);
+  tracer.append_write_event(external1);
   EXPECT_EQ(3, tracer.events().size());
   EXPECT_EQ(2, tracer.per_address_map().size());
 
-  EXPECT_EQ(1, tracer.per_address_map().at(lvalue0.address).reads.size());
-  EXPECT_EQ(1, tracer.per_address_map().at(lvalue0.address).reads.front()->event_id);
+  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).reads.size());
+  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).reads.front()->event_id);
 
-  EXPECT_EQ(1, tracer.per_address_map().at(lvalue0.address).writes.size());
-  EXPECT_EQ(0, tracer.per_address_map().at(lvalue0.address).writes.front()->event_id);
+  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).writes.size());
+  EXPECT_EQ(0, tracer.per_address_map().at(external0.address).writes.front()->event_id);
 
-  EXPECT_EQ(0, tracer.per_address_map().at(lvalue1.address).reads.size());
+  EXPECT_EQ(0, tracer.per_address_map().at(external1.address).reads.size());
 
-  EXPECT_EQ(1, tracer.per_address_map().at(lvalue1.address).writes.size());
-  EXPECT_EQ(2, tracer.per_address_map().at(lvalue1.address).writes.front()->event_id);
+  EXPECT_EQ(1, tracer.per_address_map().at(external1.address).writes.size());
+  EXPECT_EQ(2, tracer.per_address_map().at(external1.address).writes.front()->event_id);
 
   const ThreadIdentifier new_thread_id(tracer.append_thread_begin_event());
   EXPECT_EQ(1, new_thread_id);
@@ -94,7 +94,7 @@ TEST(CrvTest, Tracer)
 TEST(CrvTest, Flip)
 {
   Tracer tracer;
-  Lvalue<long> v;
+  External<long> v;
 
   // if (v < 0) { if (v < 1)  { skip } }
   EXPECT_TRUE(tracer.append_guard(v < 0));
@@ -137,30 +137,30 @@ TEST(CrvTest, Value)
   tracer().reset();
 
   EXPECT_EQ(0, tracer().events().size());
-  Lvalue<int> v0;
+  External<int> v0;
   EXPECT_EQ(1, tracer().events().size());
   {
-    make_temporary_rvalue<int>() + make_temporary_rvalue<long>();
+    make_temporary_internal<int>() + make_temporary_internal<long>();
   }
   EXPECT_EQ(1, tracer().events().size());
   {
-    Lvalue<long> v1 = make_temporary_rvalue<int>() + make_temporary_rvalue<long>();
+    External<long> v1 = make_temporary_internal<int>() + make_temporary_internal<long>();
   }
   EXPECT_EQ(2, tracer().events().size());
   {
-    make_temporary_rvalue<long>() + 7;
+    make_temporary_internal<long>() + 7;
   }
   EXPECT_EQ(2, tracer().events().size());
   {
-    7 + make_temporary_rvalue<long>();
+    7 + make_temporary_internal<long>();
   }
   EXPECT_EQ(2, tracer().events().size());
   {
-    make_temporary_rvalue<long>() + v0;
+    make_temporary_internal<long>() + v0;
   }
   EXPECT_EQ(3, tracer().events().size());
   {
-    v0 + make_temporary_rvalue<long>();
+    v0 + make_temporary_internal<long>();
   }
   EXPECT_EQ(4, tracer().events().size());
   {
@@ -184,24 +184,70 @@ TEST(CrvTest, Value)
   }
   EXPECT_EQ(11, tracer().events().size());
   {
-    // assignment operator with another lvalue
+    // assignment operator with another external
     v0 = v0;
   }
   EXPECT_EQ(13, tracer().events().size());
   {
     // copy constructor
-    Lvalue<int> v1 = v0;
+    External<int> v1 = v0;
   }
   EXPECT_EQ(15, tracer().events().size());
   {
-    Lvalue<int> v1 = 1;
+    External<int> v1 = 1;
   }
   EXPECT_EQ(16, tracer().events().size());
   {
-    Rvalue<bool> c(v0 < 0);
+    Internal<bool> c(v0 < 0);
     !std::move(c);
   }
   EXPECT_EQ(17, tracer().events().size());
+  {
+    Internal<int> internal(2);
+    internal = 3;
+  }
+  EXPECT_EQ(17, tracer().events().size());
+  {
+    Internal<int> internal(v0);
+  }
+  EXPECT_EQ(18, tracer().events().size());
+  {
+    Internal<int> internal(2);
+    internal = v0;
+  }
+  EXPECT_EQ(19, tracer().events().size());
+  {
+    Internal<int> internal(2);
+    internal = internal;
+  }
+  EXPECT_EQ(19, tracer().events().size());
+  {
+    Internal<long> internal(2L);
+    internal = make_temporary_internal<long>();
+  }
+  EXPECT_EQ(19, tracer().events().size());
+  {
+    Internal<long> lhs(2L);
+    Internal<int> rhs(7);
+    Internal<int> rhs_(rhs);
+    lhs + rhs;
+    lhs + make_temporary_internal<int>();
+    make_temporary_internal<int>() + rhs;
+    lhs + 3;
+    3L + rhs;
+    -lhs;
+  }
+  EXPECT_EQ(19, tracer().events().size());
+  {
+    Internal<long> internal(2L);
+    v0 + internal;
+  }
+  EXPECT_EQ(20, tracer().events().size());
+  {
+    Internal<int> internal(2L);
+    internal + v0;
+  }
+  EXPECT_EQ(21, tracer().events().size());
 
   EventIdentifier event_id = 0;
   for(const Event& e : tracer().events())
@@ -215,7 +261,7 @@ TEST(CrvTest, SatInsideThread)
   tracer().reset();
   Encoder encoder;
 
-  Lvalue<int> i = 1;
+  External<int> i = 1;
   i = 2;
   tracer().append_thread_begin_event();
   encoder.add(i == 2);
@@ -230,7 +276,7 @@ TEST(CrvTest, UnsatInsideThread)
   tracer().reset();
   Encoder encoder;
 
-  Lvalue<int> i = 1;
+  External<int> i = 1;
   i = 2;
   tracer().append_thread_begin_event();
   encoder.add(i == 3);
@@ -240,62 +286,45 @@ TEST(CrvTest, UnsatInsideThread)
   EXPECT_EQ(smt::unsat, encoder.solver().check());
 }
 
-TEST(CrvTest, SatGuard)
+TEST(CrvTest, Guard)
 {
   tracer().reset();
   Encoder encoder;
 
-  Lvalue<int> i;
+  External<int> i;
   tracer().append_guard(i < 3);
-  encoder.add(i == 2);
 
-  encoder.encode(tracer());
-  EXPECT_EQ(smt::sat, encoder.solver().check());
-}
-
-TEST(CrvTest, UnsatGuard)
-{
-  tracer().reset();
-  Encoder encoder;
-
-  Lvalue<int> i;
-  tracer().append_guard(i < 3);
-  encoder.add(i == 3);
-
-  encoder.encode(tracer());
-  EXPECT_EQ(smt::unsat, encoder.solver().check());
+  EXPECT_EQ(smt::unsat, encoder.check(i == 3, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(i == 2, tracer()));
 }
 
 TEST(CrvTest, ThinAir) {
   Encoder encoder;
   tracer().reset();
 
-  Lvalue<int> x(3);
+  External<int> x(3);
 
-  encoder.add(x == 42);
-  encoder.encode(tracer());
-
-  EXPECT_EQ(2, tracer().events().size());
-  EXPECT_EQ(smt::unsat, encoder.solver().check());
+  EXPECT_EQ(smt::unsat, encoder.check(x == 42, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(x == 3, tracer()));
+  EXPECT_EQ(3, tracer().events().size());
 }
 
 TEST(CrvTest, ThinAirWithThread) {
   Encoder encoder;
   tracer().reset();
 
-  Lvalue<int> x(3);
+  External<int> x(3);
   tracer().append_thread_begin_event();
   x = 7;
   tracer().append_thread_end_event();
 
-  encoder.add(x == 42);
-  encoder.encode(tracer());
-
-  EXPECT_EQ(6, tracer().events().size());
-  EXPECT_EQ(smt::unsat, encoder.solver().check());
+  EXPECT_EQ(smt::unsat, encoder.check(x == 42, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(x == 7, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(x == 3, tracer()));
+  EXPECT_EQ(8, tracer().events().size());
 }
 
-TEST(CrvTest, SatFib5)
+TEST(CrvTest, Fib5)
 {
   constexpr unsigned N = 5;
 
@@ -303,7 +332,7 @@ TEST(CrvTest, SatFib5)
   Encoder encoder;
   int k;
 
-  Lvalue<int> i = 1, j = 1;
+  External<int> i = 1, j = 1;
   tracer().append_thread_begin_event();
   for (k = 0; k < N; k++) {
     i = i + j;
@@ -315,129 +344,149 @@ TEST(CrvTest, SatFib5)
     j = j + i;
   }
   tracer().append_thread_end_event();
-  encoder.add(144 < i || 144 == i || 144 < j || 144 == j);
 
-  encoder.encode(tracer());
-  EXPECT_EQ(smt::sat, encoder.solver().check());
+  EXPECT_EQ(smt::unsat, encoder.check(144 < i || 144 < j, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(
+    144 < i || 144 == i || 144 < j || 144 == j, tracer()));
 }
 
-TEST(CrvTest, UnsatFib5)
-{
-  constexpr unsigned N = 5;
-
-  tracer().reset();
-  Encoder encoder;
-  int k;
-
-  Lvalue<int> i = 1, j = 1;
-  tracer().append_thread_begin_event();
-  for (k = 0; k < N; k++) {
-    i = i + j;
-  }
-  tracer().append_thread_end_event();
-
-  tracer().append_thread_begin_event();
-  for (k = 0; k < N; k++) {
-    j = j + i;
-  }
-  tracer().append_thread_end_event();
-  encoder.add(144 < i || 144 < j);
-
-  encoder.encode(tracer());
-  EXPECT_EQ(smt::unsat, encoder.solver().check());
-}
-
-TEST(CrvTest, SatStackApi)
+TEST(CrvTest, StackApi)
 {
   tracer().reset();
   Encoder encoder;
 
-  Lvalue<int> v;
+  External<int> v;
   v = 3;
   tracer().append_push_event(v);
-  encoder.add(3 == tracer().append_pop_event(v));
 
-  encoder.encode(tracer());
-  EXPECT_EQ(smt::sat, encoder.solver().check());
+  const Internal<int> internal(tracer().append_pop_event(v));
+  EXPECT_EQ(smt::unsat, encoder.check(3 != internal, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(3 == internal, tracer()));
 }
 
-TEST(CrvTest, UnsatStackApi)
+TEST(CrvTest, StackLifo1)
 {
   tracer().reset();
   Encoder encoder;
 
-  Lvalue<int> v;
-  v = 3;
-  tracer().append_push_event(v);
-  encoder.add(3 != tracer().append_pop_event(v));
-
-  encoder.encode(tracer());
-  EXPECT_EQ(smt::unsat, encoder.solver().check());
-}
-
-TEST(CrvTest, SatStackLifo1)
-{
-  tracer().reset();
-  Encoder encoder;
-
-  Lvalue<int> v;
+  External<int> v;
   v = 3;
   tracer().append_push_event(v);
   v = 5;
   tracer().append_push_event(v);
-  encoder.add(5 == tracer().append_pop_event(v));
 
-  encoder.encode(tracer());
-  EXPECT_EQ(smt::sat, encoder.solver().check());
+  const Internal<int> internal(tracer().append_pop_event(v));
+  EXPECT_EQ(smt::unsat, encoder.check(3 == internal, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(5 == internal, tracer()));
 }
 
-TEST(CrvTest, UnsatStackLifo1)
+TEST(CrvTest, StackLifo2)
 {
   tracer().reset();
   Encoder encoder;
 
-  Lvalue<int> v;
-  v = 3;
-  tracer().append_push_event(v);
-  v = 5;
-  tracer().append_push_event(v);
-  encoder.add(3 == tracer().append_pop_event(v));
-
-  encoder.encode(tracer());
-  EXPECT_EQ(smt::unsat, encoder.solver().check());
-}
-
-TEST(CrvTest, SatStackLifo2)
-{
-  tracer().reset();
-  Encoder encoder;
-
-  Lvalue<int> v;
+  External<int> v;
   v = 3;
   tracer().append_push_event(v);
   v = 5;
   tracer().append_push_event(v);
   tracer().append_pop_event(v);
-  encoder.add(3 == tracer().append_pop_event(v));
 
-  encoder.encode(tracer());
-  EXPECT_EQ(smt::sat, encoder.solver().check());
+  const Internal<int> internal(tracer().append_pop_event(v));
+  EXPECT_EQ(smt::unsat, encoder.check(3 != internal, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(3 == internal, tracer()));
 }
 
-TEST(CrvTest, UnsatStackLifo2)
+TEST(CrvTest, ThreeThreadsReadWriteScalarExternal)
 {
   tracer().reset();
   Encoder encoder;
 
-  Lvalue<int> v;
-  v = 3;
-  tracer().append_push_event(v);
-  v = 5;
-  tracer().append_push_event(v);
-  tracer().append_pop_event(v);
-  encoder.add(3 != tracer().append_pop_event(v));
+  // Declare shared variable initialized by the main thread
+  External<char> x('\0');
 
-  encoder.encode(tracer());
-  EXPECT_EQ(smt::unsat, encoder.solver().check());
+  // Record first child thread
+  tracer().append_thread_begin_event();
+
+  x = 'P';
+
+  tracer().append_thread_end_event();
+
+  // Record second child thread
+  tracer().append_thread_begin_event();
+
+  x = 'Q';
+
+  tracer().append_thread_end_event();
+
+  Internal<char> a(x);
+  EXPECT_EQ(smt::unsat, encoder.check(!(a == '\0' || a == 'P' || a == 'Q'), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(!(a == '\0'), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(!(a == 'P'), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(!(a == 'Q'), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(!(a == 'P' || a == 'Q'), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(!(a == '\0' || a == 'P'), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(!(a == '\0' || a == 'Q'), tracer()));
 }
 
+TEST(CrvTest, SingleThreadWithExternal1)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<char> x;
+  Internal<char> a('\0');
+
+  x = 'A';
+  a = x;
+
+  EXPECT_EQ(smt::unsat, encoder.check(a != 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'A', tracer()));
+}
+
+TEST(CrvTest, SingleThreadWithExternal2)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<char> x;
+  Internal<char> a('\0');
+
+  x = 'A';
+  x = 'B';
+  a = x;
+
+  EXPECT_EQ(smt::unsat, encoder.check(a == 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer()));
+}
+
+TEST(CrvTest, CopyInternaltoInternal)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Internal<char> a = 'A';
+  Internal<char> b = a;
+
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == 'A'), tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == a), tracer()));
+
+  a = 'B';
+  EXPECT_EQ(smt::sat, encoder.check(!(b == a), tracer()));
+}
+
+TEST(CrvTest, CopyExternaltoInternal)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<char> a = 'A';
+  Internal<char> b = a;
+
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == 'A'), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
+
+  a = 'B';
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == 'A'), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
+}
