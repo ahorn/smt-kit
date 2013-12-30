@@ -18,14 +18,14 @@ TEST(CrvTest, Event)
   tracer().reset();
 
   EXPECT_TRUE(tracer().events().empty());
-  Event e(READ_EVENT, 2, 3, 5, smt::any<smt::Bv<char>>("a"),
-    smt::literal<smt::Bool>(true));
+  Event e(READ_EVENT, 2, 3, 5, smt::literal<smt::Bool>(true),
+    smt::any<smt::Bv<char>>("a"));
   EXPECT_EQ(READ_EVENT, e.kind);
   EXPECT_EQ(2, e.event_id);
   EXPECT_EQ(3, e.thread_id);
   EXPECT_EQ(5, e.address);
-  EXPECT_FALSE(e.term.is_null());
   EXPECT_FALSE(e.guard.is_null());
+  EXPECT_FALSE(e.term.is_null());
   EXPECT_TRUE(tracer().events().empty());
 }
 
@@ -46,40 +46,39 @@ TEST(CrvTest, Tracer)
   tracer.append_nondet_write_event(external0);
   EXPECT_EQ(1, tracer.events().size());
   EXPECT_EQ(1, tracer.per_address_map().size());
-  EXPECT_EQ(0, tracer.per_address_map().at(external0.address).reads.size());
-  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).writes.size());
+  EXPECT_EQ(0, tracer.per_address_map().at(external0.address).reads().size());
+  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).writes().size());
 
   tracer.append_read_event(external0);
   EXPECT_EQ(2, tracer.events().size());
   EXPECT_EQ(1, tracer.per_address_map().size());
-  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).reads.size());
-  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).writes.size());
+  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).reads().size());
+  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).writes().size());
 
   tracer.append_write_event(external1);
   EXPECT_EQ(3, tracer.events().size());
   EXPECT_EQ(2, tracer.per_address_map().size());
 
-  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).reads.size());
-  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).reads.front()->event_id);
+  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).reads().size());
+  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).reads().front()->event_id);
 
-  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).writes.size());
-  EXPECT_EQ(0, tracer.per_address_map().at(external0.address).writes.front()->event_id);
+  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).writes().size());
+  EXPECT_EQ(0, tracer.per_address_map().at(external0.address).writes().front()->event_id);
 
-  EXPECT_EQ(0, tracer.per_address_map().at(external1.address).reads.size());
+  EXPECT_EQ(0, tracer.per_address_map().at(external1.address).reads().size());
 
-  EXPECT_EQ(1, tracer.per_address_map().at(external1.address).writes.size());
-  EXPECT_EQ(2, tracer.per_address_map().at(external1.address).writes.front()->event_id);
+  EXPECT_EQ(1, tracer.per_address_map().at(external1.address).writes().size());
+  EXPECT_EQ(2, tracer.per_address_map().at(external1.address).writes().front()->event_id);
 
   const ThreadIdentifier new_thread_id(tracer.append_thread_begin_event());
   EXPECT_EQ(1, new_thread_id);
   EXPECT_EQ(5, tracer.events().size());
 
   EventList::const_iterator iter = --tracer.events().cend();
-  const EventIdentifier event_id(iter->event_id);
   EXPECT_EQ(new_thread_id, iter->thread_id);
 
   iter--;
-  EXPECT_EQ(event_id, iter->event_id);
+  EXPECT_EQ(3, iter->event_id);
   EXPECT_EQ(new_thread_id - 1, iter->thread_id);
 
   const ThreadIdentifier old_thread_id(tracer.append_thread_end_event());
@@ -87,7 +86,7 @@ TEST(CrvTest, Tracer)
   EXPECT_EQ(6, tracer.events().size());
 
   iter = --tracer.events().cend();
-  EXPECT_EQ(event_id + 1, iter->event_id);
+  EXPECT_EQ(4, iter->event_id);
   EXPECT_EQ(new_thread_id, iter->thread_id);
 }
 
@@ -397,7 +396,7 @@ TEST(CrvTest, StackLifo2)
   EXPECT_EQ(smt::sat, encoder.check(3 == internal, tracer()));
 }
 
-TEST(CrvTest, ThreeThreadsReadWriteScalarExternal)
+TEST(CrvTest, ThreeThreadsReadWriteExternal)
 {
   tracer().reset();
   Encoder encoder;
@@ -490,3 +489,4 @@ TEST(CrvTest, CopyExternaltoInternal)
   EXPECT_EQ(smt::unsat, encoder.check(!(b == 'A'), tracer()));
   EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
 }
+

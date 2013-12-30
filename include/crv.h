@@ -33,7 +33,7 @@ enum EventKind : unsigned short
 };
 
 // Positive unless sync event
-typedef uintptr_t Address;
+typedef unsigned long Address;
 typedef unsigned long EventIdentifier;
 typedef unsigned ThreadIdentifier;
 
@@ -44,26 +44,26 @@ public:
   const EventIdentifier event_id;
   const ThreadIdentifier thread_id;
   const Address address;
-  const smt::UnsafeTerm term;
   const smt::Bool guard;
+  const smt::UnsafeTerm term;
 
   Event(
     const EventKind kind_arg,
     const EventIdentifier event_id_arg,
     const ThreadIdentifier thread_id_arg,
     const Address address_arg,
-    const smt::UnsafeTerm& term_arg,
-    const smt::Bool guard_arg)
+    const smt::Bool guard_arg,
+    const smt::UnsafeTerm& term_arg)
   : kind(kind_arg),
     event_id(event_id_arg),
     thread_id(thread_id_arg),
     address(address_arg),
-    term(term_arg),
-    guard(guard_arg)
+    guard(guard_arg),
+    term(term_arg)
   {
+    assert(!guard.is_null());
     assert(is_sync() || !term.is_null());
     assert(is_thread_begin() || is_thread_end() || 0 < address);
-    assert(!guard.is_null());
   }
 
   bool is_read() const { return kind == READ_EVENT; }
@@ -79,13 +79,60 @@ typedef std::list<Event> EventList;
 typedef EventList::const_iterator EventIter;
 typedef std::vector<EventIter> EventIterList;
 
-struct EventKinds
+class EventKinds
 {
-  EventIterList reads;
-  EventIterList writes;
-  EventIterList pops;
-  EventIterList pushes;
+private:
+  EventIterList m_reads;
+  EventIterList m_writes;
+  EventIterList m_pops;
+  EventIterList m_pushes;
+  EventIterList m_loads;
+  EventIterList m_stores;
+
+public:
+  EventKinds()
+  : m_reads(),
+    m_writes(),
+    m_pops(),
+    m_pushes(),
+    m_loads(),
+    m_stores() {}
+
+  // See member function template specializations
+  template<EventKind kind>
+  void push_back(const EventIter e_iter) { /* skip */ }
+
+  const EventIterList& reads()  const { return m_reads;  }
+  const EventIterList& writes() const { return m_writes; }
+  const EventIterList& pops()   const { return m_pops;   }
+  const EventIterList& pushes() const { return m_pushes; }
+  const EventIterList& loads()  const { return m_loads;  }
+  const EventIterList& stores() const { return m_stores; }
 };
+
+template<> inline
+void EventKinds::push_back<READ_EVENT>(const EventIter e_iter)
+{
+  m_reads.push_back(e_iter);
+}
+
+template<> inline
+void EventKinds::push_back<WRITE_EVENT>(const EventIter e_iter)
+{
+  m_writes.push_back(e_iter);
+}
+
+template<> inline
+void EventKinds::push_back<POP_EVENT>(const EventIter e_iter)
+{
+  m_pops.push_back(e_iter);
+}
+
+template<> inline
+void EventKinds::push_back<PUSH_EVENT>(const EventIter e_iter)
+{
+  m_pushes.push_back(e_iter);
+}
 
 typedef std::map<Address, EventKinds> PerAddressMap;
 typedef std::map<ThreadIdentifier, EventIterList> PerThreadMap;
@@ -141,6 +188,8 @@ private:
   FlipList m_flips;
   FlipIter m_flip_iter;
 
+  Address m_next_address;
+
   template<typename T>
   typename Smt<T>::Sort make_value_symbol()
   {
@@ -149,35 +198,22 @@ private:
       std::to_string(m_event_id_cnt++));
   }
 
-  void append_event(Event&& e)
+  template<EventKind kind>
+  void append_event(
+    const EventIdentifier event_id,
+    const Address address,
+    const smt::UnsafeTerm& term)
   {
     assert(!m_guard.is_null());
-    m_events.push_back(std::move(e));
+
+    const ThreadIdentifier thread_id(m_thread_id_stack.top());
+    m_events.push_back(Event(kind, event_id, thread_id,
+      address, m_guard, term));
 
     const EventIter e_iter(--m_events.cend());
-    EventKinds& a(m_per_address_map[e_iter->address]);
-    switch(e_iter->kind)
-    {
-    case READ_EVENT: 
-      a.reads.push_back(e_iter);
-      break;
-    case WRITE_EVENT: 
-      a.writes.push_back(e_iter);
-      break;
-    case POP_EVENT: 
-      a.pops.push_back(e_iter);
-      break;
-    case PUSH_EVENT: 
-      a.pushes.push_back(e_iter);
-      break;
-    case THREAD_BEGIN_EVENT: 
-    case THREAD_END_EVENT: 
-      break;
-    default:
-      assert(false);
-    }
-
-    m_per_thread_map[m_thread_id_stack.top()].push_back(e_iter);
+    EventKinds& a_event_kinds(m_per_address_map[e_iter->address]);
+    a_event_kinds.push_back<kind>(e_iter);
+    m_per_thread_map[thread_id].push_back(e_iter);
   }
 
 public:
@@ -191,7 +227,8 @@ public:
     m_guard(smt::literal<smt::Bool>(true)),
     m_flip_cnt(0),
     m_flips(),
-    m_flip_iter(m_flips.cbegin())
+    m_flip_iter(m_flips.cbegin()),
+    m_next_address(1)
   {
     m_thread_id_stack.push(m_thread_id_cnt++);
   }
@@ -229,6 +266,8 @@ public:
     m_flip_cnt = 0;
     m_flips.clear();
     m_flip_iter = m_flips.cbegin();
+
+    m_next_address = 1;
   }
 
   /// Depth-first search strategy
@@ -260,41 +299,32 @@ public:
     return m_flip_cnt;
   }
 
+  Address next_address()
+  {
+    assert(m_next_address < std::numeric_limits<Address>::max());
+    return m_next_address++;
+  }
+
   bool append_guard(const Internal<bool>& internal);
 
   ThreadIdentifier append_thread_begin_event()
   {
     const EventIdentifier event_id(m_event_id_cnt++);
-    append_event(
-      Event(THREAD_BEGIN_EVENT,
-            event_id,
-            m_thread_id_stack.top(),
-            0,
-            smt::UnsafeTerm(),
-            m_guard));
+    append_event<THREAD_BEGIN_EVENT>(
+      event_id, 0, smt::UnsafeTerm());
 
     m_thread_id_stack.push(m_thread_id_cnt++);
 
-    append_event(
-      Event(THREAD_BEGIN_EVENT,
-            event_id,
-            m_thread_id_stack.top(),
-            0,
-            smt::UnsafeTerm(),
-            m_guard));
+    append_event<THREAD_BEGIN_EVENT>(
+      event_id, 0, smt::UnsafeTerm());
 
     return m_thread_id_stack.top();
   }
 
   ThreadIdentifier append_thread_end_event()
   {
-    append_event(
-      Event(THREAD_END_EVENT,
-            m_event_id_cnt++,
-            m_thread_id_stack.top(),
-            0,
-            smt::UnsafeTerm(),
-            m_guard));
+    append_event<THREAD_END_EVENT>(
+      m_event_id_cnt++, 0, smt::UnsafeTerm());
 
     m_thread_id_stack.pop();
 
@@ -306,18 +336,13 @@ public:
     const EventIter e_iter = m_per_thread_map.at(thread_id).back();
     assert(e_iter->thread_id != m_thread_id_stack.top());
 
-    append_event(
-      Event(THREAD_END_EVENT,
-            e_iter->event_id,
-            m_thread_id_stack.top(),
-            0,
-            smt::UnsafeTerm(),
-            m_guard));
+    append_event<THREAD_END_EVENT>(
+      e_iter->event_id, 0, smt::UnsafeTerm());
   }
 
   /// Creates a new term for the read event
   template<typename T>
-  Internal<T> append_read_event(const External<T>&);
+  typename Smt<T>::Sort append_read_event(const External<T>&);
 
   /// Creates a new term for the write event
   template<typename T>
@@ -329,7 +354,7 @@ public:
 
   /// Creates a new term for the pop event
   template<typename T>
-  Internal<T> append_pop_event(const External<T>&);
+  typename Smt<T>::Sort append_pop_event(const External<T>&);
 
   /// Uses external's term for the new push event
   template<typename T>
@@ -451,8 +476,7 @@ public:
   Internal(const External<T>& other)
   : term()
   {
-    Internal<T> new_internal = tracer().append_read_event(other);
-    term = std::move(new_internal.term);
+    term = tracer().append_read_event(other);
   }
 
   Internal& operator=(Internal<T>&& other)
@@ -472,17 +496,52 @@ template<typename T>
 class External
 {
 public:
-  typename Smt<T>::Sort term;
   const Address address;
+  typename Smt<T>::Sort term;
 
-  External();
-  External(T);
-  External(Internal<T>&&);
-  External(const External<T>&);
+  External()
+  : address(tracer().next_address()),
+    term()
+  {
+    tracer().append_nondet_write_event(*this);
+  }
+
+  External(T v)
+  : address(tracer().next_address()),
+    term(smt::literal<typename Smt<T>::Sort>(v))
+  {
+    tracer().append_write_event(*this);
+  }
+
+  External(Internal<T>&& other)
+  : address(tracer().next_address()),
+    term(std::move(other.term))
+  {
+    tracer().append_write_event(*this);
+  }
+
+  /*
+   * Careful: optimizations with copy elision (e.g. RVO)
+   * break the side effects of this copy constructor.
+   */
+  External(const External& other)
+  : address(tracer().next_address()),
+    term()
+  {
+    term = tracer().append_read_event(other);
+    tracer().append_write_event(*this);
+  }
 
   External& operator=(T v)
   {
     term = smt::literal<typename Smt<T>::Sort>(v);
+    tracer().append_write_event(*this);
+    return *this;
+  }
+
+  External& operator=(const Internal<T>& other)
+  {
+    term = other.term;
     tracer().append_write_event(*this);
     return *this;
   }
@@ -496,8 +555,7 @@ public:
 
   External& operator=(const External& other)
   {
-    Internal<T> new_internal = tracer().append_read_event(other);
-    term = std::move(new_internal.term);
+    term = tracer().append_read_event(other);
     tracer().append_write_event(*this);
     return *this;
   }
@@ -526,109 +584,56 @@ bool Tracer::append_guard(const Internal<bool>& internal)
 }
 
 template<typename T>
-Internal<T> Tracer::append_read_event(const External<T>& external)
+typename Smt<T>::Sort Tracer::append_read_event(const External<T>& external)
 {
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
   // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
-  append_event(
-    Event(READ_EVENT,
-          event_id,
-          m_thread_id_stack.top(),
-          external.address,
-          term,
-          m_guard));
+  append_event<READ_EVENT>(
+    event_id, external.address, term);
 
-  return Internal<T>(std::move(term));
+  return term;
 }
 
 template<typename T>
 void Tracer::append_nondet_write_event(const External<T>& external)
 {
   assert(external.term.is_null());
+
+  // since evaluation order of arguments is undefined ...
   const EventIdentifier event_id(m_event_id_cnt);
-  append_event(
-    Event(WRITE_EVENT,
-          event_id,
-          m_thread_id_stack.top(),
-          external.address,
-          make_value_symbol<T>(),
-          m_guard));
+  append_event<WRITE_EVENT>(
+    event_id, external.address, make_value_symbol<T>());
 }
 
 template<typename T>
 void Tracer::append_write_event(const External<T>& external)
 {
-  append_event(
-    Event(WRITE_EVENT,
-          m_event_id_cnt++,
-          m_thread_id_stack.top(),
-          external.address,
-          external.term,
-          m_guard));
+  assert(!external.term.is_null());
+
+  append_event<WRITE_EVENT>(
+    m_event_id_cnt++, external.address, external.term);
 }
 
 template<typename T>
-Internal<T> Tracer::append_pop_event(const External<T>& external)
+typename Smt<T>::Sort Tracer::append_pop_event(const External<T>& external)
 {
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
   // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
-  append_event(
-    Event(POP_EVENT,
-          event_id,
-          m_thread_id_stack.top(),
-          external.address,
-          term,
-          m_guard));
+  append_event<POP_EVENT>(
+    event_id, external.address, term);
 
-  return Internal<T>(std::move(term));
+  return term;
 }
 
 template<typename T>
 void Tracer::append_push_event(const External<T>& external)
 {
-  append_event(
-    Event(PUSH_EVENT,
-          m_event_id_cnt++,
-          m_thread_id_stack.top(),
-          external.address,
-          external.term,
-          m_guard));
-}
+  assert(!external.term.is_null());
 
-template<typename T>
-External<T>::External()
-: term(),
-  address(reinterpret_cast<Address>(this))
-{
-  tracer().append_nondet_write_event(*this);
-}
-
-template<typename T>
-External<T>::External(T v)
-: term(smt::literal<typename Smt<T>::Sort>(v)),
-  address(reinterpret_cast<Address>(this))
-{
-  tracer().append_write_event(*this);
-}
-
-template<typename T>
-External<T>::External(Internal<T>&& other)
-: term(std::move(other.term)),
-  address(reinterpret_cast<Address>(this))
-{
-  tracer().append_write_event(*this);
-}
-
-template<typename T>
-External<T>::External(const External<T>& other)
-: term(),
-  address(reinterpret_cast<Address>(this))
-{
-  Internal<T> new_internal = tracer().append_read_event(other);
-  term = std::move(new_internal.term);
-  tracer().append_write_event(*this);
+  append_event<PUSH_EVENT>(
+    m_event_id_cnt++, external.address, external.term);
 }
 
 }
@@ -654,7 +659,7 @@ External<T>::External(const External<T>& other)
   inline auto operator op(const crv::External<T>& arg)                          \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, T>::Type>        \
   {                                                                             \
-    crv::Internal<T> arg_internal = crv::tracer().append_read_event(arg);       \
+    crv::Internal<T> arg_internal(crv::tracer().append_read_event(arg));        \
     return op std::move(arg_internal);                                          \
   }                                                                             \
 
@@ -757,7 +762,7 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
   const crv::Internal<V>& rarg)                                                 \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> larg_internal = crv::tracer().append_read_event(larg);     \
+    crv::Internal<U> larg_internal(crv::tracer().append_read_event(larg));      \
     return std::move(larg_internal) op rarg;                                    \
   }                                                                             \
                                                                                 \
@@ -767,7 +772,7 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
   crv::Internal<V>&& rarg)                                                      \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> larg_internal = crv::tracer().append_read_event(larg);     \
+    crv::Internal<U> larg_internal(crv::tracer().append_read_event(larg));      \
     return std::move(larg_internal) op std::move(rarg);                         \
   }                                                                             \
                                                                                 \
@@ -777,7 +782,7 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::External<V>& rarg)                                               \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<V> rarg_internal = crv::tracer().append_read_event(rarg);     \
+    crv::Internal<U> rarg_internal(crv::tracer().append_read_event(rarg));      \
     return larg op std::move(rarg_internal);                                    \
   }                                                                             \
                                                                                 \
@@ -787,7 +792,7 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::External<V>& rarg)                                               \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<V> rarg_internal = crv::tracer().append_read_event(rarg);     \
+    crv::Internal<V> rarg_internal(crv::tracer().append_read_event(rarg));      \
     return std::move(larg) op std::move(rarg_internal);                         \
   }                                                                             \
                                                                                 \
@@ -797,8 +802,8 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::External<V>& rarg)                                               \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> larg_internal = crv::tracer().append_read_event(larg);     \
-    crv::Internal<V> rarg_internal = crv::tracer().append_read_event(rarg);     \
+    crv::Internal<U> larg_internal(crv::tracer().append_read_event(larg));      \
+    crv::Internal<V> rarg_internal(crv::tracer().append_read_event(rarg));      \
     return std::move(larg_internal) op std::move(rarg_internal);                \
   }                                                                             \
                                                                                 \
@@ -809,7 +814,7 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     V literal)                                                                  \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> larg_internal = crv::tracer().append_read_event(larg);     \
+    crv::Internal<U> larg_internal(crv::tracer().append_read_event(larg));      \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
     return crv::Internal<ReturnType>(std::move(larg_internal.term) op literal); \
   }                                                                             \
@@ -821,7 +826,7 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::External<V>& rarg)                                               \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<V> rarg_internal = crv::tracer().append_read_event(rarg);     \
+    crv::Internal<V> rarg_internal(crv::tracer().append_read_event(rarg));      \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
     return crv::Internal<ReturnType>(literal op std::move(rarg_internal.term)); \
   }                                                                             \
@@ -957,12 +962,12 @@ private:
     for (const PerAddressMap::value_type& pair : per_address_map)
     {
       const EventKinds& a = pair.second;
-      for (const EventIter r_iter : a.reads)
+      for (const EventIter r_iter : a.reads())
       {
         const Event& r = *r_iter;
 
         smt::UnsafeTerm or_rf(smt::literal<smt::Bool>(false));
-        for (const EventIter w_iter : a.writes)
+        for (const EventIter w_iter : a.writes())
         {
           const Event& w = *w_iter;
 
@@ -988,19 +993,19 @@ private:
     for (const PerAddressMap::value_type& pair : per_address_map)
     {
       const EventKinds& a = pair.second;
-      for (const EventIter r_iter : a.reads)
+      for (const EventIter r_iter : a.reads())
       {
         const Event& r = *r_iter;
 
-        for (EventIterList::const_iterator writes_iter = a.writes.cbegin();
-             writes_iter != a.writes.cend();
+        for (EventIterList::const_iterator writes_iter = a.writes().cbegin();
+             writes_iter != a.writes().cend();
              writes_iter++)
         {
           const Event& w = **writes_iter;
 
           EventIterList::const_iterator writes_prime_iter = writes_iter;
           for (writes_prime_iter++;
-               writes_prime_iter != a.writes.cend();
+               writes_prime_iter != a.writes().cend();
                writes_prime_iter++)
           {
             const Event& w_prime = **writes_prime_iter;
@@ -1023,12 +1028,12 @@ private:
     for (const PerAddressMap::value_type& pair : per_address_map)
     {
       const EventKinds& a = pair.second;
-      if (a.writes.size() < 2)
+      if (a.writes().size() < 2)
         continue;
 
       smt::UnsafeTerms terms;
-      terms.reserve(a.writes.size());
-      for (const EventIter w_iter : a.writes)
+      terms.reserve(a.writes().size());
+      for (const EventIter w_iter : a.writes())
       {
         const Event& w = *w_iter;
         terms.push_back(time(w).term());
@@ -1053,12 +1058,12 @@ private:
     for (const PerAddressMap::value_type& pair : per_address_map)
     {
       const EventKinds& a = pair.second;
-      for (const EventIter pop_iter : a.pops)
+      for (const EventIter pop_iter : a.pops())
       {
         const Event& pop = *pop_iter;
 
         smt::UnsafeTerm or_pf(smt::literal<smt::Bool>(false));
-        for (const EventIter push_iter : a.pushes)
+        for (const EventIter push_iter : a.pushes())
         {
           const Event& push = *push_iter;
           const smt::Bool pf_bool(flow_bool(s_pf_prefix, push, pop));
@@ -1082,11 +1087,11 @@ private:
     for (const PerAddressMap::value_type& pair : per_address_map)
     {
       const EventKinds& a = pair.second;
-      if (a.pops.size() < 2)
+      if (a.pops().size() < 2)
         continue;
 
-      smt::Terms<TimeSort> terms(a.pops.size());
-      for (const EventIter pop_iter : a.pops)
+      smt::Terms<TimeSort> terms(a.pops().size());
+      for (const EventIter pop_iter : a.pops())
       {
         const Event& pop = *pop_iter;
         terms.push_back(
@@ -1104,23 +1109,23 @@ private:
     for (const PerAddressMap::value_type& pair : per_address_map)
     {
       const EventKinds& a = pair.second;
-      for (const EventIter push_iter : a.pushes)
+      for (const EventIter push_iter : a.pushes())
       {
         const Event& push = *push_iter;
 
-        for (const EventIter push_prime_iter : a.pushes)
+        for (const EventIter push_prime_iter : a.pushes())
         {
           const Event& push_prime = *push_prime_iter;
           const smt::Bool pushes_order(
             time(push).happens_before(time(push_prime)));
 
-          for (const EventIter pop_iter : a.pops)
+          for (const EventIter pop_iter : a.pops())
           {
             const Event& pop = *pop_iter;
             const smt::Bool pf_bool(flow_bool(s_pf_prefix, push, pop));
 
             smt::UnsafeTerm or_pp(smt::literal<smt::Bool>(false));
-            for (const EventIter pop_prime_iter : a.pops)
+            for (const EventIter pop_prime_iter : a.pops())
             {
               const Event& pop_prime = *pop_prime_iter;
               const smt::Bool pf_prime_bool(
