@@ -28,6 +28,8 @@ enum EventKind : unsigned short
   WRITE_EVENT,
   POP_EVENT,
   PUSH_EVENT,
+  LOAD_EVENT,
+  STORE_EVENT,
   THREAD_BEGIN_EVENT = 8,
   THREAD_END_EVENT
 };
@@ -46,6 +48,7 @@ public:
   const Address address;
   const smt::Bool guard;
   const smt::UnsafeTerm term;
+  const smt::UnsafeTerm offset_term;
 
   Event(
     const EventKind kind_arg,
@@ -53,13 +56,15 @@ public:
     const ThreadIdentifier thread_id_arg,
     const Address address_arg,
     const smt::Bool guard_arg,
-    const smt::UnsafeTerm& term_arg)
+    const smt::UnsafeTerm& term_arg,
+    const smt::UnsafeTerm& offset_term_arg)
   : kind(kind_arg),
     event_id(event_id_arg),
     thread_id(thread_id_arg),
     address(address_arg),
     guard(guard_arg),
-    term(term_arg)
+    term(term_arg),
+    offset_term(offset_term_arg)
   {
     assert(!guard.is_null());
     assert(is_sync() || !term.is_null());
@@ -134,6 +139,18 @@ void EventKinds::push_back<PUSH_EVENT>(const EventIter e_iter)
   m_pushes.push_back(e_iter);
 }
 
+template<> inline
+void EventKinds::push_back<LOAD_EVENT>(const EventIter e_iter)
+{
+  m_loads.push_back(e_iter);
+}
+
+template<> inline
+void EventKinds::push_back<STORE_EVENT>(const EventIter e_iter)
+{
+  m_stores.push_back(e_iter);
+}
+
 typedef std::map<Address, EventKinds> PerAddressMap;
 typedef std::map<ThreadIdentifier, EventIterList> PerThreadMap;
 
@@ -202,13 +219,14 @@ private:
   void append_event(
     const EventIdentifier event_id,
     const Address address,
-    const smt::UnsafeTerm& term)
+    const smt::UnsafeTerm& term,
+    const smt::UnsafeTerm& offset_term = smt::UnsafeTerm())
   {
     assert(!m_guard.is_null());
 
     const ThreadIdentifier thread_id(m_thread_id_stack.top());
     m_events.push_back(Event(kind, event_id, thread_id,
-      address, m_guard, term));
+      address, m_guard, term, offset_term));
 
     const EventIter e_iter(--m_events.cend());
     EventKinds& a_event_kinds(m_per_address_map[e_iter->address]);
@@ -359,6 +377,14 @@ public:
   /// Uses external's term for the new push event
   template<typename T>
   void append_push_event(const External<T>&);
+
+  /// Uses external's offset term for new load event
+  template<typename T>
+  typename Smt<T>::Sort append_load_event(const External<T>&);
+
+  /// Uses external's offset term for new store event
+  template<typename T>
+  void append_store_event(const External<T>&);
 };
 
 // Global for symbolic execution
@@ -455,6 +481,16 @@ namespace internal
   };
 }
 
+// Returns a new SMT term that can be set equal to another term
+template<typename T>
+typename Smt<T>::Sort append_input_event(const External<T>& external)
+{
+  if (external.offset_term.is_null())
+    return tracer().append_read_event(external);
+  else
+    return tracer().append_load_event(external);
+}
+
 template<typename T>
 class Internal
 {
@@ -476,7 +512,7 @@ public:
   Internal(const External<T>& other)
   : term()
   {
-    term = tracer().append_read_event(other);
+    term = append_input_event(other);
   }
 
   Internal& operator=(Internal<T>&& other)
@@ -492,30 +528,56 @@ public:
   }
 };
 
+template<typename T> class __External;
+
 template<typename T>
 class External
 {
 public:
   const Address address;
   typename Smt<T>::Sort term;
+  const Smt<size_t>::Sort offset_term;
+  typedef typename std::remove_extent<T>::type Range;
 
+private:
+  void append_output_event()
+  {
+    assert(!term.is_null());
+    if (offset_term.is_null())
+      tracer().append_write_event(*this);
+    else
+      tracer().append_store_event(*this);
+  }
+
+protected:
+  External(
+    const Address address_arg,
+    const Smt<size_t>::Sort& offset_term_arg)
+  : address(address_arg),
+    term(),
+    offset_term(offset_term_arg) {}
+
+public:
   External()
   : address(tracer().next_address()),
-    term()
+    term(),
+    offset_term()
   {
     tracer().append_nondet_write_event(*this);
   }
 
   External(T v)
   : address(tracer().next_address()),
-    term(smt::literal<typename Smt<T>::Sort>(v))
+    term(smt::literal<typename Smt<T>::Sort>(v)),
+    offset_term()
   {
     tracer().append_write_event(*this);
   }
 
   External(Internal<T>&& other)
   : address(tracer().next_address()),
-    term(std::move(other.term))
+    term(std::move(other.term)),
+    offset_term()
   {
     tracer().append_write_event(*this);
   }
@@ -526,40 +588,87 @@ public:
    */
   External(const External& other)
   : address(tracer().next_address()),
-    term()
+    term(),
+    offset_term()
   {
-    term = tracer().append_read_event(other);
+    term = append_input_event(other);
     tracer().append_write_event(*this);
   }
+
+  virtual ~External() {}
 
   External& operator=(T v)
   {
     term = smt::literal<typename Smt<T>::Sort>(v);
-    tracer().append_write_event(*this);
+    append_output_event();
     return *this;
   }
 
   External& operator=(const Internal<T>& other)
   {
     term = other.term;
-    tracer().append_write_event(*this);
+    append_output_event();
     return *this;
   }
 
   External& operator=(Internal<T>&& other)
   {
     term = std::move(other.term);
-    tracer().append_write_event(*this);
+    append_output_event();
     return *this;
   }
 
   External& operator=(const External& other)
   {
-    term = tracer().append_read_event(other);
-    tracer().append_write_event(*this);
+    term = append_input_event(other);
+    append_output_event();
     return *this;
   }
+
+  template<typename U = T, class Enable =
+    typename std::enable_if<std::is_array<U>::value>::type>
+  __External<Range> operator[](const Internal<size_t>& offset);
 };
+
+// Work around copy elision of External(const External&)
+template<typename T>
+class __External : public External<T>
+{
+public:
+  __External(
+    const Address address_arg,
+    const Smt<size_t>::Sort& offset_term_arg)
+  : External<T>(address_arg, offset_term_arg) {}
+
+  External<T>& operator=(T v)
+  {
+    return External<T>::operator=(v);
+  }
+
+  External<T>& operator=(const Internal<T>& other)
+  {
+    return External<T>::operator=(other);
+  }
+
+  External<T>& operator=(Internal<T>&& other)
+  {
+    return External<T>::operator=(std::move(other));
+  }
+
+  External<T>& operator=(const External<T>& other)
+  {
+    return External<T>::operator=(other);
+  }
+};
+
+template<typename T>
+template<typename U, class Enable>
+__External<typename External<T>::Range>
+External<T>::operator[](const Internal<size_t>& offset)
+{
+  tracer().next_address();
+  return __External<Range>(address, offset.term);
+}
 
 bool Tracer::append_guard(const Internal<bool>& internal)
 {
@@ -586,6 +695,8 @@ bool Tracer::append_guard(const Internal<bool>& internal)
 template<typename T>
 typename Smt<T>::Sort Tracer::append_read_event(const External<T>& external)
 {
+  assert(external.offset_term.is_null());
+
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
   // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
@@ -599,6 +710,7 @@ template<typename T>
 void Tracer::append_nondet_write_event(const External<T>& external)
 {
   assert(external.term.is_null());
+  assert(external.offset_term.is_null());
 
   // since evaluation order of arguments is undefined ...
   const EventIdentifier event_id(m_event_id_cnt);
@@ -610,6 +722,7 @@ template<typename T>
 void Tracer::append_write_event(const External<T>& external)
 {
   assert(!external.term.is_null());
+  assert(external.offset_term.is_null());
 
   append_event<WRITE_EVENT>(
     m_event_id_cnt++, external.address, external.term);
@@ -618,6 +731,8 @@ void Tracer::append_write_event(const External<T>& external)
 template<typename T>
 typename Smt<T>::Sort Tracer::append_pop_event(const External<T>& external)
 {
+  assert(external.offset_term.is_null());
+
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
   // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
@@ -631,9 +746,34 @@ template<typename T>
 void Tracer::append_push_event(const External<T>& external)
 {
   assert(!external.term.is_null());
+  assert(external.offset_term.is_null());
 
   append_event<PUSH_EVENT>(
     m_event_id_cnt++, external.address, external.term);
+}
+
+template<typename T>
+typename Smt<T>::Sort Tracer::append_load_event(const External<T>& external)
+{
+  assert(!external.offset_term.is_null());
+
+  const EventIdentifier event_id(m_event_id_cnt);
+  typename Smt<T>::Sort term(make_value_symbol<T>());
+  // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
+  append_event<LOAD_EVENT>(
+    event_id, external.address, term, external.offset_term);
+
+  return term;
+}
+
+template<typename T>
+void Tracer::append_store_event(const External<T>& external)
+{
+  assert(!external.term.is_null());
+  assert(!external.offset_term.is_null());
+
+  append_event<STORE_EVENT>(
+    m_event_id_cnt++, external.address, external.term, external.offset_term);
 }
 
 }
@@ -659,7 +799,7 @@ void Tracer::append_push_event(const External<T>& external)
   inline auto operator op(const crv::External<T>& arg)                          \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, T>::Type>        \
   {                                                                             \
-    crv::Internal<T> arg_internal(crv::tracer().append_read_event(arg));        \
+    crv::Internal<T> arg_internal(crv::append_input_event(arg));                \
     return op std::move(arg_internal);                                          \
   }                                                                             \
 
@@ -762,7 +902,7 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
   const crv::Internal<V>& rarg)                                                 \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> larg_internal(crv::tracer().append_read_event(larg));      \
+    crv::Internal<U> larg_internal(crv::append_input_event(larg));              \
     return std::move(larg_internal) op rarg;                                    \
   }                                                                             \
                                                                                 \
@@ -772,7 +912,7 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
   crv::Internal<V>&& rarg)                                                      \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> larg_internal(crv::tracer().append_read_event(larg));      \
+    crv::Internal<U> larg_internal(crv::append_input_event(larg));              \
     return std::move(larg_internal) op std::move(rarg);                         \
   }                                                                             \
                                                                                 \
@@ -782,7 +922,7 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::External<V>& rarg)                                               \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> rarg_internal(crv::tracer().append_read_event(rarg));      \
+    crv::Internal<U> rarg_internal(crv::append_input_event(rarg));              \
     return larg op std::move(rarg_internal);                                    \
   }                                                                             \
                                                                                 \
@@ -792,7 +932,7 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::External<V>& rarg)                                               \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<V> rarg_internal(crv::tracer().append_read_event(rarg));      \
+    crv::Internal<V> rarg_internal(crv::append_input_event(rarg));              \
     return std::move(larg) op std::move(rarg_internal);                         \
   }                                                                             \
                                                                                 \
@@ -802,8 +942,8 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::External<V>& rarg)                                               \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> larg_internal(crv::tracer().append_read_event(larg));      \
-    crv::Internal<V> rarg_internal(crv::tracer().append_read_event(rarg));      \
+    crv::Internal<U> larg_internal(crv::append_input_event(larg));              \
+    crv::Internal<V> rarg_internal(crv::append_input_event(rarg));              \
     return std::move(larg_internal) op std::move(rarg_internal);                \
   }                                                                             \
                                                                                 \
@@ -814,7 +954,7 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     V literal)                                                                  \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> larg_internal(crv::tracer().append_read_event(larg));      \
+    crv::Internal<U> larg_internal(crv::append_input_event(larg));              \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
     return crv::Internal<ReturnType>(std::move(larg_internal.term) op literal); \
   }                                                                             \
@@ -826,7 +966,7 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::External<V>& rarg)                                               \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<V> rarg_internal(crv::tracer().append_read_event(rarg));      \
+    crv::Internal<V> rarg_internal(crv::append_input_event(rarg));              \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
     return crv::Internal<ReturnType>(literal op std::move(rarg_internal.term)); \
   }                                                                             \
@@ -908,6 +1048,7 @@ private:
   static const std::string s_time_prefix;
   static const std::string s_rf_prefix;
   static const std::string s_pf_prefix;
+  static const std::string s_ldf_prefix;
 
   static std::string prefix_event_id(
     const std::string& prefix,
@@ -1166,6 +1307,122 @@ private:
     encode_stack_lifo_order(per_address_map);
   }
 
+  // Similar to "read-from" axiom except that offsets must be equal and
+  // loads from initial array return zero
+  void encode_load_from(const PerAddressMap& per_address_map)
+  {
+    smt::UnsafeTerm and_ldf(smt::literal<smt::Bool>(true));
+    for (const PerAddressMap::value_type& pair : per_address_map)
+    {
+      const EventKinds& a = pair.second;
+      for (const EventIter ld_iter : a.loads())
+      {
+        const Event& ld = *ld_iter;
+        const Time& ld_time = time(ld);
+
+        smt::UnsafeTerm and_lds(smt::literal<smt::Bool>(true));
+        smt::UnsafeTerm or_ldf(smt::literal<smt::Bool>(false));
+        for (const EventIter s_iter : a.stores())
+        {
+          const Event& s = *s_iter;
+
+          const smt::Bool sld_order(time(s).happens_before(ld_time));
+          const smt::Bool ldf_bool(flow_bool(s_ldf_prefix, s, ld));
+          const smt::UnsafeTerm sld_equality(s.term == ld.term);
+
+          // for every store s, if ld and s access the same array
+          // offset, then t!ld < t!s (i.e. ld must happen before s).
+          and_lds = and_lds and
+            smt::implies(/* if */ ld.offset_term == s.offset_term,
+                         /* then */ ld_time.happens_before(time(s)));
+
+          or_ldf = ldf_bool or or_ldf;
+
+          and_ldf = and_ldf and
+            smt::implies(
+              /* if */ ldf_bool,
+              /* then */ sld_order and s.guard and
+                sld_equality and s.offset_term == ld.offset_term);
+        }
+
+        /* initial array elements are zero */
+        smt::UnsafeTerm ld_zero(smt::literal(ld.term.sort(), 0));
+        and_ldf = and_ldf and ld.guard and smt::implies(
+          /* if */ not or_ldf,
+          /* then */ and_lds and ld.term == std::move(ld_zero));
+      }
+    }
+    unsafe_add(and_ldf);
+  }
+
+  // Similar to "from-read" axiom except that offsets must be equal
+  void encode_from_load(const PerAddressMap& per_address_map)
+  {
+    smt::UnsafeTerm and_fld(smt::literal<smt::Bool>(true));
+    for (const PerAddressMap::value_type& pair : per_address_map)
+    {
+      const EventKinds& a = pair.second;
+      for (const EventIter ld_iter : a.loads())
+      {
+        const Event& ld = *ld_iter;
+
+        for (EventIterList::const_iterator stores_iter = a.stores().cbegin();
+             stores_iter != a.stores().cend();
+             stores_iter++)
+        {
+          const Event& s = **stores_iter;
+
+          EventIterList::const_iterator stores_prime_iter = stores_iter;
+          for (stores_prime_iter++;
+               stores_prime_iter != a.stores().cend();
+               stores_prime_iter++)
+          {
+            const Event& s_prime = **stores_prime_iter;
+
+            const smt::Bool ldf_bool(flow_bool(s_rf_prefix, s, ld));
+            and_fld = and_fld and s.guard and
+              smt::implies(
+                /* if */ ldf_bool and time(s).happens_before(time(s_prime)) and
+                         s.offset_term == s_prime.offset_term,
+                /* then */ time(ld).happens_before(time(s_prime)));
+          }
+        }
+      }
+    }
+    unsafe_add(and_fld);
+  }
+
+  // Serialize every store regardless of array offset
+  void encode_store_serialization(const PerAddressMap& per_address_map)
+  {
+    smt::UnsafeTerm and_ss(smt::literal<smt::Bool>(true));
+    for (const PerAddressMap::value_type& pair : per_address_map)
+    {
+      const EventKinds& a = pair.second;
+      if (a.stores().size() < 2)
+        continue;
+
+      smt::UnsafeTerms terms;
+      terms.reserve(a.stores().size());
+      for (const EventIter s_iter : a.stores())
+      {
+        const Event& s = *s_iter;
+        terms.push_back(time(s).term());
+      }
+
+      and_ss = and_ss and smt::distinct(std::move(terms));
+    }
+    unsafe_add(and_ss);
+  }
+
+  void encode_array_api(const Tracer& tracer)
+  {
+    const PerAddressMap& per_address_map = tracer.per_address_map();
+    encode_load_from(per_address_map);
+    encode_from_load(per_address_map);
+    encode_store_serialization(per_address_map);
+  }
+
   /*
    * Synchronization between threads (e.g. BEGIN/THREAD_END_EVENT) relies
    * on the fact that time(const Event&) builds an SMT variable whose
@@ -1219,6 +1476,7 @@ public:
     encode_thread_order(tracer.per_thread_map());
     encode_memory_concurrency(tracer);
     encode_stack_api(tracer);
+    encode_array_api(tracer);
   }
 
   // Check condition without side effects on the solver

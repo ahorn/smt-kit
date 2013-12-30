@@ -19,13 +19,14 @@ TEST(CrvTest, Event)
 
   EXPECT_TRUE(tracer().events().empty());
   Event e(READ_EVENT, 2, 3, 5, smt::literal<smt::Bool>(true),
-    smt::any<smt::Bv<char>>("a"));
+    smt::any<smt::Bv<char>>("a"), smt::Bv<size_t>());
   EXPECT_EQ(READ_EVENT, e.kind);
   EXPECT_EQ(2, e.event_id);
   EXPECT_EQ(3, e.thread_id);
   EXPECT_EQ(5, e.address);
   EXPECT_FALSE(e.guard.is_null());
   EXPECT_FALSE(e.term.is_null());
+  EXPECT_TRUE(e.offset_term.is_null());
   EXPECT_TRUE(tracer().events().empty());
 }
 
@@ -88,6 +89,21 @@ TEST(CrvTest, Tracer)
   iter = --tracer.events().cend();
   EXPECT_EQ(4, iter->event_id);
   EXPECT_EQ(new_thread_id, iter->thread_id);
+
+  __External<char> external2(static_cast<Address>(42),
+    smt::any<typename Smt<size_t>::Sort>("42's_offset"));
+
+  external2.term = tracer.append_load_event(external2);
+  EXPECT_EQ(7, tracer.events().size());
+  EXPECT_EQ(1, tracer.per_address_map().at(external2.address).loads().size());
+  EXPECT_EQ(5, tracer.per_address_map().at(external2.address).loads().front()->event_id);
+  EXPECT_EQ(0, tracer.per_address_map().at(external2.address).stores().size());
+
+  tracer.append_store_event(external2);
+  EXPECT_EQ(8, tracer.events().size());
+  EXPECT_EQ(1, tracer.per_address_map().at(external2.address).loads().size());
+  EXPECT_EQ(1, tracer.per_address_map().at(external2.address).stores().size());
+  EXPECT_EQ(6, tracer.per_address_map().at(external2.address).stores().front()->event_id);
 }
 
 TEST(CrvTest, Flip)
@@ -488,5 +504,324 @@ TEST(CrvTest, CopyExternaltoInternal)
   a = 'B';
   EXPECT_EQ(smt::unsat, encoder.check(!(b == 'A'), tracer()));
   EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
+}
+
+TEST(CrvTest, Array)
+{
+  tracer().reset();
+
+  EXPECT_TRUE(tracer().events().empty());
+
+  External<char[]> xs;
+  EXPECT_EQ(1, tracer().events().size());
+
+  External<char[5]> ys;
+  EXPECT_EQ(2, tracer().events().size());
+
+  Internal<size_t> i(3);
+  EXPECT_EQ(2, tracer().events().size());
+
+  External<size_t> j(4);
+  EXPECT_EQ(3, tracer().events().size());
+
+  xs[2];
+  EXPECT_EQ(3, tracer().events().size());
+
+  xs[i];
+  EXPECT_EQ(3, tracer().events().size());
+
+  External<char> x0(xs[2]);
+  EXPECT_EQ(5, tracer().events().size());
+  EXPECT_NE(xs.address, x0.address);
+  EXPECT_EQ(0, tracer().per_address_map().at(x0.address).reads().size());
+  EXPECT_EQ(1, tracer().per_address_map().at(x0.address).writes().size());
+  EXPECT_EQ(1, tracer().per_address_map().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_FALSE(x0.term.is_null());
+  EXPECT_TRUE(x0.offset_term.is_null());
+
+  x0 = xs[i];
+  EXPECT_EQ(7, tracer().events().size());
+  EXPECT_NE(xs.address, x0.address);
+  EXPECT_EQ(0, tracer().per_address_map().at(x0.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_FALSE(x0.term.is_null());
+  EXPECT_TRUE(x0.offset_term.is_null());
+
+  External<char> x1(xs[j]);
+  EXPECT_EQ(10, tracer().events().size());
+  EXPECT_NE(xs.address, x1.address);
+  EXPECT_NE(x0.address, x1.address);
+  EXPECT_EQ(1, tracer().per_address_map().at(j.address).reads().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(x0.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(x1.address).reads().size());
+  EXPECT_EQ(1, tracer().per_address_map().at(x1.address).writes().size());
+  EXPECT_EQ(3, tracer().per_address_map().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_FALSE(x1.term.is_null());
+  EXPECT_TRUE(x1.offset_term.is_null());
+
+  xs[j];
+  EXPECT_EQ(11, tracer().events().size());
+
+  x1 = xs[j];
+  EXPECT_EQ(14, tracer().events().size());
+  EXPECT_NE(xs.address, x1.address);
+  EXPECT_NE(x0.address, x1.address);
+  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(x0.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(x1.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
+  EXPECT_EQ(4, tracer().per_address_map().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_FALSE(x1.term.is_null());
+  EXPECT_TRUE(x1.offset_term.is_null());
+
+  xs[make_temporary_internal<size_t>()];
+  EXPECT_EQ(14, tracer().events().size());
+
+  External<char> x2(xs[make_temporary_internal<size_t>()]);
+  EXPECT_NE(xs.address, x2.address);
+  EXPECT_NE(x1.address, x2.address);
+  EXPECT_NE(x0.address, x2.address);
+  EXPECT_EQ(16, tracer().events().size());
+  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(x0.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(x1.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(x2.address).reads().size());
+  EXPECT_EQ(1, tracer().per_address_map().at(x2.address).writes().size());
+  EXPECT_EQ(5, tracer().per_address_map().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_FALSE(x2.term.is_null());
+  EXPECT_TRUE(x2.offset_term.is_null());
+
+  x2 = xs[make_temporary_internal<size_t>()];
+  EXPECT_NE(xs.address, x2.address);
+  EXPECT_NE(x1.address, x2.address);
+  EXPECT_NE(x0.address, x2.address);
+  EXPECT_EQ(18, tracer().events().size());
+  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(x0.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(x1.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(x2.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
+  EXPECT_EQ(6, tracer().per_address_map().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_FALSE(x2.term.is_null());
+  EXPECT_TRUE(x2.offset_term.is_null());
+
+  /*
+   * Calls the following:
+   *
+   * - External(size_t)                   +1
+   * - Internal<size_t>(External<size_t>) +1
+   * - [](Internal<size_t>)
+   * - External(offset, address)
+   *
+   * Thus, there are two new events (= 20 total).
+   */
+  xs[External<size_t>(3)];
+  EXPECT_EQ(20, tracer().events().size());
+
+  /*
+   * Calls the following:
+   *
+   * - External(size_t)                   +1
+   * - Internal<size_t>(External<size_t>) +1
+   * - [](Internal<size_t>)
+   * - External(offset, address)
+   * - External<char>(External<char>)     +2
+   *
+   * Thus, there are four new events (= 24 total).
+   */
+  External<char> x3(xs[External<size_t>(4)]);
+  EXPECT_NE(x2.address, x3.address);
+  EXPECT_NE(x1.address, x3.address);
+  EXPECT_NE(x0.address, x3.address);
+  EXPECT_NE(xs.address, x3.address);
+  EXPECT_EQ(24, tracer().events().size());
+  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
+  EXPECT_EQ(1, tracer().per_address_map().at(x3.address).writes().size());
+  EXPECT_EQ(7, tracer().per_address_map().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_FALSE(x3.term.is_null());
+  EXPECT_TRUE(x3.offset_term.is_null());
+
+  x3 = xs[External<size_t>(4)];
+  EXPECT_NE(xs.address, x3.address);
+  EXPECT_NE(x2.address, x3.address);
+  EXPECT_NE(x1.address, x3.address);
+  EXPECT_NE(x0.address, x3.address);
+  EXPECT_EQ(28, tracer().events().size());
+  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x3.address).writes().size());
+  EXPECT_EQ(8, tracer().per_address_map().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_FALSE(x3.term.is_null());
+  EXPECT_TRUE(x3.offset_term.is_null());
+
+  xs[i] = 'A';
+  EXPECT_EQ(29, tracer().events().size());
+  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x3.address).writes().size());
+  EXPECT_EQ(8, tracer().per_address_map().at(xs.address).loads().size());
+  EXPECT_EQ(1, tracer().per_address_map().at(xs.address).stores().size());
+
+  Internal<char> p('A');
+  xs[i] = p;
+  EXPECT_EQ(30, tracer().events().size());
+  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x3.address).writes().size());
+  EXPECT_EQ(8, tracer().per_address_map().at(xs.address).loads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(xs.address).stores().size());
+
+  xs[i] = make_temporary_internal<char>();
+  EXPECT_EQ(31, tracer().events().size());
+  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x3.address).writes().size());
+  EXPECT_EQ(8, tracer().per_address_map().at(xs.address).loads().size());
+  EXPECT_EQ(3, tracer().per_address_map().at(xs.address).stores().size());
+
+  External<char> q('B');
+  EXPECT_EQ(32, tracer().events().size());
+  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x3.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_map().at(q.address).reads().size());
+  EXPECT_EQ(1, tracer().per_address_map().at(q.address).writes().size());
+  EXPECT_EQ(8, tracer().per_address_map().at(xs.address).loads().size());
+  EXPECT_EQ(3, tracer().per_address_map().at(xs.address).stores().size());
+
+  xs[i] = q;
+  EXPECT_EQ(34, tracer().events().size());
+  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_map().at(x3.address).writes().size());
+  EXPECT_EQ(1, tracer().per_address_map().at(q.address).reads().size());
+  EXPECT_EQ(1, tracer().per_address_map().at(q.address).writes().size());
+  EXPECT_EQ(8, tracer().per_address_map().at(xs.address).loads().size());
+  EXPECT_EQ(4, tracer().per_address_map().at(xs.address).stores().size());
+}
+
+TEST(CrvTest, ExternalArrayWithLiteralOffset) {
+  tracer().reset();
+  Encoder encoder;
+
+  External<char[5]> x;
+
+  x[2] = 'Z';
+  Internal<char> a(x[2]);
+  EXPECT_EQ(smt::unsat, encoder.check(a != 'Z', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'Z', tracer()));
+
+  // initial array elements are zero
+  Internal<char> b(x[3]);
+  Internal<char> c(x[4]);
+  EXPECT_EQ(smt::unsat, encoder.check(b != '\0', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(b == '\0', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(c != '\0', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(c == '\0', tracer()));
+}
+
+TEST(CrvTest, ExternalArrayWithExternalOffset)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<char[3]> xs;
+  External<size_t> index(1);
+  Internal<char> a('\0');
+
+  xs[index] = 'Y';
+ 
+  index = index + static_cast<size_t>(1);
+  xs[index] = 'Z';
+
+  a = xs[0];
+  EXPECT_EQ(smt::unsat, encoder.check(a == 'Z', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'Z', tracer()));
+
+  a = xs[1];
+  EXPECT_EQ(smt::unsat, encoder.check(a == 'Z', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'Z', tracer()));
+
+  a = xs[2];
+  EXPECT_EQ(smt::unsat, encoder.check(a != 'Z', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'Z', tracer()));
+
+  a = xs[index];
+  EXPECT_EQ(smt::unsat, encoder.check(a != 'Z', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'Z', tracer()));
+
+  // Out of bound array access does not cause an error.
+  index = index + static_cast<size_t>(1);
+  a = xs[index];
+  EXPECT_EQ(smt::unsat, encoder.check(a == 'Z', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'Z', tracer()));
+}
+
+TEST(CrvTest, MultipleExternalArrayStoresWithLiteralOffset)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<char[3]> xs;
+  Internal<char> a('\0');
+
+  xs[0] = 'A';
+  xs[1] = 'B';
+
+  a = xs[1];
+
+  EXPECT_EQ(smt::unsat, encoder.check(a != 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer()));
+}
+
+TEST(CrvTest, MultipleExternalArrayStoresWithExternalOffset)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<char[3]> xs;
+  External<size_t> index;
+  Internal<char> a('\0');
+
+  index = 0;
+  xs[index] = 'A';
+
+  index = index + static_cast<size_t>(1);
+  xs[index] = 'B';
+
+  a = xs[index];
+
+  EXPECT_EQ(smt::unsat, encoder.check(a != 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer()));
 }
 
