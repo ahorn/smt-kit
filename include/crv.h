@@ -251,6 +251,11 @@ public:
     m_thread_id_stack.push(m_thread_id_cnt++);
   }
 
+  const smt::Bool& guard() const
+  {
+    return m_guard;
+  }
+
   const EventList& events() const
   {
     return m_events;
@@ -266,10 +271,14 @@ public:
     return m_per_thread_map;
   }
 
-  void reset()
+  void reset_identifiers()
   {
     m_event_id_cnt = 0;
     m_thread_id_cnt = 0;
+  }
+
+  void reset_events()
+  {
     m_events.clear();
     m_per_address_map.clear();
     m_per_thread_map.clear();
@@ -279,13 +288,32 @@ public:
       m_thread_id_stack.pop();
     }
     m_thread_id_stack.push(m_thread_id_cnt++);
-    m_guard = smt::literal<smt::Bool>(true);
+  }
 
+  void reset_guard()
+  {
+    m_guard = smt::literal<smt::Bool>(true);
+  }
+
+  void reset_flips()
+  {
     m_flip_cnt = 0;
     m_flips.clear();
     m_flip_iter = m_flips.cbegin();
+  }
 
+  void reset_address()
+  {
     m_next_address = 1;
+  }
+
+  void reset()
+  {
+    reset_identifiers();
+    reset_events();
+    reset_guard();
+    reset_flips();
+    reset_address();
   }
 
   /// Depth-first search strategy
@@ -307,8 +335,14 @@ public:
     Flip& flip = m_flips.back();
     flip.direction = !flip.direction;
     flip.is_flip = true;
-
     m_flip_cnt++;
+
+    reset_events();
+    reset_guard();
+    reset_address();
+    assert(0 < m_flip_cnt);
+    assert(!m_flips.empty());
+
     return true;
   }
 
@@ -1044,6 +1078,8 @@ public:
   }
 };
 
+typedef std::list<smt::Bool> Assertions;
+
 class Encoder
 {
 private:
@@ -1074,6 +1110,7 @@ private:
     return x.event_id == app;
   }
 
+  Assertions m_assertions;
   smt::CVC4Solver m_solver;
   std::map<EventIdentifier, TimeSort> m_time_map;
   const Time m_epoch;
@@ -1455,10 +1492,11 @@ private:
 
 public:
   Encoder()
+  : m_assertions(),
 #ifdef __BV_TIME__
-  : m_solver(smt::QF_AUFBV_LOGIC),
+    m_solver(smt::QF_AUFBV_LOGIC),
 #else
-  : m_solver(smt::QF_AUFLIA_LOGIC),
+    m_solver(smt::QF_AUFLIA_LOGIC),
 #endif
     m_time_map(),
     m_epoch(smt::literal<TimeSort>(0)) {}
@@ -1468,26 +1506,59 @@ public:
     return m_solver;
   }
 
-  void add(Internal<bool>&& condition)
+  void add_assertion(Internal<bool>&& assertion)
   {
-    unsafe_add(std::move(condition.term));
+    m_assertions.push_back(std::move(assertion.term));
   }
 
+  const Assertions& assertions() const
+  {
+    return m_assertions;
+  }
+
+  /// \return Is there at least one error condition to check?
   void encode(const Tracer& tracer)
   {
+    unsafe_add(tracer.guard());
+    for (const smt::Bool& assertion : m_assertions)
+    {
+      unsafe_add(assertion);
+    }
+
     encode_thread_order(tracer.per_thread_map());
     encode_memory_concurrency(tracer);
     encode_stack_api(tracer);
     encode_array_api(tracer);
   }
 
-  // Check condition without side effects on the solver
+  /// Depth-first search strategy
+
+  /// \return Is there more to encode?
+  bool reset()
+  {
+    m_assertions.clear();
+    return tracer().flip();
+  }
+
+  /// Check added assertions without side effects on the solver
+  smt::CheckResult check_assertions(const Tracer& tracer)
+  {
+    assert(!m_assertions.empty());
+    m_solver.push();
+    encode(tracer);
+    const smt::CheckResult result = m_solver.check();
+    m_solver.pop();
+    return result;
+  }
+
+  /// Check given condition and previously added assertions
+  /// without side effects on the solver
   smt::CheckResult check(
     Internal<bool>&& condition,
     const Tracer& tracer)
   {
     m_solver.push();
-    add(std::move(condition));
+    unsafe_add(std::move(condition.term));
     encode(tracer);
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
