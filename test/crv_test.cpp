@@ -71,24 +71,24 @@ TEST(CrvTest, Tracer)
   EXPECT_EQ(1, tracer.per_address_map().at(external1.address).writes().size());
   EXPECT_EQ(2, tracer.per_address_map().at(external1.address).writes().front()->event_id);
 
-  const ThreadIdentifier new_thread_id(tracer.append_thread_begin_event());
-  EXPECT_EQ(1, new_thread_id);
+  const ThreadIdentifier parent_thread_id(tracer.append_thread_begin_event());
+  EXPECT_EQ(0, parent_thread_id);
   EXPECT_EQ(5, tracer.events().size());
 
   EventList::const_iterator iter = --tracer.events().cend();
-  EXPECT_EQ(new_thread_id, iter->thread_id);
+  EXPECT_EQ(parent_thread_id + 1, iter->thread_id);
 
   iter--;
   EXPECT_EQ(3, iter->event_id);
-  EXPECT_EQ(new_thread_id - 1, iter->thread_id);
+  EXPECT_EQ(parent_thread_id, iter->thread_id);
 
-  const ThreadIdentifier old_thread_id(tracer.append_thread_end_event());
-  EXPECT_EQ(0, old_thread_id);
+  const ThreadIdentifier child_thread_id(tracer.append_thread_end_event());
+  EXPECT_EQ(1, child_thread_id);
   EXPECT_EQ(6, tracer.events().size());
 
   iter = --tracer.events().cend();
   EXPECT_EQ(4, iter->event_id);
-  EXPECT_EQ(new_thread_id, iter->thread_id);
+  EXPECT_EQ(child_thread_id, iter->thread_id);
 
   __External<char> external2(static_cast<Address>(42),
     smt::any<typename Smt<size_t>::Sort>("42's_offset"));
@@ -823,5 +823,29 @@ TEST(CrvTest, MultipleExternalArrayStoresWithExternalOffset)
 
   EXPECT_EQ(smt::unsat, encoder.check(a != 'B', tracer()));
   EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer()));
+}
+
+TEST(CrvTest, JoinThreads)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<char> x('\0');
+
+  const ThreadIdentifier parent_thread_id(tracer().append_thread_begin_event());
+  EXPECT_EQ(0, parent_thread_id);
+
+  x = 'A';
+
+  const ThreadIdentifier child_thread_id(tracer().append_thread_end_event());
+  EXPECT_EQ(1, child_thread_id);
+
+  EXPECT_EQ(smt::sat, encoder.check(x == '\0', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(x == 'A', tracer()));
+
+  tracer().append_join_event(child_thread_id);
+
+  EXPECT_EQ(smt::unsat, encoder.check(x == '\0', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(x == 'A', tracer()));
 }
 

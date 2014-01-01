@@ -1,4 +1,4 @@
-// Copyright 2013, Alex Horn. All rights reserved.
+// Copyright 2013-2014, Alex Horn. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -325,28 +325,30 @@ public:
 
   bool append_guard(const Internal<bool>& internal);
 
+  /// Returns parent thread identifier
   ThreadIdentifier append_thread_begin_event()
   {
     const EventIdentifier event_id(m_event_id_cnt++);
     append_event<THREAD_BEGIN_EVENT>(
       event_id, 0, smt::UnsafeTerm());
 
+    ThreadIdentifier parent_thread_id(m_thread_id_stack.top());
     m_thread_id_stack.push(m_thread_id_cnt++);
 
     append_event<THREAD_BEGIN_EVENT>(
       event_id, 0, smt::UnsafeTerm());
-
-    return m_thread_id_stack.top();
+    return parent_thread_id;
   }
 
+  /// Returns child thread identifier
   ThreadIdentifier append_thread_end_event()
   {
     append_event<THREAD_END_EVENT>(
       m_event_id_cnt++, 0, smt::UnsafeTerm());
 
+    ThreadIdentifier child_thread_id(m_thread_id_stack.top());
     m_thread_id_stack.pop();
-
-    return m_thread_id_stack.top();
+    return child_thread_id;
   }
 
   void append_join_event(const ThreadIdentifier thread_id)
