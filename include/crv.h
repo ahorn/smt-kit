@@ -706,28 +706,6 @@ External<T>::operator[](const Internal<size_t>& offset)
   return __External<Range>(address, offset.term);
 }
 
-bool Tracer::append_guard(const Internal<bool>& internal)
-{
-  bool direction = true;
-  if (m_flip_iter == m_flips.cend())
-  {
-    m_flips.push_back(Flip());
-    assert(m_flips.back().direction == direction);
-  }
-  else
-  {
-    direction = m_flip_iter->direction;
-    m_flip_iter++;
-  }
-
-  if (direction)
-    m_guard = m_guard and internal.term;
-  else
-    m_guard = m_guard and !internal.term;
-
-  return direction;
-}
-
 template<typename T>
 typename Smt<T>::Sort Tracer::append_read_event(const External<T>& external)
 {

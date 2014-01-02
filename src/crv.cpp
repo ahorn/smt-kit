@@ -14,4 +14,26 @@ Tracer& tracer() {
   return s_tracer;
 }
 
+bool Tracer::append_guard(const Internal<bool>& internal)
+{
+  bool direction = true;
+  if (m_flip_iter == m_flips.cend())
+  {
+    m_flips.push_back(Flip());
+    assert(m_flips.back().direction == direction);
+  }
+  else
+  {
+    direction = m_flip_iter->direction;
+    m_flip_iter++;
+  }
+
+  if (direction)
+    m_guard = m_guard and internal.term;
+  else
+    m_guard = m_guard and !internal.term;
+
+  return direction;
+}
+
 }

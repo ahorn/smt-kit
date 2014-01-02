@@ -93,7 +93,8 @@ test_smt_SOURCES = \
   test/smt_msat_test.cpp \
   test/smt_cvc4_test.cpp \
   test/smt_functional_test.cpp \
-  test/crv_test.cpp
+  test/crv_test.cpp \
+  test/crv_functional_test.cpp
 
 test_smt_CPPFLAGS = -I$(srcdir)/include -I$(top_srcdir)/gtest/include
 test_smt_LDADD = $(top_builddir)/gtest/lib/libgtest.la \
