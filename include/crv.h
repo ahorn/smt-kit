@@ -1566,6 +1566,55 @@ public:
   }
 };
 
+/// Symbolic thread using partial order encoding
+class Thread
+{
+private:
+  ThreadIdentifier m_parent_thread_id;
+  ThreadIdentifier m_thread_id;
+  bool m_joinable;
+
+public:
+  /// Symbolically spawn `f(args...)` as a new thread of execution
+
+  /// \param f non-member function to be executed as a new symbolic thread
+  /// \param args arguments \ref std::forward "forwarded" to `f`
+  ///
+  /// The return value of `f` is always ignored.
+  template<typename Function, typename... Args>
+  Thread(Function&& f, Args&&... args)
+  : m_parent_thread_id(0),
+    m_thread_id(0),
+    m_joinable(true)
+  {
+    m_parent_thread_id = tracer().append_thread_begin_event();
+    f(args...);
+    m_thread_id = tracer().append_thread_end_event();
+  }
+
+  ThreadIdentifier parent_thread_id() const
+  {
+    return m_parent_thread_id;
+  }
+
+  ThreadIdentifier thread_id() const
+  {
+    return m_thread_id;
+  }
+
+  bool joinable() const
+  {
+    return m_joinable;
+  }
+
+  void join()
+  {
+    assert(m_joinable);
+    tracer().append_join_event(m_thread_id);
+    m_joinable = false;
+  }
+};
+
 }
 
 #endif

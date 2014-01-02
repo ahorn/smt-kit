@@ -1194,3 +1194,21 @@ TEST(CrvTest, FlipFour)
   EXPECT_EQ(1, unchecks);
 }
 
+void thread_api_test(unsigned* ptr, unsigned i)
+{
+  *ptr = i;
+}
+
+TEST(CrvTest, ThreadApi)
+{
+  tracer().reset();
+  unsigned n = 0;
+  Thread t(thread_api_test, &n, 7);
+  EXPECT_TRUE(t.joinable());
+  EXPECT_EQ(0, t.parent_thread_id());
+  EXPECT_EQ(1, t.thread_id());
+  EXPECT_EQ(7, n);
+  t.join();
+  EXPECT_FALSE(t.joinable());
+}
+
