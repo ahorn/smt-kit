@@ -72,7 +72,7 @@ TEST(CrvTest, Tracer)
   EXPECT_EQ(2, tracer.per_address_map().at(external1.address).writes().front()->event_id);
 
   const ThreadIdentifier parent_thread_id(tracer.append_thread_begin_event());
-  EXPECT_EQ(0, parent_thread_id);
+  EXPECT_EQ(1, parent_thread_id);
   EXPECT_EQ(5, tracer.events().size());
 
   EventList::const_iterator iter = --tracer.events().cend();
@@ -83,7 +83,7 @@ TEST(CrvTest, Tracer)
   EXPECT_EQ(parent_thread_id, iter->thread_id);
 
   const ThreadIdentifier child_thread_id(tracer.append_thread_end_event());
-  EXPECT_EQ(1, child_thread_id);
+  EXPECT_EQ(2, child_thread_id);
   EXPECT_EQ(6, tracer.events().size());
 
   iter = --tracer.events().cend();
@@ -388,6 +388,56 @@ TEST(CrvTest, Guard)
   true_bool = true;
   EXPECT_FALSE(tracer().append_guard(true_bool));
   EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer()));
+
+  tracer().reset_events();
+  tracer().reset_guard();
+  tracer().reset_flips();
+  false_bool = false;
+  true_bool = true;
+  EXPECT_TRUE(tracer().append_guard(false_bool));
+  EXPECT_TRUE(tracer().append_guard(true_bool));
+  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer()));
+
+  EXPECT_TRUE(tracer().flip());
+  false_bool = false;
+  true_bool = true;
+  EXPECT_TRUE(tracer().append_guard(false_bool));
+  EXPECT_FALSE(tracer().append_guard(true_bool));
+  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer()));
+
+  EXPECT_TRUE(tracer().flip());
+  false_bool = false;
+  true_bool = true;
+  EXPECT_FALSE(tracer().append_guard(false_bool));
+  EXPECT_TRUE(tracer().append_guard(true_bool));
+  EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer()));
+
+  tracer().reset_events();
+  tracer().reset_guard();
+  tracer().reset_flips();
+  false_bool = false;
+  true_bool = true;
+  EXPECT_TRUE(tracer().append_guard(false_bool));
+  tracer().add_assertion(true);
+  EXPECT_TRUE(tracer().append_guard(true_bool));
+  tracer().add_assertion(true);
+  EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
+
+  EXPECT_TRUE(tracer().flip());
+  false_bool = false;
+  true_bool = true;
+  EXPECT_TRUE(tracer().append_guard(false_bool));
+  tracer().add_assertion(true);
+  EXPECT_FALSE(tracer().append_guard(true_bool));
+  EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
+
+  EXPECT_TRUE(tracer().flip());
+  false_bool = false;
+  true_bool = true;
+  EXPECT_FALSE(tracer().append_guard(false_bool));
+  EXPECT_TRUE(tracer().append_guard(true_bool));
+  tracer().add_assertion(true);
+  EXPECT_EQ(smt::sat, encoder.check_assertions(tracer()));
 }
 
 TEST(CrvTest, ThinAir) {
@@ -910,12 +960,14 @@ TEST(CrvTest, JoinThreads)
   External<char> x('\0');
 
   const ThreadIdentifier parent_thread_id(tracer().append_thread_begin_event());
-  EXPECT_EQ(0, parent_thread_id);
+  EXPECT_EQ(1, parent_thread_id);
+  EXPECT_EQ(parent_thread_id + 1, tracer().current_thread_id());
 
   x = 'A';
 
   const ThreadIdentifier child_thread_id(tracer().append_thread_end_event());
-  EXPECT_EQ(1, child_thread_id);
+  EXPECT_EQ(2, child_thread_id);
+  EXPECT_EQ(parent_thread_id, tracer().current_thread_id());
 
   EXPECT_EQ(smt::sat, encoder.check(x == '\0', tracer()));
   EXPECT_EQ(smt::sat, encoder.check(x == 'A', tracer()));
@@ -1160,14 +1212,14 @@ TEST(CrvTest, FlipFour)
     if (tracer().append_guard(false_bool))
     {
       expect = smt::unsat;
-      tracer().add_assertion(true);
+      tracer().add_assertion(true_bool);
     }
 
     if (tracer().append_guard(true_bool))
     {
       if (expect == smt::unknown)
         expect = smt::sat;
-      tracer().add_assertion(true);
+      tracer().add_assertion(true_bool);
     }
 
     if (!tracer().assertions().empty())
@@ -1196,6 +1248,7 @@ TEST(CrvTest, FlipFour)
 
 void thread_api_test(unsigned* ptr, unsigned i)
 {
+  EXPECT_EQ(2, ThisThread::thread_id());
   *ptr = i;
 }
 
@@ -1203,12 +1256,265 @@ TEST(CrvTest, ThreadApi)
 {
   tracer().reset();
   unsigned n = 0;
+
+  EXPECT_EQ(1, ThisThread::thread_id());
   Thread t(thread_api_test, &n, 7);
   EXPECT_TRUE(t.joinable());
-  EXPECT_EQ(0, t.parent_thread_id());
-  EXPECT_EQ(1, t.thread_id());
   EXPECT_EQ(7, n);
+  EXPECT_EQ(1, ThisThread::thread_id());
   t.join();
   EXPECT_FALSE(t.joinable());
+  EXPECT_EQ(1, ThisThread::thread_id());
+}
+
+TEST(CrvTest, MutexSatSingleWriter1)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<int> shared_var(0);
+
+  tracer().append_thread_begin_event();
+  shared_var = 3;
+  shared_var = shared_var + 1;
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  tracer().add_assertion(shared_var == 3);
+  tracer().append_thread_end_event();
+
+  EXPECT_FALSE(tracer().assertions().empty());
+  EXPECT_EQ(smt::sat, encoder.check_assertions(tracer()));
+}
+
+TEST(CrvTest, MutexUnsatSingleWriter1)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<int> shared_var(0);
+  Mutex mutex;
+
+  tracer().append_thread_begin_event();
+  mutex.lock();
+  shared_var = 3;
+  shared_var = shared_var + 1;
+  mutex.unlock();
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  mutex.lock();
+  tracer().add_assertion(shared_var == 3);
+  mutex.unlock();
+  tracer().append_thread_end_event();
+
+  EXPECT_FALSE(tracer().assertions().empty());
+  EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
+}
+
+TEST(CrvTest, MutexSatSingleWriter2)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<int> shared_var(0);
+
+  tracer().append_thread_begin_event();
+  shared_var = shared_var + 3;
+  shared_var = shared_var + 1;
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  tracer().add_assertion(shared_var == 3);
+  tracer().append_thread_end_event();
+
+  EXPECT_FALSE(tracer().assertions().empty());
+  EXPECT_EQ(smt::sat, encoder.check_assertions(tracer()));
+}
+
+TEST(CrvTest, MutexUnsatSingleWriter2)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<int> shared_var(0);
+  Mutex mutex;
+
+  tracer().append_thread_begin_event();
+  mutex.lock();
+  shared_var = shared_var + 3;
+  shared_var = shared_var + 1;
+  mutex.unlock();
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  mutex.lock();
+  tracer().add_assertion(shared_var == 3);
+  mutex.unlock();
+  tracer().append_thread_end_event();
+
+  EXPECT_FALSE(tracer().assertions().empty());
+  EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
+}
+
+TEST(CrvTest, MutexSatMultipleWriters1)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<char> x('\0');
+  External<char> y('\0');
+  External<char> z('\0');
+
+  Internal<char> a('X');
+  Internal<char> b('Y');
+  Internal<char> c('Z');
+
+  Mutex mutex;
+
+  tracer().append_thread_begin_event();
+  x = 'A';
+  y = 'B';
+  z = 'C';
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  x = '\1';
+  y = '\2';
+  z = '\3';
+  tracer().append_thread_end_event();
+
+  a = x;
+  b = y;
+  c = z;
+
+  EXPECT_EQ(smt::sat, encoder.check(a == 'A' && b == '\2' && c == 'C', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == '\1' && b == 'B' && c == '\3', tracer()));
+}
+
+TEST(CrvTest, MutexSatMultipleWriters2)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<char> x('\0');
+  External<char> y('\0');
+  External<char> z('\0');
+
+  Internal<char> a('X');
+  Internal<char> b('Y');
+  Internal<char> c('Z');
+
+  Mutex mutex;
+
+  tracer().append_thread_begin_event();
+  mutex.lock();
+  x = 'A';
+  y = 'B';
+  z = 'C';
+  mutex.unlock();
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  mutex.lock();
+  x = '\1';
+  y = '\2';
+  z = '\3';
+  mutex.unlock();
+  tracer().append_thread_end_event();
+
+  // since the main thread does not protect its reads,
+  // by the mutex, it sees the non-atomic updates!
+  a = x;
+  b = y;
+  c = z;
+
+  EXPECT_EQ(smt::sat, encoder.check(a == 'A' && b == '\2' && c == 'C', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == '\1' && b == 'B' && c == '\3', tracer()));
+}
+
+TEST(CrvTest, MutexUnsatMultipleWriters)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<char> x('\0');
+  External<char> y('\0');
+  External<char> z('\0');
+
+  Internal<char> a('X');
+  Internal<char> b('Y');
+  Internal<char> c('Z');
+
+  Mutex mutex;
+
+  tracer().append_thread_begin_event();
+  mutex.lock();
+  x = 'A';
+  y = 'B';
+  z = 'C';
+  mutex.unlock();
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  mutex.lock();
+  x = '\1';
+  y = '\2';
+  z = '\3';
+  mutex.unlock();
+  tracer().append_thread_end_event();
+
+  mutex.lock();
+  a = x;
+  mutex.unlock();
+
+  mutex.lock();
+  b = y;
+  mutex.unlock();
+
+  mutex.lock();
+  c = z;
+  mutex.unlock();
+
+  EXPECT_EQ(smt::unsat, encoder.check(a == 'A' && b == '\2' && c == 'C', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a == '\1' && b == 'B' && c == '\3', tracer()));
+}
+
+TEST(CrvTest, MutexJoinMultipleWriters)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<int> x(10);
+  External<int> y(10);
+  Mutex mutex;
+
+  tracer().append_thread_begin_event();
+  mutex.lock();
+  x = x + 1;
+  mutex.unlock();
+
+  mutex.lock();
+  y = y + 1;
+  mutex.unlock();
+  const ThreadIdentifier child_thread_id_1(
+    tracer().append_thread_end_event());
+
+  tracer().append_thread_begin_event();
+  mutex.lock();
+  x = x + 5;
+  mutex.unlock();
+
+  mutex.lock();
+  y = y - 6;
+  mutex.unlock();
+  const ThreadIdentifier child_thread_id_2(
+    tracer().append_thread_end_event());
+
+  tracer().append_join_event(child_thread_id_1);
+  tracer().append_join_event(child_thread_id_2);
+
+  EXPECT_EQ(smt::sat, encoder.check(x == 16 && y == 5, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(x == 16 && y == 5), tracer()));
 }
 

@@ -34,9 +34,11 @@ enum EventKind : unsigned short
   THREAD_END_EVENT
 };
 
-// Positive unless sync event
+/// Positive unless event is_sync()
 typedef unsigned long Address;
 typedef unsigned long EventIdentifier;
+
+/// Positive if and only if thread is joinable
 typedef unsigned ThreadIdentifier;
 
 class Event
@@ -224,11 +226,9 @@ private:
     const smt::UnsafeTerm& term,
     const smt::UnsafeTerm& offset_term = smt::UnsafeTerm())
   {
-    assert(!m_guard.is_null());
-
-    const ThreadIdentifier thread_id(m_thread_id_stack.top());
+    const ThreadIdentifier thread_id(current_thread_id());
     m_events.push_back(Event(kind, event_id, thread_id,
-      address, m_guard, term, offset_term));
+      address, guard(), term, offset_term));
 
     const EventIter e_iter(--m_events.cend());
     EventKinds& a_event_kinds(m_per_address_map[e_iter->address]);
@@ -236,10 +236,17 @@ private:
     m_per_thread_map[thread_id].push_back(e_iter);
   }
 
+  void push_next_thread_id()
+  {
+    assert(0 < m_thread_id_cnt);
+    assert(m_thread_id_cnt < std::numeric_limits<ThreadIdentifier>::max());
+    m_thread_id_stack.push(m_thread_id_cnt++);
+  }
+
 public:
   Tracer()
   : m_event_id_cnt(0),
-    m_thread_id_cnt(0),
+    m_thread_id_cnt(1),
     m_events(),
     m_per_address_map(),
     m_per_thread_map(),
@@ -254,8 +261,15 @@ public:
     m_thread_id_stack.push(m_thread_id_cnt++);
   }
 
+  ThreadIdentifier current_thread_id() const
+  {
+    assert(m_thread_id_stack.top() < m_thread_id_cnt);
+    return m_thread_id_stack.top();
+  }
+
   const smt::Bool& guard() const
   {
+    assert(!m_guard.is_null());
     return m_guard;
   }
 
@@ -277,7 +291,7 @@ public:
   void reset_identifiers()
   {
     m_event_id_cnt = 0;
-    m_thread_id_cnt = 0;
+    m_thread_id_cnt = 1;
   }
 
   void reset_events()
@@ -290,7 +304,7 @@ public:
     {
       m_thread_id_stack.pop();
     }
-    m_thread_id_stack.push(m_thread_id_cnt++);
+    push_next_thread_id();
   }
 
   void reset_guard()
@@ -330,7 +344,6 @@ public:
   /// \return is there more to explore?
   bool flip()
   {
-    m_guard = smt::literal<smt::Bool>(true);
     m_flip_iter = m_flips.cbegin();
 
     while (!m_flips.empty() && m_flips.back().is_flip)
@@ -374,7 +387,7 @@ public:
     return m_next_address++;
   }
 
-  bool append_guard(const Internal<bool>& internal);
+  bool append_guard(const Internal<bool>&);
 
   /// Returns parent thread identifier
   ThreadIdentifier append_thread_begin_event()
@@ -383,8 +396,8 @@ public:
     append_event<THREAD_BEGIN_EVENT>(
       event_id, 0, smt::UnsafeTerm());
 
-    ThreadIdentifier parent_thread_id(m_thread_id_stack.top());
-    m_thread_id_stack.push(m_thread_id_cnt++);
+    ThreadIdentifier parent_thread_id(current_thread_id());
+    push_next_thread_id();
 
     append_event<THREAD_BEGIN_EVENT>(
       event_id, 0, smt::UnsafeTerm());
@@ -397,7 +410,7 @@ public:
     append_event<THREAD_END_EVENT>(
       m_event_id_cnt++, 0, smt::UnsafeTerm());
 
-    ThreadIdentifier child_thread_id(m_thread_id_stack.top());
+    ThreadIdentifier child_thread_id(current_thread_id());
     m_thread_id_stack.pop();
     return child_thread_id;
   }
@@ -405,7 +418,7 @@ public:
   void append_join_event(const ThreadIdentifier thread_id)
   {
     const EventIter e_iter = m_per_thread_map.at(thread_id).back();
-    assert(e_iter->thread_id != m_thread_id_stack.top());
+    assert(e_iter->thread_id != current_thread_id());
 
     append_event<THREAD_END_EVENT>(
       e_iter->event_id, 0, smt::UnsafeTerm());
@@ -1175,13 +1188,14 @@ private:
         {
           const Event& w = **writes_iter;
 
-          EventIterList::const_iterator writes_prime_iter = writes_iter;
-          for (writes_prime_iter++;
+          for (EventIterList::const_iterator writes_prime_iter = a.writes().cbegin();
                writes_prime_iter != a.writes().cend();
                writes_prime_iter++)
           {
-            const Event& w_prime = **writes_prime_iter;
+            if (*writes_iter == *writes_prime_iter)
+              continue;
 
+            const Event& w_prime = **writes_prime_iter;
             const smt::Bool rf_bool(flow_bool(s_rf_prefix, w, r));
             and_fr = and_fr and w.guard and
               smt::implies(
@@ -1544,7 +1558,6 @@ class Thread
 private:
   ThreadIdentifier m_parent_thread_id;
   ThreadIdentifier m_thread_id;
-  bool m_joinable;
 
 public:
   /// Symbolically spawn `f(args...)` as a new thread of execution
@@ -1556,34 +1569,59 @@ public:
   template<typename Function, typename... Args>
   Thread(Function&& f, Args&&... args)
   : m_parent_thread_id(0),
-    m_thread_id(0),
-    m_joinable(true)
+    m_thread_id(0)
   {
     m_parent_thread_id = tracer().append_thread_begin_event();
     f(args...);
     m_thread_id = tracer().append_thread_end_event();
   }
 
-  ThreadIdentifier parent_thread_id() const
-  {
-    return m_parent_thread_id;
-  }
-
-  ThreadIdentifier thread_id() const
-  {
-    return m_thread_id;
-  }
-
   bool joinable() const
   {
-    return m_joinable;
+    return 0 < m_thread_id;
   }
 
   void join()
   {
-    assert(m_joinable);
+    assert(joinable());
     tracer().append_join_event(m_thread_id);
-    m_joinable = false;
+    m_thread_id = 0;
+  }
+};
+
+namespace ThisThread
+{
+  ThreadIdentifier thread_id();
+}
+
+/// Symbolic spinlock
+
+/// The Mutex class symbolically encodes a spinlock that protects shared data
+/// from being simultaneously accessed by multiple threads.
+class Mutex {
+private:
+  ThreadIdentifier m_lock_thread_id;
+  External<ThreadIdentifier> m_thread_id;
+
+public:
+  Mutex() :
+  m_lock_thread_id(/* no thread */ 0),
+  m_thread_id(/* no thread */ 0) {}
+
+  /// Acquire lock
+  void lock() {
+    m_lock_thread_id = ThisThread::thread_id();
+    m_thread_id = m_lock_thread_id;
+  }
+
+  /// Release lock
+
+  /// \pre: ThisThread is the same as the one that called lock()
+  void unlock()
+  {
+    // TODO: ensure that lock() and unlock() are in preserved program order
+    assert(m_lock_thread_id == ThisThread::thread_id());
+    tracer().add_assertion(m_thread_id == m_lock_thread_id);
   }
 };
 

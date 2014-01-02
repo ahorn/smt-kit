@@ -41,4 +41,12 @@ bool Tracer::append_guard(const Internal<bool>& internal)
   return direction;
 }
 
+namespace ThisThread
+{
+  ThreadIdentifier thread_id()
+  {
+    return tracer().current_thread_id();
+  }
+};
+
 }
