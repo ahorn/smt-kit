@@ -14,6 +14,11 @@ Tracer& tracer() {
   return s_tracer;
 }
 
+void Tracer::add_assertion(Internal<bool>&& assertion)
+{
+  m_assertions.push_back(std::move(assertion.term));
+}
+
 bool Tracer::append_guard(const Internal<bool>& internal)
 {
   bool direction = true;

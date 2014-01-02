@@ -168,6 +168,7 @@ struct Flip
 
 typedef std::list<Flip> FlipList;
 typedef std::list<Flip>::const_iterator FlipIter;
+typedef std::list<smt::Bool> Assertions;
 
 template<typename T> class External;
 template<typename T> class Internal;
@@ -204,6 +205,7 @@ private:
   unsigned long long m_flip_cnt;
   FlipList m_flips;
   FlipIter m_flip_iter;
+  Assertions m_assertions;
 
   Address m_next_address;
 
@@ -246,6 +248,7 @@ public:
     m_flip_cnt(0),
     m_flips(),
     m_flip_iter(m_flips.cbegin()),
+    m_assertions(),
     m_next_address(1)
   {
     m_thread_id_stack.push(m_thread_id_cnt++);
@@ -302,6 +305,11 @@ public:
     m_flip_iter = m_flips.cbegin();
   }
 
+  void reset_assertions()
+  {
+    m_assertions.clear();
+  }
+
   void reset_address()
   {
     m_next_address = 1;
@@ -313,6 +321,7 @@ public:
     reset_events();
     reset_guard();
     reset_flips();
+    reset_assertions();
     reset_address();
   }
 
@@ -339,6 +348,7 @@ public:
 
     reset_events();
     reset_guard();
+    reset_assertions();
     reset_address();
     assert(0 < m_flip_cnt);
     assert(!m_flips.empty());
@@ -350,6 +360,13 @@ public:
   {
     return m_flip_cnt;
   }
+
+  const Assertions& assertions() const
+  {
+    return m_assertions;
+  }
+
+  void add_assertion(Internal<bool>&& assertion);
 
   Address next_address()
   {
@@ -1056,8 +1073,6 @@ public:
   }
 };
 
-typedef std::list<smt::Bool> Assertions;
-
 class Encoder
 {
 private:
@@ -1088,7 +1103,6 @@ private:
     return x.event_id == app;
   }
 
-  Assertions m_assertions;
   smt::CVC4Solver m_solver;
   std::map<EventIdentifier, TimeSort> m_time_map;
   const Time m_epoch;
@@ -1470,11 +1484,10 @@ private:
 
 public:
   Encoder()
-  : m_assertions(),
 #ifdef __BV_TIME__
-    m_solver(smt::QF_AUFBV_LOGIC),
+  : m_solver(smt::QF_AUFBV_LOGIC),
 #else
-    m_solver(smt::QF_AUFLIA_LOGIC),
+  : m_solver(smt::QF_AUFLIA_LOGIC),
 #endif
     m_time_map(),
     m_epoch(smt::literal<TimeSort>(0)) {}
@@ -1484,21 +1497,11 @@ public:
     return m_solver;
   }
 
-  void add_assertion(Internal<bool>&& assertion)
-  {
-    m_assertions.push_back(std::move(assertion.term));
-  }
-
-  const Assertions& assertions() const
-  {
-    return m_assertions;
-  }
-
   /// \return Is there at least one error condition to check?
   void encode(const Tracer& tracer)
   {
     unsafe_add(tracer.guard());
-    for (const smt::Bool& assertion : m_assertions)
+    for (const smt::Bool& assertion : tracer.assertions())
     {
       unsafe_add(assertion);
     }
@@ -1509,19 +1512,10 @@ public:
     encode_array_api(tracer);
   }
 
-  /// Depth-first search strategy
-
-  /// \return Is there more to encode?
-  bool reset()
-  {
-    m_assertions.clear();
-    return tracer().flip();
-  }
-
   /// Check added assertions without side effects on the solver
   smt::CheckResult check_assertions(const Tracer& tracer)
   {
-    assert(!m_assertions.empty());
+    assert(!tracer.assertions().empty());
     m_solver.push();
     encode(tracer);
     const smt::CheckResult result = m_solver.check();

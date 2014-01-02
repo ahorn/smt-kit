@@ -16,13 +16,13 @@ TEST(CrvFunctionalTest, SafeIf)
       x = 'B';
     crv::Internal<char> a(x);
 
-    encoder.add_assertion(!(a == 'B' || a == 'A'));
+    crv::tracer().add_assertion(!(a == 'B' || a == 'A'));
 
-    if (!encoder.assertions().empty() &&
+    if (!crv::tracer().assertions().empty() &&
         smt::sat == encoder.check_assertions(crv::tracer()))
       error = true;
   }
-  while (encoder.reset());
+  while (crv::tracer().flip());
   EXPECT_FALSE(error);
 }
 
@@ -63,14 +63,14 @@ TEST(CrvFunctionalTest, UnsatFib6)
   crv::Thread t0(fib_t0, N, i, j);
   crv::Thread t1(fib_t1, N, i, j);
 
-  encoder.add_assertion(377 < i || 377 < j);
+  crv::tracer().add_assertion(377 < i || 377 < j);
 
   t0.join();
   t1.join();
 
-  EXPECT_FALSE(encoder.assertions().empty());
+  EXPECT_FALSE(crv::tracer().assertions().empty());
   EXPECT_TRUE(smt::unsat == encoder.check_assertions(crv::tracer()));
-  EXPECT_FALSE(encoder.reset());
+  EXPECT_FALSE(crv::tracer().flip());
 }
 
 // Adapted from SV-COMP'13 benchmark:
@@ -86,13 +86,13 @@ TEST(CrvFunctionalTest, SatFib6)
   crv::Thread t0(fib_t0, N, i, j);
   crv::Thread t1(fib_t1, N, i, j);
 
-  encoder.add_assertion(377 <= i || 377 <= j);
+  crv::tracer().add_assertion(377 <= i || 377 <= j);
 
   t0.join();
   t1.join();
 
-  EXPECT_FALSE(encoder.assertions().empty());
+  EXPECT_FALSE(crv::tracer().assertions().empty());
   EXPECT_TRUE(smt::sat == encoder.check_assertions(crv::tracer()));
-  EXPECT_FALSE(encoder.reset());
+  EXPECT_FALSE(crv::tracer().flip());
 }
 

@@ -279,7 +279,7 @@ TEST(CrvTest, SatInsideThread)
   External<int> i = 1;
   i = 2;
   tracer().append_thread_begin_event();
-  encoder.add_assertion(i == 2);
+  tracer().add_assertion(i == 2);
   tracer().append_thread_end_event();
 
   EXPECT_EQ(smt::sat, encoder.check_assertions(tracer()));
@@ -293,7 +293,7 @@ TEST(CrvTest, UnsatInsideThread)
   External<int> i = 1;
   i = 2;
   tracer().append_thread_begin_event();
-  encoder.add_assertion(i == 3);
+  tracer().add_assertion(i == 3);
   tracer().append_thread_end_event();
 
   EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
@@ -304,14 +304,14 @@ TEST(CrvTest, Assertions)
   tracer().reset();
   Encoder encoder;
 
-  EXPECT_TRUE(encoder.assertions().empty());
+  EXPECT_TRUE(tracer().assertions().empty());
   External<int> i = 1;
-  encoder.add_assertion(i == 3);
-  EXPECT_FALSE(encoder.assertions().empty());
+  tracer().add_assertion(i == 3);
+  EXPECT_FALSE(tracer().assertions().empty());
   EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
 
   // idempotent
-  EXPECT_FALSE(encoder.assertions().empty());
+  EXPECT_FALSE(tracer().assertions().empty());
 }
 
 TEST(CrvTest, Guard)
@@ -337,7 +337,7 @@ TEST(CrvTest, Guard)
   EXPECT_TRUE(tracer().append_guard(false));
   EXPECT_EQ(smt::unsat, encoder.check(true, tracer()));
 
-  EXPECT_TRUE(encoder.reset());
+  EXPECT_TRUE(tracer().flip());
   EXPECT_FALSE(tracer().append_guard(false));
   EXPECT_EQ(smt::sat, encoder.check(true, tracer()));
 
@@ -345,7 +345,7 @@ TEST(CrvTest, Guard)
   EXPECT_TRUE(tracer().append_guard(true));
   EXPECT_EQ(smt::sat, encoder.check(true, tracer()));
 
-  EXPECT_TRUE(encoder.reset());
+  EXPECT_TRUE(tracer().flip());
   EXPECT_FALSE(tracer().append_guard(true));
   EXPECT_EQ(smt::unsat, encoder.check(true, tracer()));
 
@@ -369,7 +369,7 @@ TEST(CrvTest, Guard)
   EXPECT_TRUE(tracer().append_guard(false_bool));
   EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer()));
 
-  EXPECT_TRUE(encoder.reset());
+  EXPECT_TRUE(tracer().flip());
   false_bool = false;
   true_bool = true;
   EXPECT_FALSE(tracer().append_guard(false_bool));
@@ -383,7 +383,7 @@ TEST(CrvTest, Guard)
   EXPECT_TRUE(tracer().append_guard(true_bool));
   EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer()));
 
-  EXPECT_TRUE(encoder.reset());
+  EXPECT_TRUE(tracer().flip());
   false_bool = false;
   true_bool = true;
   EXPECT_FALSE(tracer().append_guard(true_bool));
@@ -956,7 +956,7 @@ TEST(CrvTest, SatFlipWithNondeterminsticGuardInSingleThread)
     r3 |= smt::sat == encoder.check(a == 'C', tracer());
     r4 |= smt::sat == encoder.check(a != 'B' && a == 'C', tracer());
   }
-  while (encoder.reset());
+  while (tracer().flip());
 
   EXPECT_EQ(1, tracer().flip_cnt());
   EXPECT_TRUE(r0);
@@ -996,7 +996,7 @@ TEST(CrvTest, SatFlipWithNondeterminsticGuardAndArrayInSingleThread)
     r3 |= smt::sat == encoder.check(a == 'C', tracer());
     r4 |= smt::sat == encoder.check(a != 'B' && a == 'C', tracer());
   }
-  while (encoder.reset());
+  while (tracer().flip());
 
   EXPECT_EQ(1, tracer().flip_cnt());
   EXPECT_TRUE(r0);
@@ -1034,7 +1034,7 @@ TEST(CrvTest, SatFlipWithDeterminsticGuardAndArrayInSingleThread)
     r1 |= smt::sat == encoder.check(a != 'C', tracer());
     r1 &= smt::unsat == encoder.check(a == 'C', tracer());
   }
-  while (encoder.reset());
+  while (tracer().flip());
 
   EXPECT_EQ(1, tracer().flip_cnt());
   EXPECT_TRUE(r0);
@@ -1055,9 +1055,9 @@ TEST(CrvTest, UnsatFlipInSingleThread)
     External<int> var;
 
     if (tracer().append_guard(0 < var))
-      encoder.add_assertion(var == 0);
+      tracer().add_assertion(var == 0);
 
-    if (!encoder.assertions().empty())
+    if (!tracer().assertions().empty())
     {
       checks++;
       EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
@@ -1067,7 +1067,7 @@ TEST(CrvTest, UnsatFlipInSingleThread)
       unchecks++;
     }
   }
-  while (encoder.reset());
+  while (tracer().flip());
 
   EXPECT_EQ(1, tracer().flip_cnt());
   EXPECT_EQ(1, checks);
@@ -1088,10 +1088,10 @@ TEST(CrvTest, UnsatFlipInMultipleThread)
 
     tracer().append_thread_begin_event();
     if (tracer().append_guard(0 < var))
-      encoder.add_assertion(var == 0);
+      tracer().add_assertion(var == 0);
     tracer().append_thread_end_event();
 
-    if (!encoder.assertions().empty())
+    if (!tracer().assertions().empty())
     {
       checks++;
       EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
@@ -1101,7 +1101,7 @@ TEST(CrvTest, UnsatFlipInMultipleThread)
       unchecks++;
     }
   }
-  while (encoder.reset());
+  while (tracer().flip());
 
   EXPECT_EQ(1, tracer().flip_cnt());
   EXPECT_EQ(1, checks);
@@ -1120,9 +1120,9 @@ TEST(CrvTest, UnsatFlipErrorConditionDueToFalseGuard)
   {
     External<bool> false_bool(false);
     if (tracer().append_guard(false_bool))
-      encoder.add_assertion(true);
+      tracer().add_assertion(true);
 
-    if (!encoder.assertions().empty())
+    if (!tracer().assertions().empty())
     {
       checks++;
       EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
@@ -1132,7 +1132,7 @@ TEST(CrvTest, UnsatFlipErrorConditionDueToFalseGuard)
       unchecks++;
     }
   }
-  while (encoder.reset());
+  while (tracer().flip());
 
   EXPECT_EQ(1, tracer().flip_cnt());
   EXPECT_EQ(1, checks);
@@ -1160,17 +1160,17 @@ TEST(CrvTest, FlipFour)
     if (tracer().append_guard(false_bool))
     {
       expect = smt::unsat;
-      encoder.add_assertion(true);
+      tracer().add_assertion(true);
     }
 
     if (tracer().append_guard(true_bool))
     {
       if (expect == smt::unknown)
         expect = smt::sat;
-      encoder.add_assertion(true);
+      tracer().add_assertion(true);
     }
 
-    if (!encoder.assertions().empty())
+    if (!tracer().assertions().empty())
     {
       switch (expect)
       {
@@ -1185,7 +1185,7 @@ TEST(CrvTest, FlipFour)
       unchecks++;
     }
   }
-  while (encoder.reset());
+  while (tracer().flip());
 
   EXPECT_EQ(3, tracer().flip_cnt());
   EXPECT_EQ(1, sat_checks);
