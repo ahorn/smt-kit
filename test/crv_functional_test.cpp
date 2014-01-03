@@ -16,10 +16,10 @@ TEST(CrvFunctionalTest, SafeIf)
       x = 'B';
     crv::Internal<char> a(x);
 
-    crv::tracer().add_assertion(!(a == 'B' || a == 'A'));
+    crv::tracer().add_error(!(a == 'B' || a == 'A'));
 
-    if (!crv::tracer().assertions().empty() &&
-        smt::sat == encoder.check_assertions(crv::tracer()))
+    if (!crv::tracer().errors().empty() &&
+        smt::sat == encoder.check(crv::tracer()))
       error = true;
   }
   while (crv::tracer().flip());
@@ -63,13 +63,14 @@ TEST(CrvFunctionalTest, UnsatFib6)
   crv::Thread t0(fib_t0, N, i, j);
   crv::Thread t1(fib_t1, N, i, j);
 
-  crv::tracer().add_assertion(377 < i || 377 < j);
+  crv::tracer().add_error(377 < i || 377 < j);
 
   t0.join();
   t1.join();
 
-  EXPECT_FALSE(crv::tracer().assertions().empty());
-  EXPECT_TRUE(smt::unsat == encoder.check_assertions(crv::tracer()));
+  EXPECT_TRUE(crv::tracer().assertions().empty());
+  EXPECT_FALSE(crv::tracer().errors().empty());
+  EXPECT_TRUE(smt::unsat == encoder.check(crv::tracer()));
   EXPECT_FALSE(crv::tracer().flip());
 }
 
@@ -86,13 +87,14 @@ TEST(CrvFunctionalTest, SatFib6)
   crv::Thread t0(fib_t0, N, i, j);
   crv::Thread t1(fib_t1, N, i, j);
 
-  crv::tracer().add_assertion(377 <= i || 377 <= j);
+  crv::tracer().add_error(377 <= i || 377 <= j);
 
   t0.join();
   t1.join();
 
-  EXPECT_FALSE(crv::tracer().assertions().empty());
-  EXPECT_TRUE(smt::sat == encoder.check_assertions(crv::tracer()));
+  EXPECT_TRUE(crv::tracer().assertions().empty());
+  EXPECT_FALSE(crv::tracer().errors().empty());
+  EXPECT_TRUE(smt::sat == encoder.check(crv::tracer()));
   EXPECT_FALSE(crv::tracer().flip());
 }
 
@@ -143,10 +145,10 @@ TEST(CrvFunctionalTest, UnsatStateful)
     t0.join();
     t1.join();
 
-    crv::tracer().add_assertion(i != 16 || j != 5);
+    crv::tracer().add_error(i != 16 || j != 5);
 
-    if (!crv::tracer().assertions().empty() &&
-        smt::sat == encoder.check_assertions(crv::tracer()))
+    if (!crv::tracer().errors().empty() &&
+        smt::sat == encoder.check(crv::tracer()))
       error = true;
   }
   while (crv::tracer().flip());
@@ -172,13 +174,129 @@ TEST(CrvFunctionalTest, SatStateful)
     t0.join();
     t1.join();
 
-    crv::tracer().add_assertion(i == 16 && j == 5);
+    crv::tracer().add_error(i == 16 && j == 5);
 
-    if (!crv::tracer().assertions().empty() &&
-        smt::sat == encoder.check_assertions(crv::tracer()))
+    if (!crv::tracer().errors().empty() &&
+        smt::sat == encoder.check(crv::tracer()))
       error = true;
   }
   while (crv::tracer().flip());
   EXPECT_TRUE(error);
+}
+
+void sat_stack_t0(
+  const unsigned N,
+  crv::Mutex& mutex,
+  crv::External<unsigned int>& top,
+  crv::External<int>& flag)
+{
+  int i;
+  for (i = 0; i < N; i++)
+  {
+    mutex.lock();
+    top = top + 1U;
+    flag = 1;
+    mutex.unlock();
+  }
+}
+
+void sat_stack_t1(
+const unsigned N,
+  crv::Mutex& mutex,
+  crv::External<unsigned int>& top,
+  crv::External<int>& flag)
+{
+  int i;
+  for (i = 0; i < N; i++)
+  {
+    mutex.lock();
+    if (crv::tracer().append_guard(flag == 1))
+    {
+      crv::tracer().add_error(top == 0U);
+      top = top - 1U;
+    }
+    mutex.unlock();
+  }
+}
+
+TEST(CrvFunctionalTest, SatStack)
+{
+  constexpr unsigned N = 5;
+
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  crv::Mutex mutex;
+  crv::External<unsigned int> top(0U);
+  crv::External<int> flag(0);
+
+  bool error = false;
+  do
+  {
+    crv::Thread t0(sat_stack_t0, N, mutex, top, flag);
+    crv::Thread t1(sat_stack_t1, N, mutex, top, flag);
+
+    if (!crv::tracer().errors().empty() &&
+        smt::sat == encoder.check(crv::tracer()))
+      error = true;
+  }
+  while (crv::tracer().flip());
+  EXPECT_TRUE(error);
+}
+
+void unsat_stack_t0(
+  const unsigned N,
+  crv::Mutex& mutex,
+  crv::External<unsigned int>& top)
+{
+  int i;
+  for (i = 0; i < N; i++)
+  {
+    mutex.lock();
+    top = top + 1U;
+    mutex.unlock();
+  }
+}
+
+void unsat_stack_t1(
+  const unsigned N,
+  crv::Mutex& mutex,
+  crv::External<unsigned int>& top)
+{
+  int i;
+  for (i = 0; i < N; i++)
+  {
+    mutex.lock();
+    if (crv::tracer().append_guard(0U < top))
+    {
+      crv::tracer().add_error(top == 0U);
+      top = top - 1U;
+    }
+    mutex.unlock();
+  }
+}
+
+TEST(CrvFunctionalTest, UnsatStack)
+{
+  constexpr unsigned N = 5;
+
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  crv::Mutex mutex;
+  crv::External<unsigned int> top(0U);
+
+  bool error = false;
+  do
+  {
+    crv::Thread t0(unsat_stack_t0, N, mutex, top);
+    crv::Thread t1(unsat_stack_t1, N, mutex, top);
+
+    if (!crv::tracer().errors().empty() &&
+        smt::sat == encoder.check(crv::tracer()))
+      error = true;
+  }
+  while (crv::tracer().flip());
+  EXPECT_FALSE(error);
 }
 

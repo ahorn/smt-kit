@@ -279,10 +279,11 @@ TEST(CrvTest, SatInsideThread)
   External<int> i = 1;
   i = 2;
   tracer().append_thread_begin_event();
-  tracer().add_assertion(i == 2);
+  tracer().add_error(i == 2);
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::sat, encoder.check_assertions(tracer()));
+  EXPECT_TRUE(tracer().assertions().empty());
+  EXPECT_EQ(smt::sat, encoder.check(tracer()));
 }
 
 TEST(CrvTest, UnsatInsideThread)
@@ -293,10 +294,11 @@ TEST(CrvTest, UnsatInsideThread)
   External<int> i = 1;
   i = 2;
   tracer().append_thread_begin_event();
-  tracer().add_assertion(i == 3);
+  tracer().add_error(i == 3);
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
+  EXPECT_TRUE(tracer().assertions().empty());
+  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
 }
 
 TEST(CrvTest, Assertions)
@@ -304,14 +306,42 @@ TEST(CrvTest, Assertions)
   tracer().reset();
   Encoder encoder;
 
+  // satisfy precondition of Encoder::check(const Tracer&)
+  tracer().add_error(true);
+
   EXPECT_TRUE(tracer().assertions().empty());
   External<int> i = 1;
+  tracer().add_assertion(i == 1);
+  EXPECT_FALSE(tracer().assertions().empty());
+  EXPECT_EQ(smt::sat, encoder.check(tracer()));
   tracer().add_assertion(i == 3);
   EXPECT_FALSE(tracer().assertions().empty());
-  EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
+
+  // conjunction
+  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
 
   // idempotent
   EXPECT_FALSE(tracer().assertions().empty());
+}
+
+TEST(CrvTest, Errors)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  EXPECT_TRUE(tracer().errors().empty());
+  External<int> i = 1;
+  tracer().add_error(i == 1);
+  EXPECT_FALSE(tracer().errors().empty());
+  EXPECT_EQ(smt::sat, encoder.check(tracer()));
+  tracer().add_error(i == 3);
+  EXPECT_FALSE(tracer().errors().empty());
+
+  // disjunction
+  EXPECT_EQ(smt::sat, encoder.check(tracer()));
+
+  // idempotent
+  EXPECT_FALSE(tracer().errors().empty());
 }
 
 TEST(CrvTest, Guard)
@@ -418,26 +448,26 @@ TEST(CrvTest, Guard)
   false_bool = false;
   true_bool = true;
   EXPECT_TRUE(tracer().append_guard(false_bool));
-  tracer().add_assertion(true);
+  tracer().add_error(true);
   EXPECT_TRUE(tracer().append_guard(true_bool));
-  tracer().add_assertion(true);
-  EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
+  tracer().add_error(true);
+  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
 
   EXPECT_TRUE(tracer().flip());
   false_bool = false;
   true_bool = true;
   EXPECT_TRUE(tracer().append_guard(false_bool));
-  tracer().add_assertion(true);
+  tracer().add_error(true);
   EXPECT_FALSE(tracer().append_guard(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
 
   EXPECT_TRUE(tracer().flip());
   false_bool = false;
   true_bool = true;
   EXPECT_FALSE(tracer().append_guard(false_bool));
   EXPECT_TRUE(tracer().append_guard(true_bool));
-  tracer().add_assertion(true);
-  EXPECT_EQ(smt::sat, encoder.check_assertions(tracer()));
+  tracer().add_error(true);
+  EXPECT_EQ(smt::sat, encoder.check(tracer()));
 }
 
 TEST(CrvTest, ThinAir) {
@@ -1107,12 +1137,12 @@ TEST(CrvTest, UnsatFlipInSingleThread)
     External<int> var;
 
     if (tracer().append_guard(0 < var))
-      tracer().add_assertion(var == 0);
+      tracer().add_error(var == 0);
 
-    if (!tracer().assertions().empty())
+    if (!tracer().errors().empty())
     {
       checks++;
-      EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
+      EXPECT_EQ(smt::unsat, encoder.check(tracer()));
     }
     else
     {
@@ -1140,13 +1170,13 @@ TEST(CrvTest, UnsatFlipInMultipleThread)
 
     tracer().append_thread_begin_event();
     if (tracer().append_guard(0 < var))
-      tracer().add_assertion(var == 0);
+      tracer().add_error(var == 0);
     tracer().append_thread_end_event();
 
-    if (!tracer().assertions().empty())
+    if (!tracer().errors().empty())
     {
       checks++;
-      EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
+      EXPECT_EQ(smt::unsat, encoder.check(tracer()));
     }
     else
     {
@@ -1172,12 +1202,12 @@ TEST(CrvTest, UnsatFlipErrorConditionDueToFalseGuard)
   {
     External<bool> false_bool(false);
     if (tracer().append_guard(false_bool))
-      tracer().add_assertion(true);
+      tracer().add_error(true);
 
-    if (!tracer().assertions().empty())
+    if (!tracer().errors().empty())
     {
       checks++;
-      EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
+      EXPECT_EQ(smt::unsat, encoder.check(tracer()));
     }
     else
     {
@@ -1212,17 +1242,17 @@ TEST(CrvTest, FlipFour)
     if (tracer().append_guard(false_bool))
     {
       expect = smt::unsat;
-      tracer().add_assertion(true_bool);
+      tracer().add_error(true_bool);
     }
 
     if (tracer().append_guard(true_bool))
     {
       if (expect == smt::unknown)
         expect = smt::sat;
-      tracer().add_assertion(true_bool);
+      tracer().add_error(true_bool);
     }
 
-    if (!tracer().assertions().empty())
+    if (!tracer().errors().empty())
     {
       switch (expect)
       {
@@ -1230,7 +1260,7 @@ TEST(CrvTest, FlipFour)
       case smt::unsat:   unsat_checks++;   break;
       case smt::unknown: unknown_checks++; break;
       }
-      EXPECT_EQ(expect, encoder.check_assertions(tracer()));
+      EXPECT_EQ(expect, encoder.check(tracer()));
     }
     else
     {
@@ -1280,11 +1310,12 @@ TEST(CrvTest, MutexSatSingleWriter1)
   tracer().append_thread_end_event();
 
   tracer().append_thread_begin_event();
-  tracer().add_assertion(shared_var == 3);
+  tracer().add_error(shared_var == 3);
   tracer().append_thread_end_event();
 
-  EXPECT_FALSE(tracer().assertions().empty());
-  EXPECT_EQ(smt::sat, encoder.check_assertions(tracer()));
+  EXPECT_TRUE(tracer().assertions().empty());
+  EXPECT_FALSE(tracer().errors().empty());
+  EXPECT_EQ(smt::sat, encoder.check(tracer()));
 }
 
 TEST(CrvTest, MutexUnsatSingleWriter1)
@@ -1304,12 +1335,13 @@ TEST(CrvTest, MutexUnsatSingleWriter1)
 
   tracer().append_thread_begin_event();
   mutex.lock();
-  tracer().add_assertion(shared_var == 3);
+  tracer().add_error(shared_var == 3);
   mutex.unlock();
   tracer().append_thread_end_event();
 
   EXPECT_FALSE(tracer().assertions().empty());
-  EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
+  EXPECT_FALSE(tracer().errors().empty());
+  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
 }
 
 TEST(CrvTest, MutexSatSingleWriter2)
@@ -1325,11 +1357,12 @@ TEST(CrvTest, MutexSatSingleWriter2)
   tracer().append_thread_end_event();
 
   tracer().append_thread_begin_event();
-  tracer().add_assertion(shared_var == 3);
+  tracer().add_error(shared_var == 3);
   tracer().append_thread_end_event();
 
-  EXPECT_FALSE(tracer().assertions().empty());
-  EXPECT_EQ(smt::sat, encoder.check_assertions(tracer()));
+  EXPECT_TRUE(tracer().assertions().empty());
+  EXPECT_FALSE(tracer().errors().empty());
+  EXPECT_EQ(smt::sat, encoder.check(tracer()));
 }
 
 TEST(CrvTest, MutexUnsatSingleWriter2)
@@ -1349,12 +1382,13 @@ TEST(CrvTest, MutexUnsatSingleWriter2)
 
   tracer().append_thread_begin_event();
   mutex.lock();
-  tracer().add_assertion(shared_var == 3);
+  tracer().add_error(shared_var == 3);
   mutex.unlock();
   tracer().append_thread_end_event();
 
   EXPECT_FALSE(tracer().assertions().empty());
-  EXPECT_EQ(smt::unsat, encoder.check_assertions(tracer()));
+  EXPECT_FALSE(tracer().errors().empty());
+  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
 }
 
 TEST(CrvTest, MutexSatMultipleWriters1)

@@ -170,7 +170,7 @@ struct Flip
 
 typedef std::list<Flip> FlipList;
 typedef std::list<Flip>::const_iterator FlipIter;
-typedef std::list<smt::Bool> Assertions;
+typedef std::list<smt::Bool> Bools;
 
 template<typename T> class External;
 template<typename T> class Internal;
@@ -207,7 +207,8 @@ private:
   unsigned long long m_flip_cnt;
   FlipList m_flips;
   FlipIter m_flip_iter;
-  Assertions m_assertions;
+  Bools m_assertions;
+  Bools m_errors;
 
   Address m_next_address;
 
@@ -256,6 +257,7 @@ public:
     m_flips(),
     m_flip_iter(m_flips.cbegin()),
     m_assertions(),
+    m_errors(),
     m_next_address(1)
   {
     m_thread_id_stack.push(m_thread_id_cnt++);
@@ -324,6 +326,11 @@ public:
     m_assertions.clear();
   }
 
+  void reset_errors()
+  {
+    m_errors.clear();
+  }
+
   void reset_address()
   {
     m_next_address = 1;
@@ -336,6 +343,7 @@ public:
     reset_guard();
     reset_flips();
     reset_assertions();
+    reset_errors();
     reset_address();
   }
 
@@ -362,6 +370,7 @@ public:
     reset_events();
     reset_guard();
     reset_assertions();
+    reset_errors();
     reset_address();
     assert(0 < m_flip_cnt);
     assert(!m_flips.empty());
@@ -374,12 +383,20 @@ public:
     return m_flip_cnt;
   }
 
-  const Assertions& assertions() const
+  /// Encode as conjunction
+  const Bools& assertions() const
   {
     return m_assertions;
   }
 
-  void add_assertion(Internal<bool>&& assertion);
+  /// Encode as disjunction 
+  const Bools& errors() const
+  {
+    return m_errors;
+  }
+
+  void add_assertion(Internal<bool>&&);
+  void add_error(Internal<bool>&&);
 
   Address next_address()
   {
@@ -1506,11 +1523,6 @@ public:
     m_time_map(),
     m_epoch(smt::literal<TimeSort>(0)) {}
 
-  smt::CVC4Solver& solver()
-  {
-    return m_solver;
-  }
-
   /// \return Is there at least one error condition to check?
   void encode(const Tracer& tracer)
   {
@@ -1520,16 +1532,32 @@ public:
       unsafe_add(assertion);
     }
 
+    if (!tracer.errors().empty())
+    {
+      smt::Bool or_error(smt::literal<smt::Bool>(false));
+      for (const smt::Bool& error : tracer.errors())
+      {
+        or_error = or_error or error;
+      }
+      unsafe_add(or_error);
+    }
+
     encode_thread_order(tracer.per_thread_map());
     encode_memory_concurrency(tracer);
     encode_stack_api(tracer);
     encode_array_api(tracer);
   }
 
-  /// Check added assertions without side effects on the solver
-  smt::CheckResult check_assertions(const Tracer& tracer)
+  /// Check for any program safety violations (i.e. bugs)
+
+  /// Use SAT/SMT solver to check the satisfiability of the
+  /// disjunction of errors() and conjunction of assertions()
+  ///
+  /// pre: not errors().empty()
+  smt::CheckResult check(const Tracer& tracer)
   {
-    assert(!tracer.assertions().empty());
+    assert(!tracer.errors().empty());
+
     m_solver.push();
     encode(tracer);
     const smt::CheckResult result = m_solver.check();
@@ -1537,8 +1565,10 @@ public:
     return result;
   }
 
-  /// Check given condition and previously added assertions
-  /// without side effects on the solver
+  // Check satisfiability of given condition, disjunction of
+  // previously added errors() and conjunction of assertions()
+  // Note: unlike check(const Tracer&), errors().empty() is
+  // permissible (in which case they are ignored).
   smt::CheckResult check(
     Internal<bool>&& condition,
     const Tracer& tracer)
