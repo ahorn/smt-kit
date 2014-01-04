@@ -1428,20 +1428,17 @@ private:
       {
         const Event& ld = *ld_iter;
 
-        for (EventIterList::const_iterator stores_iter = a.stores().cbegin();
-             stores_iter != a.stores().cend();
-             stores_iter++)
+        for (const EventIter s_iter : a.stores())
         {
-          const Event& s = **stores_iter;
+          const Event& s = *s_iter;
 
-          EventIterList::const_iterator stores_prime_iter = stores_iter;
-          for (stores_prime_iter++;
-               stores_prime_iter != a.stores().cend();
-               stores_prime_iter++)
+          for (const EventIter s_prime_iter : a.stores())
           {
-            const Event& s_prime = **stores_prime_iter;
+            if (s_iter == s_prime_iter)
+              continue;
 
-            const smt::Bool ldf_bool(flow_bool(s_rf_prefix, s, ld));
+            const Event& s_prime = *s_prime_iter;
+            const smt::Bool ldf_bool(flow_bool(s_ldf_prefix, s, ld));
             and_fld = and_fld and s.guard and
               smt::implies(
                 /* if */ ldf_bool and time(s).happens_before(time(s_prime)) and

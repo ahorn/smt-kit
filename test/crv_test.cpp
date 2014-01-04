@@ -1008,6 +1008,36 @@ TEST(CrvTest, JoinThreads)
   EXPECT_EQ(smt::sat, encoder.check(x == 'A', tracer()));
 }
 
+void array_t0(crv::External<char[]>& array)
+{
+  array[0] = 'X';
+}
+
+void array_t1(crv::External<char[]>& array)
+{
+  array[0] = 'Y';
+}
+
+TEST(CrvTest, ArrayWithJoinThreads)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<char[]> array;
+
+  Thread t1(array_t0, array);
+  Thread t2(array_t1, array);
+  t1.join();
+  t2.join();
+ 
+  EXPECT_TRUE(tracer().assertions().empty());
+  EXPECT_TRUE(tracer().errors().empty());
+  EXPECT_EQ(smt::unsat, encoder.check(array[0] != 'X' && array[0] != 'Y', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(array[0] != 'X', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(array[0] != 'Y', tracer()));
+  EXPECT_FALSE(tracer().flip());
+}
+
 TEST(CrvTest, SatFlipWithNondeterminsticGuardInSingleThread)
 {
   tracer().reset();
