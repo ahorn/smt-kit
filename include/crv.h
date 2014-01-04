@@ -383,6 +383,11 @@ public:
     return m_flip_cnt;
   }
 
+  FlipList& flips()
+  {
+    return m_flips;
+  }
+
   /// Encode as conjunction
   const Bools& assertions() const
   {
