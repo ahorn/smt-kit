@@ -162,9 +162,8 @@ struct Flip
   bool direction;
   bool is_flip;
 
-  // Nonzero initialization!
-  Flip()
-  : direction(true),
+  Flip(bool direction)
+  : direction(direction),
     is_flip(false) {}
 };
 
@@ -409,7 +408,7 @@ public:
     return m_next_address++;
   }
 
-  bool append_guard(const Internal<bool>&);
+  bool append_guard(const Internal<bool>&, bool direction = true);
 
   /// Returns parent thread identifier
   ThreadIdentifier append_thread_begin_event()

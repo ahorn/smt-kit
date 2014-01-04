@@ -24,12 +24,13 @@ void Tracer::add_error(Internal<bool>&& error)
   m_errors.push_back(std::move(error.term));
 }
 
-bool Tracer::append_guard(const Internal<bool>& internal)
+bool Tracer::append_guard(
+  const Internal<bool>& internal,
+  bool direction)
 {
-  bool direction = true;
   if (m_flip_iter == m_flips.cend())
   {
-    m_flips.push_back(Flip());
+    m_flips.push_back(Flip(direction));
     assert(m_flips.back().direction == direction);
   }
   else

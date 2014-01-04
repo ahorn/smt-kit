@@ -379,6 +379,17 @@ TEST(CrvTest, Guard)
   EXPECT_FALSE(tracer().append_guard(true));
   EXPECT_EQ(smt::unsat, encoder.check(true, tracer()));
 
+  tracer().reset();
+  EXPECT_FALSE(tracer().append_guard(false, false));
+  EXPECT_TRUE(tracer().append_guard(true, true));
+  tracer().add_error(true);
+  EXPECT_EQ(smt::sat, encoder.check(tracer()));
+
+  tracer().reset();
+  EXPECT_FALSE(tracer().append_guard(true, false));
+  tracer().add_error(true);
+  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+
   External<bool> false_bool;
   External<bool> true_bool;
 
