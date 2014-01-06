@@ -1046,6 +1046,8 @@ TEST(CrvTest, ArrayWithJoinThreads)
   EXPECT_EQ(smt::unsat, encoder.check(array[0] != 'X' && array[0] != 'Y', tracer()));
   EXPECT_EQ(smt::sat, encoder.check(array[0] != 'X', tracer()));
   EXPECT_EQ(smt::sat, encoder.check(array[0] != 'Y', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(array[0] == 'X', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(array[0] == 'Y', tracer()));
   EXPECT_FALSE(tracer().flip());
 }
 
