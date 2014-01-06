@@ -1019,12 +1019,12 @@ TEST(CrvTest, JoinThreads)
   EXPECT_EQ(smt::sat, encoder.check(x == 'A', tracer()));
 }
 
-void array_t0(crv::External<char[]>& array)
+void array_t0(External<char[]>& array)
 {
   array[0] = 'X';
 }
 
-void array_t1(crv::External<char[]>& array)
+void array_t1(External<char[]>& array)
 {
   array[0] = 'Y';
 }
@@ -1048,6 +1048,43 @@ TEST(CrvTest, ArrayWithJoinThreads)
   EXPECT_EQ(smt::sat, encoder.check(array[0] != 'Y', tracer()));
   EXPECT_EQ(smt::sat, encoder.check(array[0] == 'X', tracer()));
   EXPECT_EQ(smt::sat, encoder.check(array[0] == 'Y', tracer()));
+  EXPECT_FALSE(tracer().flip());
+}
+
+void array_index(
+  External<unsigned[]>& array,
+  const External<size_t>& index)
+{
+  array[index] = 1;
+}
+
+TEST(CrvTest, ArrayIndex)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<unsigned[]> array;
+  External<size_t> index(0);
+
+  Thread t1(array_index, array, index);
+  index = index + 1;
+
+  Thread t2(array_index, array, index);
+  index = index + 1;
+
+  Thread t3(array_index, array, index);
+
+  t1.join();
+  t2.join();
+  t3.join();
+
+  Internal<unsigned> sum(array[0] + array[1] + array[2]);
+ 
+  EXPECT_TRUE(tracer().assertions().empty());
+  EXPECT_TRUE(tracer().errors().empty());
+  EXPECT_EQ(smt::unsat, encoder.check(sum == 4, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(sum == 3, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(sum != 3, tracer()));
   EXPECT_FALSE(tracer().flip());
 }
 
