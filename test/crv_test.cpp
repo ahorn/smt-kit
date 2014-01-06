@@ -1085,6 +1085,12 @@ TEST(CrvTest, ArrayIndex)
   EXPECT_EQ(smt::unsat, encoder.check(sum == 4, tracer()));
   EXPECT_EQ(smt::sat, encoder.check(sum == 3, tracer()));
   EXPECT_EQ(smt::sat, encoder.check(sum != 3, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(sum == 2, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(sum != 2, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(sum == 1, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(sum != 1, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(sum == 0, tracer()));
+
   EXPECT_FALSE(tracer().flip());
 }
 
