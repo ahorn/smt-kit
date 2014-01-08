@@ -25,14 +25,14 @@ namespace crv
 
 enum EventKind : unsigned short
 {
-  READ_EVENT = 1,
+  THREAD_BEGIN_EVENT = 0,
+  THREAD_END_EVENT   = 1,
+  READ_EVENT         = 7,
   WRITE_EVENT,
   POP_EVENT,
   PUSH_EVENT,
   LOAD_EVENT,
   STORE_EVENT,
-  THREAD_BEGIN_EVENT = 8,
-  THREAD_END_EVENT
 };
 
 /// Positive unless event is_sync()
@@ -89,7 +89,7 @@ public:
   bool is_push() const { return kind == PUSH_EVENT; }
   bool is_thread_begin() const { return kind == THREAD_BEGIN_EVENT; }
   bool is_thread_end() const { return kind == THREAD_END_EVENT; }
-  bool is_sync() const { return 8 <= kind; }
+  bool is_sync() const { return is_thread_begin() || is_thread_end(); }
 };
 
 typedef std::list<Event> EventList;
