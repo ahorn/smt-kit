@@ -7,7 +7,6 @@
 
 #include <smt>
 #include <set>
-#include <map>
 #include <unordered_map>
 #include <list>
 #include <stack>
@@ -218,8 +217,8 @@ void EventKinds::push_back<SEND_EVENT>(const EventIter e_iter)
   m_sends.push_back(e_iter);
 }
 
-typedef std::map<Address, EventKinds> PerAddressMap;
-typedef std::map<ThreadIdentifier, EventIterList> PerThreadMap;
+typedef std::unordered_map<Address, EventKinds> PerAddressMap;
+typedef std::unordered_map<ThreadIdentifier, EventIterList> PerThreadMap;
 typedef std::unordered_map<EventIter, EventIterList> PerEventMap;
 
 /// Control flow decision along symbolic path
