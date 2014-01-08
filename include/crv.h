@@ -33,6 +33,8 @@ enum EventKind : unsigned short
   PUSH_EVENT,
   LOAD_EVENT,
   STORE_EVENT,
+  RECV_EVENT,
+  SEND_EVENT,
 };
 
 /// Positive unless event is_sync()
@@ -87,6 +89,8 @@ public:
   bool is_write() const { return kind == WRITE_EVENT; }
   bool is_pop() const { return kind == POP_EVENT; }
   bool is_push() const { return kind == PUSH_EVENT; }
+  bool is_recv() const { return kind == RECV_EVENT; }
+  bool is_send() const { return kind == SEND_EVENT; }
   bool is_thread_begin() const { return kind == THREAD_BEGIN_EVENT; }
   bool is_thread_end() const { return kind == THREAD_END_EVENT; }
   bool is_sync() const { return is_thread_begin() || is_thread_end(); }
@@ -94,6 +98,41 @@ public:
 
 typedef std::list<Event> EventList;
 typedef EventList::const_iterator EventIter;
+
+}
+
+namespace std
+{
+  template<>
+  class hash<crv::EventIter>
+  {
+  public:
+    size_t operator()(const crv::EventIter& e_iter) const
+    {
+      return e_iter->event_id;
+    }
+  };
+
+  template<>
+  class hash<std::pair<crv::EventIter, crv::EventIter>>
+  {
+  public:
+    size_t operator()(const std::pair<crv::EventIter, crv::EventIter>& p) const
+    {
+      constexpr crv::EventIdentifier max_event_id =
+        numeric_limits<crv::EventIdentifier>::max();
+
+      static_assert(max_event_id * 2 < numeric_limits<size_t>::max(),
+        "size_t must be at least twice as large as crv::EventIdentifier");
+
+      return p.first->event_id * max_event_id + p.second->event_id;
+    }
+  };
+}
+
+namespace crv
+{
+
 typedef std::vector<EventIter> EventIterList;
 
 class EventKinds
@@ -105,6 +144,8 @@ private:
   EventIterList m_pushes;
   EventIterList m_loads;
   EventIterList m_stores;
+  EventIterList m_recvs;
+  EventIterList m_sends;
 
 public:
   EventKinds()
@@ -125,6 +166,8 @@ public:
   const EventIterList& pushes() const { return m_pushes; }
   const EventIterList& loads()  const { return m_loads;  }
   const EventIterList& stores() const { return m_stores; }
+  const EventIterList& recvs()  const { return m_recvs;  }
+  const EventIterList& sends()  const { return m_sends;  }
 };
 
 template<> inline
@@ -163,8 +206,21 @@ void EventKinds::push_back<STORE_EVENT>(const EventIter e_iter)
   m_stores.push_back(e_iter);
 }
 
+template<> inline
+void EventKinds::push_back<RECV_EVENT>(const EventIter e_iter)
+{
+  m_recvs.push_back(e_iter);
+}
+
+template<> inline
+void EventKinds::push_back<SEND_EVENT>(const EventIter e_iter)
+{
+  m_sends.push_back(e_iter);
+}
+
 typedef std::map<Address, EventKinds> PerAddressMap;
 typedef std::map<ThreadIdentifier, EventIterList> PerThreadMap;
+typedef std::unordered_map<EventIter, EventIterList> PerEventMap;
 
 /// Control flow decision along symbolic path
 struct Flip
@@ -481,6 +537,12 @@ public:
   /// Uses external's offset term for new store event
   template<typename T>
   void append_store_event(const External<T>&);
+
+  template<typename T>
+  typename Smt<T>::Sort append_recv_event(const External<T>&);
+
+  template<typename T>
+  void append_send_event(const External<T>&);
 };
 
 // Global for symbolic execution
@@ -848,6 +910,28 @@ void Tracer::append_store_event(const External<T>& external)
 
   append_event<STORE_EVENT>(
     m_event_id_cnt++, external.address, external.term, external.offset_term);
+}
+
+template<typename T>
+typename Smt<T>::Sort Tracer::append_recv_event(const External<T>& channel)
+{
+  assert(channel.offset_term.is_null());
+
+  const EventIdentifier event_id(m_event_id_cnt);
+  typename Smt<T>::Sort term(make_value_symbol<T>());
+  // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
+  append_event<RECV_EVENT>(event_id, channel.address, term);
+
+  return term;
+}
+
+template<typename T>
+void Tracer::append_send_event(const External<T>& channel)
+{
+  assert(!channel.term.is_null());
+  assert(channel.offset_term.is_null());
+
+  append_event<SEND_EVENT>(m_event_id_cnt++, channel.address, channel.term);
 }
 
 }
@@ -1495,6 +1579,224 @@ private:
     encode_store_serialization(per_address_map);
   }
 
+public:
+  static PerEventMap build_predecessors_map(
+    const PerThreadMap& per_thread_map)
+  {
+    // TODO: implement communication-select feature
+    bool is_communication_select(false);
+    PerEventMap predecessors_map;
+    for (const PerThreadMap::value_type& pair : per_thread_map)
+    {
+      // ignore main thread
+      if (pair.first == 1)
+        continue;
+
+      const EventIterList& events = pair.second;
+      if (events.empty())
+        continue;
+
+      EventIterList::const_reverse_iterator criter(events.crbegin());
+      assert(criter != events.crend());
+
+      EventIter e_iter(*criter);
+      assert(e_iter->is_thread_end());
+
+      EventIter e_prime_iter(e_iter);
+      for (criter++; criter != events.crend(); criter++)
+      {
+        const EventKind e_kind((*criter)->kind);
+        if (e_kind != RECV_EVENT && e_kind != SEND_EVENT)
+          continue;
+
+        e_prime_iter = *criter;
+        EventIterList& predecessors = predecessors_map[e_iter];
+        if (!is_communication_select)
+        {
+          e_iter = e_prime_iter;
+          for (const EventIter p_iter : predecessors)
+          {
+            predecessors_map[p_iter].push_back(e_iter);
+          }
+        }
+        predecessors.push_back(e_prime_iter); 
+      }
+
+      if (e_prime_iter != *events.crbegin())
+      {
+        // first per-thread communication events have no predecessors
+        assert(e_prime_iter->is_recv() || e_prime_iter->is_send());
+        predecessors_map[e_prime_iter];
+      }
+    }
+    return predecessors_map;
+  }
+
+  /// Maps recv/send events on same channel but in different threads
+  typedef std::unordered_map<std::pair<EventIter, EventIter>,
+    smt::Bool> MatchableMap;
+
+  static MatchableMap build_matchable_map(
+    const PerAddressMap& per_address_map)
+  {
+    const std::string match_prefix("match!{");
+    MatchableMap matchable_map;
+    for (const PerAddressMap::value_type& pair : per_address_map)
+    {
+      const EventKinds& a = pair.second;
+      for (const EventIter r_iter : a.recvs())
+      {
+        for (const EventIter s_iter : a.sends())
+        {
+          if (r_iter->thread_id == s_iter->thread_id)
+            continue;
+
+          std::string match_symbol(match_prefix +
+            std::to_string(r_iter->event_id) + "," +
+            std::to_string(s_iter->event_id) + "}");
+
+          matchable_map[std::make_pair(r_iter, s_iter)] =
+            smt::any<smt::Bool>(std::move(match_symbol));
+        }
+      }
+    }
+    return matchable_map;
+  }
+
+private:
+  static smt::Bool communication_preds(
+    const PerAddressMap& per_address_map,
+    const MatchableMap& matchable_map,
+    const EventIterList& predecessors)
+  {
+    smt::Bool and_match(smt::literal<smt::Bool>(true));
+    for (const EventIter e_iter : predecessors)
+    {
+      assert(e_iter->is_recv() || e_iter->is_send());
+
+      const EventKinds& a = per_address_map.at(e_iter->address);
+      const EventIterList& matchables = e_iter->is_recv() ?
+        a.sends() : a.recvs();
+
+      smt::Bool or_match(smt::literal<smt::Bool>(false));
+      for (const EventIter e_prime_iter : matchables)
+      {
+        if (e_iter->thread_id == e_prime_iter->thread_id)
+          continue;
+
+        const MatchableMap::key_type match_pair(
+          e_iter->is_recv() ?
+            std::make_pair(e_iter, e_prime_iter)
+          : std::make_pair(e_prime_iter, e_iter));
+
+        or_match = or_match or matchable_map.at(match_pair);
+      }
+
+      and_match = and_match and or_match;
+    }
+    return and_match;
+  }
+
+  static smt::Bool communication_excl(
+    const PerAddressMap& per_address_map,
+    const MatchableMap& matchable_map,
+    const EventIter r_iter,
+    const EventIter s_iter)
+  {
+    assert(r_iter->is_recv());
+    assert(s_iter->is_send());
+    assert(r_iter->thread_id != s_iter->thread_id);
+
+    const EventKinds& r_a = per_address_map.at(r_iter->address);
+    const EventKinds& s_a = per_address_map.at(s_iter->address);
+
+    smt::Bool or_match(smt::literal<smt::Bool>(false));
+    for (const EventIter e_iter : r_a.sends())
+    {
+      if (r_iter->thread_id == e_iter->thread_id || e_iter == s_iter)
+        continue;
+
+      or_match = or_match or
+        matchable_map.at(std::make_pair(r_iter, e_iter));
+    }
+    for (const EventIter e_iter : s_a.recvs())
+    {
+      if (s_iter->thread_id == e_iter->thread_id || e_iter == r_iter)
+        continue;
+
+      or_match = or_match or
+        matchable_map.at(std::make_pair(e_iter, s_iter));
+    }
+    return not or_match;
+  }
+
+  void encode_communication_concurrency(const Tracer& tracer)
+  {
+    const PerAddressMap& per_address_map = tracer.per_address_map();
+    const PerThreadMap& per_thread_map = tracer.per_thread_map();
+    const std::string finalizer_prefix("finalizer!");
+
+    auto matchable_map(build_matchable_map(per_address_map));
+    auto predecessors_map(build_predecessors_map(per_thread_map));
+
+    smt::Bool init_match(smt::literal<smt::Bool>(false));
+    smt::Bool ext_match(smt::literal<smt::Bool>(true));
+    smt::Bool finalizers(smt::literal<smt::Bool>(true));
+
+    for (const PerAddressMap::value_type& pair : per_address_map)
+    {
+      const EventKinds& a = pair.second;
+      for (const EventIter r_iter : a.recvs())
+      {
+        const Time& r_time = time(*r_iter);
+        for (const EventIter s_iter : a.sends())
+        {
+          if (r_iter->thread_id == s_iter->thread_id)
+            continue;
+
+          const smt::Bool& match_bool(
+            matchable_map.at(std::make_pair(r_iter, s_iter)));
+
+          smt::Bool rs_ext(match_bool ==
+            (communication_preds(per_address_map, matchable_map,
+               predecessors_map.at(r_iter)) and
+             communication_preds(per_address_map, matchable_map,
+               predecessors_map.at(s_iter)) and
+             communication_excl(per_address_map, matchable_map,
+               r_iter, s_iter)));
+
+          ext_match = ext_match and rs_ext and
+            (match_bool == r_time.simultaneous(time(*s_iter)));
+
+          if (predecessors_map.at(r_iter).empty() &&
+              predecessors_map.at(s_iter).empty())
+            init_match = init_match or match_bool;
+        }
+      }
+    }
+
+    for (const PerThreadMap::value_type& pair : per_thread_map)
+    {
+      // ignore main thread
+      if (pair.first == 1)
+        continue;
+
+      const EventIter e_iter(pair.second.back());
+      assert(e_iter->is_thread_end());
+
+      smt::Bool finalizer_bool(smt::any<smt::Bool>(
+        finalizer_prefix + std::to_string(e_iter->event_id)));
+      finalizers = finalizers and finalizer_bool;
+      ext_match = ext_match and
+        (finalizer_bool == communication_preds(per_address_map,
+           matchable_map, predecessors_map.at(e_iter)));
+    }
+
+    unsafe_add(ext_match);
+    unsafe_add(init_match);
+    unsafe_add(not finalizers);
+  }
+
   /*
    * Synchronization between threads (e.g. BEGIN/THREAD_END_EVENT) relies
    * on the fact that time(const Event&) builds an SMT variable whose
@@ -1556,6 +1858,19 @@ public:
     encode_memory_concurrency(tracer);
     encode_stack_api(tracer);
     encode_array_api(tracer);
+  }
+
+  /// Check whether there is a communication deadlock
+  smt::CheckResult check_deadlock(const Tracer& tracer)
+  {
+    assert(tracer.errors().empty());
+
+    m_solver.push();
+    encode(tracer);
+    encode_communication_concurrency(tracer);
+    const smt::CheckResult result = m_solver.check();
+    m_solver.pop();
+    return result;
   }
 
   /// Check for any program safety violations (i.e. bugs)
@@ -1662,6 +1977,37 @@ public:
     // TODO: ensure that lock() and unlock() are in preserved program order
     assert(m_lock_thread_id == ThisThread::thread_id());
     tracer().add_assertion(m_thread_id == m_lock_thread_id);
+  }
+};
+
+/// CSP-style communication
+template<typename T>
+class Channel
+{
+private:
+  External<T> m_channel;
+
+public:
+  void send(T v)
+  {
+    send(Internal<T>(v));
+  }
+
+  void send(const Internal<T>& payload)
+  {
+    m_channel.term = payload.term;
+    tracer().append_send_event(m_channel);
+  }
+
+  void send(const External<T>& payload)
+  {
+    m_channel.term = append_input_event(payload);
+    tracer().append_send_event(m_channel);
+  }
+
+  Internal<T> recv() const
+  {
+    return Internal<T>(tracer().append_recv_event(m_channel));
   }
 };
 

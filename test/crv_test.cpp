@@ -1638,3 +1638,115 @@ TEST(CrvTest, MutexJoinMultipleWriters)
   EXPECT_EQ(smt::unsat, encoder.check(!(x == 16 && y == 5), tracer()));
 }
 
+TEST(CrvTest, CommunicationPredecessors)
+{
+  tracer().reset();
+
+  Channel<int> c;
+  tracer().append_thread_begin_event();
+  External<int> x(0);
+  x = c.recv();
+  x = x + 1;
+  c.send(x);
+  tracer().append_thread_end_event();
+
+  const PerThreadMap& per_thread_map = tracer().per_thread_map();
+  PerEventMap predecessors_map(
+    Encoder::build_predecessors_map(per_thread_map));
+  EXPECT_FALSE(predecessors_map.empty());
+
+  EventIterList event_iters;
+  for (const EventIter e_iter : per_thread_map.at(2))
+  {
+    if (e_iter->is_send() ||
+        e_iter->is_recv() || 
+        e_iter->is_thread_end())
+      event_iters.push_back(e_iter);
+  }
+
+  EXPECT_EQ(3, event_iters.size());
+
+  EventIter e_iter(event_iters[2]);
+  EXPECT_TRUE(e_iter->is_thread_end());
+
+  EventIter e_prime_iter = event_iters[1];
+  EXPECT_TRUE(e_prime_iter->is_send());
+
+  // look up predecessors of a THREAD_END_EVENT
+  EXPECT_EQ(1, predecessors_map.at(e_iter).size());
+  EXPECT_EQ(e_prime_iter, predecessors_map.at(e_iter).front());
+
+  e_iter = e_prime_iter;
+  e_prime_iter = event_iters[0];
+  EXPECT_TRUE(e_prime_iter->is_recv());
+
+  EXPECT_EQ(1, predecessors_map.at(e_iter).size());
+  EXPECT_EQ(e_prime_iter, predecessors_map.at(e_iter).front());
+  EXPECT_EQ(0, predecessors_map.at(e_prime_iter).size());
+}
+
+TEST(CrvTest, Deadlock)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Channel<int> c;
+
+  tracer().append_thread_begin_event();
+  c.send(5);
+  Internal<int> r = c.recv();
+  c.send(Internal<int>(6));
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  External<int> seven(7);
+  c.send(seven);
+  c.recv();
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  c.recv();
+  tracer().append_thread_end_event();
+
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer()));
+}
+
+TEST(CrvTest, InitDeadlockFree)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Channel<int> c;
+
+  tracer().append_thread_begin_event();
+  c.send(5);
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  c.recv();
+  tracer().append_thread_end_event();
+
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer()));
+}
+
+// Unlike CrvTest::InitDeadlockFree, this test also relies
+// on the extension axiom implemented by Encoder
+TEST(CrvTest, ExtensionDeadlockFree)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Channel<int> c;
+
+  tracer().append_thread_begin_event();
+  c.send(5);
+  c.recv();
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  c.recv();
+  c.send(6);
+  tracer().append_thread_end_event();
+
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer()));
+}

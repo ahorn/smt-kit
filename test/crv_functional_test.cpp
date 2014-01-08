@@ -300,3 +300,55 @@ TEST(CrvFunctionalTest, UnsatStack)
   EXPECT_FALSE(error);
 }
 
+void sat_communication_f(crv::Channel<int>& s, crv::Channel<int>& t)
+{
+  t.send(1);
+  crv::Internal<int> r(s.recv());
+  s.send(r);
+}
+
+void sat_communication_g(crv::Channel<int>& s, crv::Channel<int>& t)
+{
+  crv::Internal<int> r(t.recv());
+  s.send(r);
+}
+
+void sat_communication_h(crv::Channel<int>& s)
+{
+  s.recv();
+}
+
+TEST(CrvFunctionalTest, SatCommunication)
+{
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  crv::Channel<int> s, t;
+  crv::Thread f(sat_communication_f, s, t);
+  crv::Thread g(sat_communication_g, s, t);
+  crv::Thread h(sat_communication_h, s);
+
+  EXPECT_TRUE(crv::tracer().errors().empty());
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer()));
+}
+
+void sat_communication_g_prime(crv::Channel<int>& s, crv::Channel<int>& t)
+{
+  crv::Internal<int> r(t.recv());
+  s.send(r);
+  s.recv();
+}
+
+TEST(CrvFunctionalTest, UnsatCommunication)
+{
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  crv::Channel<int> s, t;
+  crv::Thread f(sat_communication_f, s, t);
+  crv::Thread g_prime(sat_communication_g_prime, s, t);
+
+  EXPECT_TRUE(crv::tracer().errors().empty());
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(crv::tracer()));
+}
+
