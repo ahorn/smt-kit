@@ -8,6 +8,7 @@
 #include <smt>
 #include <set>
 #include <map>
+#include <unordered_map>
 #include <list>
 #include <stack>
 #include <string>
@@ -35,8 +36,8 @@ enum EventKind : unsigned short
 };
 
 /// Positive unless event is_sync()
-typedef unsigned long Address;
-typedef unsigned long EventIdentifier;
+typedef unsigned int Address;
+typedef unsigned int EventIdentifier;
 
 /// Positive if and only if thread is joinable
 typedef unsigned ThreadIdentifier;
@@ -1146,7 +1147,7 @@ private:
   }
 
   smt::CVC4Solver m_solver;
-  std::map<EventIdentifier, TimeSort> m_time_map;
+  std::unordered_map<EventIdentifier, TimeSort> m_time_map;
   const Time m_epoch;
 
   /// Uses e's identifier to build a numerical SMT variable
