@@ -52,6 +52,15 @@ public:
   const smt::UnsafeTerm term;
   const smt::UnsafeTerm offset_term;
 
+  Event(Event&& other)
+  : kind(other.kind),
+    event_id(other.event_id),
+    thread_id(other.thread_id),
+    address(other.address),
+    guard(std::move(other.guard)),
+    term(std::move(other.term)),
+    offset_term(std::move(other.offset_term)) {}
+
   Event(
     const EventKind kind_arg,
     const EventIdentifier event_id_arg,
@@ -231,8 +240,7 @@ private:
       address, guard(), term, offset_term));
 
     const EventIter e_iter(--m_events.cend());
-    EventKinds& a_event_kinds(m_per_address_map[e_iter->address]);
-    a_event_kinds.push_back<kind>(e_iter);
+    m_per_address_map[e_iter->address].push_back<kind>(e_iter);
     m_per_thread_map[thread_id].push_back(e_iter);
   }
 
