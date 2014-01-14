@@ -372,9 +372,9 @@ public:
     push_next_thread_id();
   }
 
-  void reset_guard()
+  void reset_guard(const smt::Bool guard = smt::literal<smt::Bool>(true))
   {
-    m_guard = smt::literal<smt::Bool>(true);
+    m_guard = guard;
   }
 
   void reset_flips()
@@ -1920,6 +1920,7 @@ public:
 class Thread
 {
 private:
+  const smt::Bool m_guard;
   ThreadIdentifier m_parent_thread_id;
   ThreadIdentifier m_thread_id;
 
@@ -1932,12 +1933,15 @@ public:
   /// The return value of `f` is always ignored.
   template<typename Function, typename... Args>
   Thread(Function&& f, Args&&... args)
-  : m_parent_thread_id(0),
+  : m_guard(tracer().guard()),
+    m_parent_thread_id(0),
     m_thread_id(0)
   {
+    tracer().reset_guard();
     m_parent_thread_id = tracer().append_thread_begin_event();
     f(args...);
     m_thread_id = tracer().append_thread_end_event();
+    tracer().reset_guard(m_guard);
   }
 
   bool joinable() const

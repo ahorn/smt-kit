@@ -1490,6 +1490,38 @@ TEST(CrvTest, ThreadApi)
   EXPECT_EQ(1, ThisThread::thread_id());
 }
 
+void thread_false_guard()
+{
+  tracer().append_guard(false);
+}
+
+void thread_true_error()
+{
+  tracer().add_error(true);
+}
+
+TEST(CrvTest, ThreadGuard)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Thread f(thread_false_guard);
+  Thread g(thread_true_error);
+
+  EXPECT_FALSE(tracer().errors().empty());
+  EXPECT_EQ(smt::sat, encoder.check(tracer()));
+
+  tracer().reset();
+  unsigned n = 0;
+
+  tracer().append_guard(false);
+  Thread h(thread_api_test, &n, 7);
+  tracer().add_error(true);
+
+  EXPECT_EQ(7, n);
+  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+}
+
 TEST(CrvTest, MutexSatSingleWriter1)
 {
   tracer().reset();
