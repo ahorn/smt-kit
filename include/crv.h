@@ -1305,20 +1305,16 @@ private:
       {
         const Event& r = *r_iter;
 
-        for (EventIterList::const_iterator writes_iter = a.writes().cbegin();
-             writes_iter != a.writes().cend();
-             writes_iter++)
+        for (const EventIter w_iter : a.writes())
         {
-          const Event& w = **writes_iter;
+          const Event& w = *w_iter;
 
-          for (EventIterList::const_iterator writes_prime_iter = a.writes().cbegin();
-               writes_prime_iter != a.writes().cend();
-               writes_prime_iter++)
+          for (const EventIter w_prime_iter : a.writes())
           {
-            if (*writes_iter == *writes_prime_iter)
+            if (w_iter == w_prime_iter)
               continue;
 
-            const Event& w_prime = **writes_prime_iter;
+            const Event& w_prime = *w_prime_iter;
             const smt::Bool rf_bool(flow_bool(s_rf_prefix, w, r));
             and_fr = and_fr and w.guard and
               smt::implies(
