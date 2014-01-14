@@ -874,27 +874,25 @@ void Tracer::append_write_event(const External<T>& external)
 }
 
 template<typename T>
-typename Smt<T>::Sort Tracer::append_pop_event(const External<T>& external)
+typename Smt<T>::Sort Tracer::append_pop_event(const External<T>& stack)
 {
-  assert(external.offset_term.is_null());
+  assert(stack.offset_term.is_null());
 
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
   // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
-  append_event<POP_EVENT>(
-    event_id, external.address, term);
+  append_event<POP_EVENT>(event_id, stack.address, term);
 
   return term;
 }
 
 template<typename T>
-void Tracer::append_push_event(const External<T>& external)
+void Tracer::append_push_event(const External<T>& stack)
 {
-  assert(!external.term.is_null());
-  assert(external.offset_term.is_null());
+  assert(!stack.term.is_null());
+  assert(stack.offset_term.is_null());
 
-  append_event<PUSH_EVENT>(
-    m_event_id_cnt++, external.address, external.term);
+  append_event<PUSH_EVENT>(m_event_id_cnt++, stack.address, stack.term);
 }
 
 template<typename T>
@@ -1428,6 +1426,8 @@ private:
           {
             const Event& pop = *pop_iter;
             const smt::Bool pf_bool(flow_bool(s_pf_prefix, push, pop));
+            const smt::Bool push_prime_pop_order(
+              time(push_prime).happens_before(time(pop)));
 
             smt::UnsafeTerm or_pp(smt::literal<smt::Bool>(false));
             for (const EventIter pop_prime_iter : a.pops())
@@ -1441,11 +1441,11 @@ private:
               or_pp = or_pp or pf_prime_bool;
 
               // if pf!pop = push and pf!pop' = push' and
-              // t!push < t!push', then t!pop' < t!pop.
-              and_stack = and_stack and
-                smt::implies(
-                  pf_bool and pf_prime_bool and pushes_order,
-                  pops_order);
+              // t!push < t!push' and t!push' < t!pop,
+              // then t!pop' < t!pop.
+              and_stack = and_stack and smt::implies(
+                pf_bool and pf_prime_bool and pushes_order and
+                push_prime_pop_order, pops_order);
             }
 
             // if t!push < t!push' < t!pop and pf!pop = push and
@@ -1454,7 +1454,7 @@ private:
             and_stack = and_stack and
               smt::implies(
                 pf_bool and push_prime.guard and pushes_order and
-                time(push_prime).happens_before(time(pop)), or_pp);
+                push_prime_pop_order, or_pp);
           }
         }
       }
@@ -2017,6 +2017,36 @@ public:
   Internal<T> recv() const
   {
     return Internal<T>(tracer().append_recv_event(m_channel));
+  }
+};
+
+template<typename T>
+class Stack
+{
+private:
+  External<T> m_stack;
+
+public:
+  void push(T v)
+  {
+    push(Internal<T>(v));
+  }
+
+  void push(const Internal<T>& internal)
+  {
+    m_stack.term = internal.term;
+    tracer().append_push_event(m_stack);
+  }
+
+  void push(const External<T>& external)
+  {
+    m_stack.term = append_input_event(external);
+    tracer().append_push_event(m_stack);
+  }
+
+  Internal<T> pop()
+  {
+    return Internal<T>(tracer().append_pop_event(m_stack));
   }
 };
 

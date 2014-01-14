@@ -640,7 +640,7 @@ TEST(CrvTest, Fib5)
     144 < i || 144 == i || 144 < j || 144 == j, tracer()));
 }
 
-TEST(CrvTest, StackApi)
+TEST(CrvTest, Stack)
 {
   tracer().reset();
   Encoder encoder;
@@ -652,6 +652,64 @@ TEST(CrvTest, StackApi)
   const Internal<int> internal(tracer().append_pop_event(v));
   EXPECT_EQ(smt::unsat, encoder.check(3 != internal, tracer()));
   EXPECT_EQ(smt::sat, encoder.check(3 == internal, tracer()));
+}
+
+TEST(CrvTest, StackApi)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Stack<int> stack;
+  External<int> external(5);
+  Internal<int> internal(7);
+
+  stack.push(3);
+  stack.push(external);
+  stack.push(internal);
+
+  internal = stack.pop();
+  EXPECT_EQ(smt::unsat, encoder.check(7 != internal, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(7 == internal, tracer()));
+
+  internal = stack.pop();
+  EXPECT_EQ(smt::unsat, encoder.check(5 != internal, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(5 == internal, tracer()));
+
+  internal = stack.pop();
+  EXPECT_EQ(smt::unsat, encoder.check(3 != internal, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(3 == internal, tracer()));
+}
+
+TEST(CrvTest, StackApiWithSingleThread)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Stack<int> stack;
+
+  tracer().append_thread_begin_event();
+  stack.push(5);
+  stack.push(7);
+  tracer().append_thread_end_event();
+
+  Internal<int> p0(stack.pop());
+  EXPECT_EQ(smt::sat, encoder.check(5 == p0, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(7 == p0, tracer()));
+
+  Internal<int> p1(stack.pop());
+
+  EXPECT_EQ(smt::sat, encoder.check(5 == p0, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(7 == p0, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(5 == p1, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(7 == p1, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(7 == p0 && 5 == p1, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(5 == p0 && 7 == p1, tracer()));
+
+  EXPECT_EQ(smt::unsat, encoder.check(!(5 != p0 || 7 == p1), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(5 != p0 || 7 == p1, tracer()));
+
+  EXPECT_EQ(smt::unsat, encoder.check(!(7 != p0 || 5 == p1), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(7 != p0 || 5 == p1, tracer()));
 }
 
 TEST(CrvTest, StackLifo1)
