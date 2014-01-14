@@ -550,6 +550,8 @@ extern Tracer& tracer();
 namespace internal
 {
   /// Evaluate built-in arithmetic and boolean expressions
+
+  /// Uses constexpr perfect forwarding since C++14
   template<smt::Opcode opcode> class Eval;
 
   #define EVAL_UNARY_ONLY(op, opcode)                              \
@@ -557,12 +559,14 @@ namespace internal
     struct Eval<opcode>                                            \
     {                                                              \
       template<typename U>                                         \
-      static inline auto eval(const U arg)                         \
-      -> decltype(op arg) { return op arg; }                       \
+      static inline auto eval(U&& u)                               \
+      -> decltype(op std::forward<U>(u))                           \
+      { return op std::forward<U>(u); }                            \
                                                                    \
       template<typename U>                                         \
-      static constexpr auto const_eval(const U arg)                \
-      -> decltype(op arg) { return op arg; }                       \
+      static constexpr auto const_eval(U&& u)                      \
+      -> decltype(op std::forward<U>(u))                           \
+      { return op std::forward<U>(u); }                            \
     };
 
   #define EVAL_BINARY_ONLY(op, opcode)                             \
@@ -570,12 +574,14 @@ namespace internal
     struct Eval<opcode>                                            \
     {                                                              \
       template<typename U, typename V>                             \
-      static inline auto eval(const U larg, const V rarg)          \
-      -> decltype(larg op rarg) { return larg op rarg; }           \
+      static inline auto eval(U&& u, V&& v)                        \
+      -> decltype(std::forward<U>(u) op std::forward<V>(v))        \
+      { return std::forward<U>(u) op std::forward<V>(v); }         \
                                                                    \
       template<typename U, typename V>                             \
-      static constexpr auto const_eval(const U larg, const V rarg) \
-      -> decltype(larg op rarg) { return larg op rarg; }           \
+      static constexpr auto const_eval(U&& u, V&& v)               \
+      -> decltype(std::forward<U>(u) op std::forward<V>(v))        \
+      { return std::forward<U>(u) op std::forward<V>(v); }         \
     };
 
   #define EVAL_UNARY_AND_BINARY(op, opcode)                        \
@@ -583,20 +589,24 @@ namespace internal
     struct Eval<opcode>                                            \
     {                                                              \
       template<typename U>                                         \
-      static inline auto eval(const U arg)                         \
-      -> decltype(op arg) { return op arg; }                       \
+      static inline auto eval(U&& u)                               \
+      -> decltype(op std::forward<U>(u))                           \
+      { return op std::forward<U>(u); }                            \
                                                                    \
       template<typename U>                                         \
-      static constexpr auto const_eval(const U arg)                \
-      -> decltype(op arg) { return op arg; }                       \
-      template<typename U, typename V>                             \
-                                                                   \
-      static inline auto eval(const U larg, const V rarg)          \
-      -> decltype(larg op rarg) { return larg op rarg; }           \
+      static constexpr auto const_eval(U&& u)                      \
+      -> decltype(op std::forward<U>(u))                           \
+      { return op std::forward<U>(u); }                            \
                                                                    \
       template<typename U, typename V>                             \
-      static constexpr auto const_eval(const U larg, const V rarg) \
-      -> decltype(larg op rarg) { return larg op rarg; }           \
+      static inline auto eval(U&& u, V&& v)                        \
+      -> decltype(std::forward<U>(u) op std::forward<V>(v))        \
+      { return std::forward<U>(u) op std::forward<V>(v); }         \
+                                                                   \
+      template<typename U, typename V>                             \
+      static constexpr auto const_eval(U&& u, V&& v)               \
+      -> decltype(std::forward<U>(u) op std::forward<V>(v))        \
+      { return std::forward<U>(u) op std::forward<V>(v); }         \
     };
 
   EVAL_UNARY_ONLY       (!, smt::LNOT)

@@ -5,6 +5,113 @@
 
 using namespace crv;
 
+TEST(CrvTest, EvalLnot)
+{
+  EXPECT_FALSE(internal::Eval<smt::LNOT>::eval(1));
+  EXPECT_FALSE(internal::Eval<smt::LNOT>::eval(12));
+  EXPECT_TRUE(internal::Eval<smt::LNOT>::eval(0));
+  EXPECT_TRUE(internal::Eval<smt::LNOT>::eval(false));
+}
+
+TEST(CrvTest, EvalAdd)
+{
+  EXPECT_EQ(18, internal::Eval<smt::ADD>::eval(10, 8));
+  EXPECT_EQ(18, internal::Eval<smt::ADD>::eval(8, 10));
+}
+
+TEST(CrvTest, EvalLand)
+{
+  EXPECT_TRUE(internal::Eval<smt::LAND>::eval(true, true));
+  EXPECT_FALSE(internal::Eval<smt::LAND>::eval(false, true));
+  EXPECT_FALSE(internal::Eval<smt::LAND>::eval(true, false));
+  EXPECT_FALSE(internal::Eval<smt::LAND>::eval(false, false));
+}
+
+TEST(CrvTest, EvalLor)
+{
+  EXPECT_TRUE(internal::Eval<smt::LOR>::eval(true, true));
+  EXPECT_TRUE(internal::Eval<smt::LOR>::eval(false, true));
+  EXPECT_TRUE(internal::Eval<smt::LOR>::eval(true, false));
+  EXPECT_FALSE(internal::Eval<smt::LOR>::eval(false, false));
+}
+
+TEST(CrvTest, EvalEql)
+{
+  EXPECT_TRUE(internal::Eval<smt::EQL>::eval(12, 0xc));
+  EXPECT_TRUE(internal::Eval<smt::EQL>::eval(0xc, 12));
+  EXPECT_FALSE(internal::Eval<smt::EQL>::eval(12, 13));
+}
+
+TEST(CrvTest, EvalLss)
+{
+  EXPECT_FALSE(internal::Eval<smt::LSS>::eval(12, 0xc));
+  EXPECT_FALSE(internal::Eval<smt::LSS>::eval(0xc, 12));
+  EXPECT_TRUE(internal::Eval<smt::LSS>::eval(12, 13));
+  EXPECT_FALSE(internal::Eval<smt::LSS>::eval(13, 12));
+}
+
+#define STATIC_EXPECT_TRUE(assertion) static_assert((assertion), "")
+#define STATIC_EXPECT_FALSE(assertion) static_assert(!(assertion), "")
+
+TEST(CrvTest, ConstexprEvalLnot)
+{
+  STATIC_EXPECT_FALSE(internal::Eval<smt::LNOT>::const_eval(true));
+  STATIC_EXPECT_TRUE(internal::Eval<smt::LNOT>::const_eval(false));
+
+  STATIC_EXPECT_FALSE(internal::Eval<smt::LNOT>::const_eval(1));
+  STATIC_EXPECT_FALSE(internal::Eval<smt::LNOT>::const_eval(12));
+  STATIC_EXPECT_TRUE(internal::Eval<smt::LNOT>::const_eval(0));
+}
+
+TEST(CrvTest, ConstexprEvalAdd)
+{
+  STATIC_EXPECT_TRUE(18 == internal::Eval<smt::ADD>::const_eval(10, 8));
+  STATIC_EXPECT_TRUE(18 == internal::Eval<smt::ADD>::const_eval(8, 10));
+}
+
+TEST(CrvTest, ConstexprEvalLand)
+{
+  STATIC_EXPECT_TRUE(internal::Eval<smt::LAND>::const_eval(true, true));
+  STATIC_EXPECT_FALSE(internal::Eval<smt::LAND>::const_eval(false, true));
+  STATIC_EXPECT_FALSE(internal::Eval<smt::LAND>::const_eval(true, false));
+  STATIC_EXPECT_FALSE(internal::Eval<smt::LAND>::const_eval(false, false));
+}
+
+TEST(CrvTest, ConstexprEvalLor)
+{
+  STATIC_EXPECT_TRUE(internal::Eval<smt::LOR>::const_eval(true, true));
+  STATIC_EXPECT_TRUE(internal::Eval<smt::LOR>::const_eval(false, true));
+  STATIC_EXPECT_TRUE(internal::Eval<smt::LOR>::const_eval(true, false));
+  STATIC_EXPECT_FALSE(internal::Eval<smt::LOR>::const_eval(false, false));
+}
+
+TEST(CrvTest, ConstexprEvalEql)
+{
+  STATIC_EXPECT_TRUE(internal::Eval<smt::EQL>::const_eval(12, 0xc));
+  STATIC_EXPECT_TRUE(internal::Eval<smt::EQL>::const_eval(0xc, 12));
+  STATIC_EXPECT_FALSE(internal::Eval<smt::EQL>::const_eval(12, 13));
+}
+
+TEST(CrvTest, ConstexprEvalLss)
+{
+  STATIC_EXPECT_FALSE(internal::Eval<smt::LSS>::const_eval(12, 0xc));
+  STATIC_EXPECT_FALSE(internal::Eval<smt::LSS>::const_eval(0xc, 12));
+  STATIC_EXPECT_TRUE(internal::Eval<smt::LSS>::const_eval(12, 13));
+  STATIC_EXPECT_FALSE(internal::Eval<smt::LSS>::const_eval(13, 12));
+}
+
+TEST(CrvTest, ReturnType)
+{
+  STATIC_EXPECT_TRUE((std::is_same<unsigned long, typename internal::Return<smt::ADD,
+    unsigned int, unsigned long>::Type>::value));
+
+  STATIC_EXPECT_TRUE((std::is_same<bool, typename internal::Return<smt::LSS,
+    int, int>::Type>::value));
+
+  STATIC_EXPECT_TRUE((std::is_same<bool, typename internal::Return<smt::LNOT,
+    unsigned int>::Type>::value));
+}
+
 template<typename T>
 static Internal<T> make_temporary_internal()
 {
