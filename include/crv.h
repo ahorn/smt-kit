@@ -353,10 +353,9 @@ public:
     return m_per_thread_map;
   }
 
-  void reset_identifiers()
+  void reset_event_identifiers()
   {
     m_event_id_cnt = 0;
-    m_thread_id_cnt = 1;
   }
 
   void reset_events()
@@ -369,6 +368,7 @@ public:
     {
       m_thread_id_stack.pop();
     }
+    m_thread_id_cnt = 1;
     push_next_thread_id();
   }
 
@@ -401,7 +401,7 @@ public:
 
   void reset()
   {
-    reset_identifiers();
+    reset_event_identifiers();
     reset_events();
     reset_guard();
     reset_flips();

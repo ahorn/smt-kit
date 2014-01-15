@@ -252,6 +252,20 @@ TEST(CrvTest, Flip)
 
   EXPECT_FALSE(tracer.flip());
   EXPECT_EQ(3, tracer.flip_cnt());
+
+  tracer.reset();
+
+  EXPECT_TRUE(tracer.append_guard(v < 0));
+  tracer.append_thread_begin_event();
+  EXPECT_EQ(2, tracer.current_thread_id());
+  tracer.append_thread_end_event();
+
+  EXPECT_TRUE(tracer.flip());
+
+  // thread identifiers are reset
+  tracer.append_thread_begin_event();
+  EXPECT_EQ(2, tracer.current_thread_id());
+  tracer.append_thread_end_event();
 }
 
 TEST(CrvTest, Value)
