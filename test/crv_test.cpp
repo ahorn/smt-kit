@@ -1892,6 +1892,44 @@ TEST(CrvTest, CommunicationPredecessors)
   EXPECT_EQ(0, predecessors_map.at(e_prime_iter).size());
 }
 
+TEST(CrvTest, DeadlockSingleSend)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Channel<int> c;
+  tracer().append_thread_begin_event();
+  c.send(5);
+  tracer().append_thread_end_event();
+
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer()));
+
+  tracer().append_thread_begin_event();
+  c.recv();
+  tracer().append_thread_end_event();
+
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer()));
+}
+
+TEST(CrvTest, DeadlockSingleRecv)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Channel<int> c;
+  tracer().append_thread_begin_event();
+  c.recv();
+  tracer().append_thread_end_event();
+
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer()));
+
+  tracer().append_thread_begin_event();
+  c.send(5);
+  tracer().append_thread_end_event();
+
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer()));
+}
+
 TEST(CrvTest, Deadlock)
 {
   tracer().reset();

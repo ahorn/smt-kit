@@ -1741,10 +1741,10 @@ private:
     auto matchable_map(build_matchable_map(per_address_map));
     auto predecessors_map(build_predecessors_map(per_thread_map));
 
-    smt::Bool init_match(smt::literal<smt::Bool>(false));
     smt::Bool ext_match(smt::literal<smt::Bool>(true));
     smt::Bool finalizers(smt::literal<smt::Bool>(true));
 
+    Bools inits;
     for (const PerAddressMap::value_type& pair : per_address_map)
     {
       const EventKinds& a = pair.second;
@@ -1772,7 +1772,7 @@ private:
 
           if (predecessors_map.at(r_iter).empty() &&
               predecessors_map.at(s_iter).empty())
-            init_match = init_match or match_bool;
+            inits.push_back(match_bool);
         }
       }
     }
@@ -1795,8 +1795,17 @@ private:
     }
 
     unsafe_add(ext_match);
-    unsafe_add(init_match);
     unsafe_add(not finalizers);
+
+    if (!inits.empty())
+    {
+      smt::Bool init_match(smt::literal<smt::Bool>(false));
+      for (const smt::Bool init : inits)
+      {
+        init_match = init_match or init;
+      }
+      unsafe_add(init_match);
+    }
   }
 
   /*
