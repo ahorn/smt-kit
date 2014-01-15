@@ -1741,7 +1741,7 @@ private:
     auto matchable_map(build_matchable_map(per_address_map));
     auto predecessors_map(build_predecessors_map(per_thread_map));
 
-    smt::Bool ext_match(smt::literal<smt::Bool>(true));
+    smt::UnsafeTerm ext_match(smt::literal<smt::Bool>(true));
     smt::Bool finalizers(smt::literal<smt::Bool>(true));
 
     Bools inits;
@@ -1759,7 +1759,7 @@ private:
           const smt::Bool& match_bool(
             matchable_map.at(std::make_pair(r_iter, s_iter)));
 
-          smt::Bool rs_ext(match_bool ==
+          smt::UnsafeTerm rs_ext(match_bool ==
             (communication_preds(per_address_map, matchable_map,
                predecessors_map.at(r_iter)) and
              communication_preds(per_address_map, matchable_map,
