@@ -1598,8 +1598,7 @@ public:
         continue;
 
       const EventIterList& events = pair.second;
-      if (events.empty())
-        continue;
+      assert(!events.empty());
 
       EventIterList::const_reverse_iterator criter(events.crbegin());
       assert(criter != events.crend());
@@ -1627,12 +1626,10 @@ public:
         predecessors.push_back(e_prime_iter); 
       }
 
-      if (e_prime_iter != *events.crbegin())
-      {
-        // first per-thread communication events have no predecessors
-        assert(e_prime_iter->is_recv() || e_prime_iter->is_send());
-        predecessors_map[e_prime_iter];
-      }
+      // at least one event in every thread has no predecessors
+      assert(e_prime_iter->is_recv() || e_prime_iter->is_send() ||
+        e_prime_iter->is_thread_end());
+      predecessors_map[e_prime_iter];
     }
     return predecessors_map;
   }

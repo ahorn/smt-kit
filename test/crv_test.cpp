@@ -1839,6 +1839,17 @@ TEST(CrvTest, CommunicationPredecessors)
 {
   tracer().reset();
 
+  tracer().append_thread_begin_event();
+  tracer().append_thread_end_event();
+
+  PerEventMap predecessors_map(Encoder::build_predecessors_map(
+    tracer().per_thread_map()));
+  EXPECT_FALSE(predecessors_map.empty());
+  EXPECT_EQ(0, predecessors_map.at(
+    tracer().per_thread_map().at(2).back()).size());
+
+  tracer().reset();
+
   Channel<int> c;
   tracer().append_thread_begin_event();
   External<int> x(0);
@@ -1848,8 +1859,7 @@ TEST(CrvTest, CommunicationPredecessors)
   tracer().append_thread_end_event();
 
   const PerThreadMap& per_thread_map = tracer().per_thread_map();
-  PerEventMap predecessors_map(
-    Encoder::build_predecessors_map(per_thread_map));
+  predecessors_map = Encoder::build_predecessors_map(per_thread_map);
   EXPECT_FALSE(predecessors_map.empty());
 
   EventIterList event_iters;
