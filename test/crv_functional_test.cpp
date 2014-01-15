@@ -352,3 +352,51 @@ TEST(CrvFunctionalTest, UnsatCommunication)
   EXPECT_EQ(smt::unsat, encoder.check_deadlock(crv::tracer()));
 }
 
+void unsat_communication_deadlock_with_guard_f(crv::Channel<int>& c)
+{
+  EXPECT_TRUE(crv::tracer().append_guard(6 == c.recv()));
+  c.send(7);
+}
+
+void unsat_communication_deadlock_with_guard_g(crv::Channel<int>& c)
+{
+  c.send(6);
+  c.recv();
+}
+
+TEST(CrvFunctionalTest, UnsatCommunicationDeadlockWithGuard)
+{
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  crv::Channel<int> c;
+  crv::Thread f(unsat_communication_deadlock_with_guard_f, c);
+  crv::Thread g(unsat_communication_deadlock_with_guard_g, c);
+
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(crv::tracer()));
+}
+
+void sat_communication_deadlock_with_guard_f(crv::Channel<int>& c)
+{
+  EXPECT_TRUE(crv::tracer().append_guard(6 != c.recv()));
+  c.send(7);
+}
+
+void sat_communication_deadlock_with_guard_g(crv::Channel<int>& c)
+{
+  c.send(6);
+  c.recv();
+}
+
+TEST(CrvFunctionalTest, SatCommunicationDeadlockWithGuard)
+{
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  crv::Channel<int> c;
+  crv::Thread f(sat_communication_deadlock_with_guard_f, c);
+  crv::Thread g(sat_communication_deadlock_with_guard_g, c);
+
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer()));
+}
+

@@ -1732,19 +1732,16 @@ private:
     return not or_match;
   }
 
-  void encode_communication_concurrency(const Tracer& tracer)
+  void encode_communication_concurrency(const Tracer& tracer, bool check_deadlocks)
   {
     const PerAddressMap& per_address_map = tracer.per_address_map();
     const PerThreadMap& per_thread_map = tracer.per_thread_map();
-    const std::string finalizer_prefix("finalizer!");
 
     auto matchable_map(build_matchable_map(per_address_map));
     auto predecessors_map(build_predecessors_map(per_thread_map));
 
-    smt::UnsafeTerm ext_match(smt::literal<smt::Bool>(true));
-    smt::Bool finalizers(smt::literal<smt::Bool>(true));
-
     Bools inits;
+    smt::UnsafeTerm ext_match(smt::literal<smt::Bool>(true));
     for (const PerAddressMap::value_type& pair : per_address_map)
     {
       const EventKinds& a = pair.second;
@@ -1756,8 +1753,14 @@ private:
           if (r_iter->thread_id == s_iter->thread_id)
             continue;
 
-          const smt::Bool& match_bool(
-            matchable_map.at(std::make_pair(r_iter, s_iter)));
+          const Event& r = *r_iter;
+          const Event& s = *s_iter;
+          const smt::Bool& match_bool =
+            matchable_map.at(std::make_pair(r_iter, s_iter));
+
+          smt::UnsafeTerm rs_value(smt::implies(
+            /* if */ match_bool,
+            /* then */ r.term == s.term));
 
           smt::UnsafeTerm rs_ext(match_bool ==
             (communication_preds(per_address_map, matchable_map,
@@ -1765,10 +1768,10 @@ private:
              communication_preds(per_address_map, matchable_map,
                predecessors_map.at(s_iter)) and
              communication_excl(per_address_map, matchable_map,
-               r_iter, s_iter)));
+               r_iter, s_iter) and r.guard and s.guard));
 
-          ext_match = ext_match and rs_ext and
-            (match_bool == r_time.simultaneous(time(*s_iter)));
+          ext_match = ext_match and rs_ext and rs_value and
+            (match_bool == r_time.simultaneous(time(s)));
 
           if (predecessors_map.at(r_iter).empty() &&
               predecessors_map.at(s_iter).empty())
@@ -1777,25 +1780,30 @@ private:
       }
     }
 
-    for (const PerThreadMap::value_type& pair : per_thread_map)
+    if (check_deadlocks)
     {
-      // ignore main thread
-      if (pair.first == 1)
-        continue;
+      const std::string finalizer_prefix("finalizer!");
+      smt::Bool finalizers(smt::literal<smt::Bool>(true));
+      for (const PerThreadMap::value_type& pair : per_thread_map)
+      {
+        // ignore main thread
+        if (pair.first == 1)
+          continue;
 
-      const EventIter e_iter(pair.second.back());
-      assert(e_iter->is_thread_end());
+        const EventIter e_iter(pair.second.back());
+        assert(e_iter->is_thread_end());
 
-      smt::Bool finalizer_bool(smt::any<smt::Bool>(
-        finalizer_prefix + std::to_string(e_iter->event_id)));
-      finalizers = finalizers and finalizer_bool;
-      ext_match = ext_match and
-        (finalizer_bool == communication_preds(per_address_map,
-           matchable_map, predecessors_map.at(e_iter)));
+        smt::Bool finalizer_bool(smt::any<smt::Bool>(
+          finalizer_prefix + std::to_string(e_iter->event_id)));
+        finalizers = finalizers and finalizer_bool;
+        ext_match = ext_match and
+          (finalizer_bool == communication_preds(per_address_map,
+             matchable_map, predecessors_map.at(e_iter)));
+      }
+      unsafe_add(not finalizers);
     }
 
     unsafe_add(ext_match);
-    unsafe_add(not finalizers);
 
     if (!inits.empty())
     {
@@ -1836,6 +1844,35 @@ private:
     unsafe_add(thread_order);
   }
 
+  void encode_errors(const Bools& errors)
+  {
+    if (errors.empty())
+      return;
+
+    smt::Bool or_error(smt::literal<smt::Bool>(false));
+    for (const smt::Bool& error : errors)
+    {
+      or_error = or_error or error;
+    }
+    unsafe_add(or_error);
+  }
+
+  /// \return Is there at least one error condition to check?
+  void encode(const Tracer& tracer, bool check_deadlock)
+  {
+    unsafe_add(tracer.guard());
+    for (const smt::Bool& assertion : tracer.assertions())
+    {
+      unsafe_add(assertion);
+    }
+
+    encode_thread_order(tracer.per_thread_map());
+    encode_memory_concurrency(tracer);
+    encode_communication_concurrency(tracer, check_deadlock);
+    encode_stack_api(tracer);
+    encode_array_api(tracer);
+  }
+
 public:
   Encoder()
 #ifdef __BV_TIME__
@@ -1846,39 +1883,13 @@ public:
     m_time_map(),
     m_epoch(smt::literal<TimeSort>(0)) {}
 
-  /// \return Is there at least one error condition to check?
-  void encode(const Tracer& tracer)
-  {
-    unsafe_add(tracer.guard());
-    for (const smt::Bool& assertion : tracer.assertions())
-    {
-      unsafe_add(assertion);
-    }
+  /// Checks only whether there is a communication deadlock
 
-    if (!tracer.errors().empty())
-    {
-      smt::Bool or_error(smt::literal<smt::Bool>(false));
-      for (const smt::Bool& error : tracer.errors())
-      {
-        or_error = or_error or error;
-      }
-      unsafe_add(or_error);
-    }
-
-    encode_thread_order(tracer.per_thread_map());
-    encode_memory_concurrency(tracer);
-    encode_stack_api(tracer);
-    encode_array_api(tracer);
-  }
-
-  /// Check whether there is a communication deadlock
+  /// No errors are encoded
   smt::CheckResult check_deadlock(const Tracer& tracer)
   {
-    assert(tracer.errors().empty());
-
     m_solver.push();
-    encode(tracer);
-    encode_communication_concurrency(tracer);
+    encode(tracer, true);
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
     return result;
@@ -1889,13 +1900,18 @@ public:
   /// Use SAT/SMT solver to check the satisfiability of the
   /// disjunction of errors() and conjunction of assertions()
   ///
+  /// If there is a communication deadlock, receive events are
+  /// permitted to take on nondeterministic values possibly
+  /// leading to false alarms.
+  ///
   /// pre: not errors().empty()
   smt::CheckResult check(const Tracer& tracer)
   {
     assert(!tracer.errors().empty());
 
     m_solver.push();
-    encode(tracer);
+    encode(tracer, false);
+    encode_errors(tracer.errors());
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
     return result;
@@ -1905,13 +1921,18 @@ public:
   // previously added errors() and conjunction of assertions()
   // Note: unlike check(const Tracer&), errors().empty() is
   // permissible (in which case they are ignored).
+  //
+  // If there is a communication deadlock, receive events are
+  // permitted to take on nondeterministic values possibly
+  // leading to false alarms.
   smt::CheckResult check(
     Internal<bool>&& condition,
     const Tracer& tracer)
   {
     m_solver.push();
     unsafe_add(std::move(condition.term));
-    encode(tracer);
+    encode(tracer, false);
+    encode_errors(tracer.errors());
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
     return result;

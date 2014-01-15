@@ -2009,3 +2009,77 @@ TEST(CrvTest, ExtensionDeadlockFree)
 
   EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer()));
 }
+
+TEST(CrvTest, CommunicationValue)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Channel<int> c;
+
+  tracer().append_thread_begin_event();
+  c.send(5);
+  Internal<int> r(c.recv());
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  c.recv();
+  c.send(6);
+  tracer().append_thread_end_event();
+
+  EXPECT_EQ(smt::unsat, encoder.check(r != 6, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(r == 6, tracer()));
+}
+
+TEST(CrvTest, CommunicationWithTrueGuard)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Channel<int> c;
+
+  tracer().append_thread_begin_event();
+  c.send(5);
+  EXPECT_TRUE(tracer().append_guard(6 == c.recv()));
+  c.send(7);
+  tracer().append_thread_end_event();
+
+  tracer().reset_guard();
+  tracer().append_thread_begin_event();
+  c.recv();
+  c.send(6);
+  Internal<int> r(c.recv());
+  tracer().append_thread_end_event();
+
+  EXPECT_EQ(smt::unsat, encoder.check(r != 7, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(r == 7, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer()));
+}
+
+TEST(CrvTest, CommunicationWithFalseGuard)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Channel<int> c;
+
+  tracer().append_thread_begin_event();
+  c.send(5);
+  EXPECT_TRUE(tracer().append_guard(6 != c.recv()));
+  c.send(7);
+  tracer().append_thread_end_event();
+
+  tracer().reset_guard();
+  tracer().append_thread_begin_event();
+  c.recv();
+  c.send(6);
+  Internal<int> r(c.recv());
+  tracer().append_thread_end_event();
+
+  // if there is a deadlock (which there is), then receive
+  // events can take on nondeterministic values.
+  EXPECT_EQ(smt::sat, encoder.check(r != 7, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(r == 7, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer()));
+}
+
