@@ -973,7 +973,12 @@ public:
   template<typename T>
   explicit operator T() const
   {
-    return T(std::dynamic_pointer_cast<const Expr<T>>(m_ptr));
+    std::shared_ptr<const Expr<T>> ptr(std::dynamic_pointer_cast<const Expr<T>>(m_ptr));
+
+    // cast is successful
+    assert(is_null() == (ptr.get() == nullptr));
+
+    return T(std::move(ptr));
   }
 
   bool is_null() const

@@ -1059,3 +1059,22 @@ TEST(SmtTest, UnsafeExpr)
   const UnsafeTerm rlss_term(x_term < 8);
   EXPECT_TRUE(rlss_term.sort().is_bool());
 }
+
+// UnsafeTerm to internal::Term<T> conversion calls the
+// UnsafeTerm::T() operator. Failed casts are detected by
+// a runtime assertion that checks for an empty pointer.
+TEST(SmtTest, Implies)
+{
+  const smt::Bool a(smt::literal<smt::Bool>(true));
+  const smt::UnsafeTerm b(smt::literal<smt::Bool>(true));
+
+  smt::UnsafeTerm c(smt::implies(a, b));
+  smt::UnsafeTerm d(smt::implies(b, a));
+  smt::Bool e(smt::implies(a, a));
+  smt::UnsafeTerm f(smt::implies(b, b));
+
+  EXPECT_FALSE(c.is_null());
+  EXPECT_FALSE(d.is_null());
+  EXPECT_FALSE(e.is_null());
+  EXPECT_FALSE(f.is_null());
+}
