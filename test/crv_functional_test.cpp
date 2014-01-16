@@ -2,6 +2,7 @@
 
 // Include <gtest/gtest.h> _after_ "crv.h"
 #include "gtest/gtest.h"
+#include <array>
 
 TEST(CrvFunctionalTest, SafeIf)
 {
@@ -396,6 +397,84 @@ TEST(CrvFunctionalTest, SatCommunicationDeadlockWithGuard)
   crv::Channel<int> c;
   crv::Thread f(sat_communication_deadlock_with_guard_f, c);
   crv::Thread g(sat_communication_deadlock_with_guard_g, c);
+
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer()));
+}
+
+// N is the number of philosophers
+template<size_t N>
+struct DiningTable
+{
+  std::array<crv::Channel<int>, N> picksup;
+  std::array<crv::Channel<int>, N> putsdown;
+};
+
+// Allow fork to be used twice
+template<size_t N>
+void phil_fork(size_t i, DiningTable<N>& t)
+{
+  t.picksup.at(i).recv();
+  t.putsdown.at(i).recv();
+  t.picksup.at(i).recv();
+  t.putsdown.at(i).recv();
+}
+
+// Picks up left and then right fork;
+// finally, puts down both forks
+template<size_t N>
+void phil_person(size_t i, DiningTable<N>& t)
+{
+  t.picksup.at(i).send(i);
+  t.picksup.at((i + 1) % N).send(i);
+  t.putsdown.at(i).send(i);
+  t.putsdown.at((i + 1) % N).send(i);
+}
+
+// Picks up right fork then left fork;
+// finally, puts down both forks
+template<size_t N>
+void phil_different_person(size_t i, DiningTable<N>& t)
+{
+  t.picksup.at((i + 1) % N).send(i);
+  t.picksup.at(i).send(i);
+  t.putsdown.at(i).send(i);
+  t.putsdown.at((i + 1) % N).send(i);
+}
+
+TEST(CrvFunctionalTest, UnsatDiningPhilosophersDeadlock)
+{
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  constexpr size_t N = 5;
+  DiningTable<N> t;
+
+  for (int i = 0; i < N; i++)
+  {
+    crv::Thread fork(phil_fork<N>, i, t);
+
+    if (i == 0)
+      crv::Thread person(phil_different_person<N>, i, t);
+    else
+      crv::Thread person(phil_person<N>, i, t);
+  }
+
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(crv::tracer()));
+}
+
+TEST(CrvFunctionalTest, SatDiningPhilosophersDeadlock)
+{
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  constexpr size_t N = 2;
+  DiningTable<N> t;
+
+  for (int i = 0; i < N; i++)
+  {
+    crv::Thread fork(phil_fork<N>, i, t);
+    crv::Thread person(phil_person<N>, i, t);
+  }
 
   EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer()));
 }
