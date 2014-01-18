@@ -402,6 +402,35 @@ TEST(CrvFunctionalTest, SatCommunicationDeadlockWithGuard)
 }
 
 // N is the number of philosophers
+
+// For comparison, the equivalent CSP code of
+// {Sat,Unsat}DiningPhilosophersDeadlock:
+//
+// N = 5
+// 
+// FORK_ID = {0..N-1}
+// PHIL_ID = {0..N-1}
+// 
+// channel picksup, putsdown:FORK_ID.PHIL_ID
+// 
+// PHIL(i) = picksup!i!i -> picksup!((i+1)%N)!i ->
+//   putsdown!((i+1)%N)!i -> putsdown!i!i -> PHIL(i)
+// 
+// FORK(i) = picksup!i?j -> putsdown!i!j -> FORK(i)
+// 
+// PHILS = ||| i:PHIL_ID@ PHIL(i)
+// FORKS = ||| i:FORK_ID@ FORK(i)
+// 
+// SAT_SYSTEM = PHILS[|{|picksup, putsdown|}|]FORKS
+// assert SAT_SYSTEM :[deadlock free [F]]
+// 
+// LPHIL(i) = picksup!((i+1)%N)!i -> picksup!i!i ->
+//   putsdown!((i+1)%N)!i -> putsdown!i!i -> LPHIL(i)
+// 
+// PHILS' = ||| i:PHIL_ID @ if i==0 then LPHIL(0) else PHIL(i)
+// 
+// UNSAT_SYSTEM = PHILS'[|{|picksup, putsdown|}|]FORKS
+// assert UNSAT_SYSTEM :[deadlock free [F]]
 template<size_t N>
 struct DiningTable
 {
@@ -409,7 +438,8 @@ struct DiningTable
   std::array<crv::Channel<int>, N> putsdown;
 };
 
-// Allow fork to be used twice
+// Allow fork to be used twice, so it can be picked up and put
+// down by the person to the fork's right and left
 template<size_t N>
 void phil_fork(size_t i, DiningTable<N>& t)
 {
