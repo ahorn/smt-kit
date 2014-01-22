@@ -26,6 +26,7 @@ enum EventKind : unsigned short
 {
   THREAD_BEGIN_EVENT = 0,
   THREAD_END_EVENT   = 1,
+  BARRIER_EVENT,
   READ_EVENT         = 7,
   WRITE_EVENT,
   POP_EVENT,
@@ -81,9 +82,10 @@ public:
   {
     assert(!guard.is_null());
     assert(is_sync() || !term.is_null());
-    assert(is_thread_begin() || is_thread_end() || 0 < address);
+    assert(is_sync() || 0 < address);
   }
 
+  bool is_barrier() const { return kind == BARRIER_EVENT; }
   bool is_read() const { return kind == READ_EVENT; }
   bool is_write() const { return kind == WRITE_EVENT; }
   bool is_pop() const { return kind == POP_EVENT; }
@@ -92,7 +94,7 @@ public:
   bool is_send() const { return kind == SEND_EVENT; }
   bool is_thread_begin() const { return kind == THREAD_BEGIN_EVENT; }
   bool is_thread_end() const { return kind == THREAD_END_EVENT; }
-  bool is_sync() const { return is_thread_begin() || is_thread_end(); }
+  bool is_sync() const { return kind < READ_EVENT; }
 };
 
 typedef std::list<Event> EventList;
@@ -276,6 +278,13 @@ private:
 
   Address m_next_address;
 
+  // Generated barrier identifiers irrespective of threads
+  std::list<EventIdentifier> m_barrier_list;
+
+  // Per thread most recently used barrier
+  std::unordered_map<ThreadIdentifier,
+    std::list<EventIdentifier>::const_iterator> m_barrier_map;
+
   template<typename T>
   typename Smt<T>::Sort make_value_symbol()
   {
@@ -321,7 +330,9 @@ public:
     m_flip_iter(m_flips.cbegin()),
     m_assertions(),
     m_errors(),
-    m_next_address(1)
+    m_next_address(1),
+    m_barrier_list(),
+    m_barrier_map()
   {
     m_thread_id_stack.push(m_thread_id_cnt++);
   }
@@ -399,6 +410,12 @@ public:
     m_next_address = 1;
   }
 
+  void reset_barrier()
+  {
+    m_barrier_list.clear();
+    m_barrier_map.clear();
+  }
+
   void reset()
   {
     reset_event_identifiers();
@@ -408,6 +425,39 @@ public:
     reset_assertions();
     reset_errors();
     reset_address();
+    reset_barrier();
+  }
+
+  /// Synchronization point between threads of execution
+  void barrier()
+  {
+    const ThreadIdentifier thread_id(current_thread_id());
+    if (m_barrier_map.find(thread_id) == m_barrier_map.cend())
+    {
+      if (m_barrier_list.empty())
+        m_barrier_list.push_back(append_barrier_event());
+      else
+        append_barrier_event(*m_barrier_list.cbegin());
+
+      m_barrier_map[thread_id] = m_barrier_list.cbegin();
+    }
+    else
+    {
+      // caution: branches rely on mutable reference!
+      std::list<EventIdentifier>::const_iterator& citer =
+        m_barrier_map.at(thread_id);
+      assert(citer != m_barrier_list.cend());
+      if (citer == --m_barrier_list.cend())
+      {
+        m_barrier_list.push_back(append_barrier_event());
+        citer++;
+      }
+      else
+      {
+        citer++;
+        append_barrier_event(*citer);
+      }
+    }
   }
 
   /// Depth-first search strategy
@@ -435,6 +485,7 @@ public:
     reset_assertions();
     reset_errors();
     reset_address();
+    reset_barrier();
     assert(0 < m_flip_cnt);
     assert(!m_flips.empty());
 
@@ -498,6 +549,18 @@ public:
     ThreadIdentifier child_thread_id(current_thread_id());
     m_thread_id_stack.pop();
     return child_thread_id;
+  }
+
+  EventIdentifier append_barrier_event()
+  {
+    const EventIdentifier event_id(m_event_id_cnt++);
+    append_barrier_event(event_id);
+    return event_id;
+  }
+
+  void append_barrier_event(const EventIdentifier event_id)
+  {
+    append_event<BARRIER_EVENT>(event_id, 0, smt::UnsafeTerm());
   }
 
   void append_join_event(const ThreadIdentifier thread_id)

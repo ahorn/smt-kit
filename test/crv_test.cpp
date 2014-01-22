@@ -213,6 +213,56 @@ TEST(CrvTest, Tracer)
   EXPECT_EQ(6, tracer.per_address_map().at(external2.address).stores().front()->event_id);
 }
 
+TEST(CrvTest, Barrier)
+{
+  Tracer tracer;
+
+  tracer.append_thread_begin_event();
+  tracer.barrier();
+  tracer.barrier();
+  const ThreadIdentifier tid0(tracer.append_thread_end_event());
+
+  tracer.append_thread_begin_event();
+  tracer.barrier();
+  tracer.barrier();
+  tracer.barrier();
+  const ThreadIdentifier tid1(tracer.append_thread_end_event());
+
+  tracer.append_thread_begin_event();
+  tracer.barrier();
+  tracer.barrier();
+  tracer.barrier();
+  tracer.barrier();
+  const ThreadIdentifier tid2(tracer.append_thread_end_event());
+
+  EXPECT_EQ(4, tracer.per_thread_map().at(tid0).size());
+  for (unsigned i = 1; i <= 2; i++)
+  {
+    EXPECT_EQ(i, tracer.per_thread_map().at(tid0).at(i)->event_id);
+    EXPECT_TRUE(tracer.per_thread_map().at(tid0).at(i)->is_barrier());
+  }
+
+  EXPECT_EQ(5, tracer.per_thread_map().at(tid1).size());
+  for (unsigned i = 1; i <= 2; i++)
+  {
+    EXPECT_EQ(i, tracer.per_thread_map().at(tid1).at(i)->event_id);
+    EXPECT_TRUE(tracer.per_thread_map().at(tid1).at(i)->is_barrier());
+  }
+  EXPECT_EQ(5, tracer.per_thread_map().at(tid1).at(3)->event_id);
+  EXPECT_TRUE(tracer.per_thread_map().at(tid1).at(3)->is_barrier());
+
+  EXPECT_EQ(6, tracer.per_thread_map().at(tid2).size());
+  for (unsigned i = 1; i <= 2; i++)
+  {
+    EXPECT_EQ(i, tracer.per_thread_map().at(tid2).at(i)->event_id);
+    EXPECT_TRUE(tracer.per_thread_map().at(tid2).at(i)->is_barrier());
+  }
+  EXPECT_EQ(5, tracer.per_thread_map().at(tid2).at(3)->event_id);
+  EXPECT_TRUE(tracer.per_thread_map().at(tid2).at(3)->is_barrier());
+  EXPECT_EQ(8, tracer.per_thread_map().at(tid2).at(4)->event_id);
+  EXPECT_TRUE(tracer.per_thread_map().at(tid2).at(4)->is_barrier());
+}
+
 TEST(CrvTest, Flip)
 {
   Tracer tracer;

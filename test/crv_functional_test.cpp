@@ -509,3 +509,55 @@ TEST(CrvFunctionalTest, SatDiningPhilosophersDeadlock)
   EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer()));
 }
 
+void barrier_test_f(crv::External<int>& i)
+{
+  i = 1;
+  i = 2;
+  crv::tracer().barrier();
+}
+
+void barrier_test_g(const crv::External<int>& i)
+{
+  crv::tracer().barrier();
+  crv::tracer().add_error(i == 1);
+}
+
+void barrier_test_h(const crv::External<int>& i)
+{
+  crv::tracer().add_error(i == 2);
+}
+
+TEST(CrvFunctionalTest, UnsatBarrier)
+{
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  crv::External<int> i(0);
+  crv::Thread f(barrier_test_f, i);
+  crv::Thread g(barrier_test_g, i);
+
+  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+
+  crv::tracer().barrier();
+  EXPECT_EQ(smt::unsat, encoder.check(i == 0, crv::tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(i == 1, crv::tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(i == 2, crv::tracer()));
+}
+
+TEST(CrvFunctionalTest, SatBarrier)
+{
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  crv::External<int> i(0);
+  crv::Thread f(barrier_test_f, i);
+  crv::Thread h(barrier_test_h, i);
+
+  EXPECT_EQ(smt::sat, encoder.check(crv::tracer()));
+
+  // no barrier in main thread
+  EXPECT_EQ(smt::sat, encoder.check(i == 0, crv::tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(i == 1, crv::tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(i == 2, crv::tracer()));
+}
+
