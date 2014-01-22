@@ -1922,7 +1922,6 @@ private:
     unsafe_add(or_error);
   }
 
-  /// \return Is there at least one error condition to check?
   void encode(const Tracer& tracer, bool check_deadlock)
   {
     unsafe_add(tracer.guard());
