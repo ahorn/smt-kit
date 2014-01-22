@@ -1917,10 +1917,8 @@ public:
     return result;
   }
 
-  // Check satisfiability of given condition, disjunction of
-  // previously added errors() and conjunction of assertions()
-  // Note: unlike check(const Tracer&), errors().empty() is
-  // permissible (in which case they are ignored).
+  // Check satisfiability of given condition and conjunction of
+  // assertions(). Note: errors() are always ignored.
   //
   // If there is a communication deadlock, receive events are
   // permitted to take on nondeterministic values possibly
@@ -1932,7 +1930,6 @@ public:
     m_solver.push();
     unsafe_add(std::move(condition.term));
     encode(tracer, false);
-    encode_errors(tracer.errors());
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
     return result;
