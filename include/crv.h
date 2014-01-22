@@ -155,7 +155,9 @@ public:
     m_pops(),
     m_pushes(),
     m_loads(),
-    m_stores() {}
+    m_stores(),
+    m_recvs(),
+    m_sends() {}
 
   // See member function template specializations
   template<EventKind kind>
