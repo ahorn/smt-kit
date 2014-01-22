@@ -182,7 +182,7 @@ TEST(CrvTest, Tracer)
   EXPECT_EQ(1, parent_thread_id);
   EXPECT_EQ(5, tracer.events().size());
 
-  EventList::const_iterator iter = --tracer.events().cend();
+  EventIter iter = --tracer.events().cend();
   EXPECT_EQ(parent_thread_id + 1, iter->thread_id);
 
   iter--;
@@ -1926,7 +1926,7 @@ TEST(CrvTest, CommunicationPredecessors)
   predecessors_map = Encoder::build_predecessors_map(per_thread_map);
   EXPECT_FALSE(predecessors_map.empty());
 
-  EventIterList event_iters;
+  EventIters event_iters;
   for (const EventIter e_iter : per_thread_map.at(2))
   {
     if (e_iter->is_send() ||

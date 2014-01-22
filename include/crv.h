@@ -97,8 +97,8 @@ public:
   bool is_sync() const { return kind < READ_EVENT; }
 };
 
-typedef std::list<Event> EventList;
-typedef EventList::const_iterator EventIter;
+typedef std::list<Event> Events;
+typedef Events::const_iterator EventIter;
 
 }
 
@@ -134,19 +134,19 @@ namespace std
 namespace crv
 {
 
-typedef std::vector<EventIter> EventIterList;
+typedef std::vector<EventIter> EventIters;
 
 class EventKinds
 {
 private:
-  EventIterList m_reads;
-  EventIterList m_writes;
-  EventIterList m_pops;
-  EventIterList m_pushes;
-  EventIterList m_loads;
-  EventIterList m_stores;
-  EventIterList m_recvs;
-  EventIterList m_sends;
+  EventIters m_reads;
+  EventIters m_writes;
+  EventIters m_pops;
+  EventIters m_pushes;
+  EventIters m_loads;
+  EventIters m_stores;
+  EventIters m_recvs;
+  EventIters m_sends;
 
 public:
   EventKinds()
@@ -163,14 +163,14 @@ public:
   template<EventKind kind>
   void push_back(const EventIter e_iter) { /* skip */ }
 
-  const EventIterList& reads()  const { return m_reads;  }
-  const EventIterList& writes() const { return m_writes; }
-  const EventIterList& pops()   const { return m_pops;   }
-  const EventIterList& pushes() const { return m_pushes; }
-  const EventIterList& loads()  const { return m_loads;  }
-  const EventIterList& stores() const { return m_stores; }
-  const EventIterList& recvs()  const { return m_recvs;  }
-  const EventIterList& sends()  const { return m_sends;  }
+  const EventIters& reads()  const { return m_reads;  }
+  const EventIters& writes() const { return m_writes; }
+  const EventIters& pops()   const { return m_pops;   }
+  const EventIters& pushes() const { return m_pushes; }
+  const EventIters& loads()  const { return m_loads;  }
+  const EventIters& stores() const { return m_stores; }
+  const EventIters& recvs()  const { return m_recvs;  }
+  const EventIters& sends()  const { return m_sends;  }
 };
 
 template<> inline
@@ -222,8 +222,8 @@ void EventKinds::push_back<SEND_EVENT>(const EventIter e_iter)
 }
 
 typedef std::unordered_map<Address, EventKinds> PerAddressMap;
-typedef std::unordered_map<ThreadIdentifier, EventIterList> PerThreadMap;
-typedef std::unordered_map<EventIter, EventIterList> PerEventMap;
+typedef std::unordered_map<ThreadIdentifier, EventIters> PerThreadMap;
+typedef std::unordered_map<EventIter, EventIters> PerEventMap;
 
 /// Control flow decision along symbolic path
 struct Flip
@@ -236,7 +236,7 @@ struct Flip
     is_flip(false) {}
 };
 
-typedef std::list<Flip> FlipList;
+typedef std::list<Flip> Flips;
 typedef std::list<Flip>::const_iterator FlipIter;
 typedef std::list<smt::Bool> Bools;
 
@@ -260,7 +260,7 @@ private:
 
   EventIdentifier m_event_id_cnt;
   ThreadIdentifier m_thread_id_cnt;
-  EventList m_events;
+  Events m_events;
 
   // Index event list by various keys
   PerAddressMap m_per_address_map;
@@ -273,7 +273,7 @@ private:
   smt::Bool m_guard;
 
   unsigned long long m_flip_cnt;
-  FlipList m_flips;
+  Flips m_flips;
   FlipIter m_flip_iter;
   Bools m_assertions;
   Bools m_errors;
@@ -351,7 +351,7 @@ public:
     return m_guard;
   }
 
-  const EventList& events() const
+  const Events& events() const
   {
     return m_events;
   }
@@ -499,7 +499,7 @@ public:
     return m_flip_cnt;
   }
 
-  FlipList& flips()
+  Flips& flips()
   {
     return m_flips;
   }
@@ -1303,20 +1303,20 @@ private:
   }
 
   smt::CVC4Solver m_solver;
-  std::unordered_map<EventIdentifier, TimeSort> m_time_map;
+  std::unordered_map<EventIdentifier, Time> m_time_map;
   const Time m_epoch;
 
   /// Uses e's identifier to build a numerical SMT variable
-  Time time(const Event& e)
+  const Time& time(const Event& e)
   {
-    TimeSort& time = m_time_map[e.event_id];
-    if (time.is_null())
+    if (m_time_map.find(e.event_id) == m_time_map.cend())
     {
-      time = smt::any<TimeSort>(prefix_event_id(s_time_prefix, e));
+      Time time(smt::any<TimeSort>(prefix_event_id(s_time_prefix, e)));
       m_solver.add(m_epoch.happens_before(time));
+      m_time_map.insert(std::make_pair(e.event_id, time));
     }
 
-    return time;
+    return m_time_map.at(e.event_id);
   }
 
   void unsafe_add(const smt::UnsafeTerm& term)
@@ -1662,10 +1662,10 @@ public:
       if (pair.first == 1)
         continue;
 
-      const EventIterList& events = pair.second;
+      const EventIters& events = pair.second;
       assert(!events.empty());
 
-      EventIterList::const_reverse_iterator criter(events.crbegin());
+      EventIters::const_reverse_iterator criter(events.crbegin());
       assert(criter != events.crend());
 
       EventIter e_iter(*criter);
@@ -1679,7 +1679,7 @@ public:
           continue;
 
         e_prime_iter = *criter;
-        EventIterList& predecessors = predecessors_map[e_iter];
+        EventIters& predecessors = predecessors_map[e_iter];
         if (!is_communication_select)
         {
           e_iter = e_prime_iter;
@@ -1734,7 +1734,7 @@ private:
   static smt::Bool communication_preds(
     const PerAddressMap& per_address_map,
     const MatchableMap& matchable_map,
-    const EventIterList& predecessors)
+    const EventIters& predecessors)
   {
     smt::Bool and_match(smt::literal<smt::Bool>(true));
     for (const EventIter e_iter : predecessors)
@@ -1742,7 +1742,7 @@ private:
       assert(e_iter->is_recv() || e_iter->is_send());
 
       const EventKinds& a = per_address_map.at(e_iter->address);
-      const EventIterList& matchables = e_iter->is_recv() ?
+      const EventIters& matchables = e_iter->is_recv() ?
         a.sends() : a.recvs();
 
       smt::Bool or_match(smt::literal<smt::Bool>(false));
@@ -1891,11 +1891,11 @@ private:
     smt::Bool thread_order(smt::literal<smt::Bool>(true));
     for (const PerThreadMap::value_type& pair : per_thread_map)
     {
-      const EventIterList& events = pair.second;
+      const EventIters& events = pair.second;
       if (events.size() < 2)
         continue;
 
-      EventIterList::const_iterator events_iter = events.cbegin();
+      EventIters::const_iterator events_iter = events.cbegin();
       EventIter e_iter = *events_iter++;
       while (events_iter != events.cend())
       {
