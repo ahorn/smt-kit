@@ -444,7 +444,8 @@ public:
       else
         append_barrier_event(*m_barrier_list.cbegin());
 
-      m_barrier_map[thread_id] = m_barrier_list.cbegin();
+      m_barrier_map.insert(
+        std::make_pair(thread_id, m_barrier_list.cbegin()));
     }
     else
     {
