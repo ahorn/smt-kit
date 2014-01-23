@@ -13,7 +13,7 @@ TEST(CrvFunctionalTest, SafeIf)
   do
   {
     crv::External<char> x('A');
-    if (crv::tracer().append_guard(x == '?'))
+    if (crv::tracer().decide_flip(x == '?'))
       x = 'B';
     crv::Internal<char> a(x);
 
@@ -211,7 +211,7 @@ const unsigned N,
   for (i = 0; i < N; i++)
   {
     mutex.lock();
-    if (crv::tracer().append_guard(flag == 1))
+    if (crv::tracer().decide_flip(flag == 1))
     {
       crv::tracer().add_error(top == 0U);
       top = top - 1U;
@@ -268,7 +268,7 @@ void unsat_stack_t1(
   for (i = 0; i < N; i++)
   {
     mutex.lock();
-    if (crv::tracer().append_guard(0U < top))
+    if (crv::tracer().decide_flip(0U < top))
     {
       crv::tracer().add_error(top == 0U);
       top = top - 1U;
@@ -355,7 +355,7 @@ TEST(CrvFunctionalTest, UnsatCommunication)
 
 void unsat_communication_deadlock_with_guard_f(crv::Channel<int>& c)
 {
-  EXPECT_TRUE(crv::tracer().append_guard(6 == c.recv()));
+  EXPECT_TRUE(crv::tracer().decide_flip(6 == c.recv()));
   c.send(7);
 }
 
@@ -379,7 +379,7 @@ TEST(CrvFunctionalTest, UnsatCommunicationDeadlockWithGuard)
 
 void sat_communication_deadlock_with_guard_f(crv::Channel<int>& c)
 {
-  EXPECT_TRUE(crv::tracer().append_guard(6 != c.recv()));
+  EXPECT_TRUE(crv::tracer().decide_flip(6 != c.recv()));
   c.send(7);
 }
 

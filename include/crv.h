@@ -528,7 +528,7 @@ public:
     return m_next_address++;
   }
 
-  bool append_guard(const Internal<bool>&, bool direction = true);
+  bool decide_flip(const Internal<bool>&, bool direction = true);
 
   /// Returns parent thread identifier
   ThreadIdentifier append_thread_begin_event()

@@ -24,8 +24,8 @@ void Tracer::add_error(Internal<bool>&& error)
   m_errors.push_back(std::move(error.term));
 }
 
-bool Tracer::append_guard(
-  const Internal<bool>& internal,
+bool Tracer::decide_flip(
+  const Internal<bool>& guard,
   bool direction)
 {
   if (m_flip_iter == m_flips.cend())
@@ -40,9 +40,9 @@ bool Tracer::append_guard(
   }
 
   if (direction)
-    m_guard = m_guard and internal.term;
+    m_guard = m_guard and guard.term;
   else
-    m_guard = m_guard and !internal.term;
+    m_guard = m_guard and !guard.term;
 
   return direction;
 }
