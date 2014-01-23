@@ -13,6 +13,7 @@
 #include <string>
 #include <limits>
 #include <cassert>
+#include <iterator>
 #include <type_traits>
 
 #ifdef __CRV_DEBUG__
@@ -306,7 +307,7 @@ private:
     m_events.push_back(Event(kind, event_id, thread_id,
       address, guard(), term, offset_term));
 
-    const EventIter e_iter(--m_events.cend());
+    const EventIter e_iter(std::prev(m_events.cend()));
     m_per_address_map[e_iter->address].push_back<kind>(e_iter);
     m_per_thread_map[thread_id].push_back(e_iter);
   }
@@ -449,7 +450,7 @@ public:
       std::list<EventIdentifier>::const_iterator& citer =
         m_barrier_map.at(thread_id);
       assert(citer != m_barrier_list.cend());
-      if (citer == --m_barrier_list.cend())
+      if (citer == std::prev(m_barrier_list.cend()))
       {
         m_barrier_list.push_back(append_barrier_event());
         citer++;

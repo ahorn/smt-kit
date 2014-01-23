@@ -182,7 +182,7 @@ TEST(CrvTest, Tracer)
   EXPECT_EQ(1, parent_thread_id);
   EXPECT_EQ(5, tracer.events().size());
 
-  EventIter iter = --tracer.events().cend();
+  EventIter iter = std::prev(tracer.events().cend());
   EXPECT_EQ(parent_thread_id + 1, iter->thread_id);
 
   iter--;
@@ -193,7 +193,7 @@ TEST(CrvTest, Tracer)
   EXPECT_EQ(2, child_thread_id);
   EXPECT_EQ(6, tracer.events().size());
 
-  iter = --tracer.events().cend();
+  iter = std::prev(tracer.events().cend());
   EXPECT_EQ(4, iter->event_id);
   EXPECT_EQ(child_thread_id, iter->thread_id);
 
