@@ -30,7 +30,7 @@ bool Tracer::append_guard(
 {
   if (m_flip_iter == m_flips.cend())
   {
-    m_flips.push_back(Flip(direction));
+    m_flips.emplace_back(direction);
     assert(m_flips.back().direction == direction);
   }
   else

@@ -232,6 +232,8 @@ struct Flip
   bool direction;
   bool is_flip;
 
+  Flip(const Flip&) = delete;
+
   Flip(bool direction)
   : direction(direction),
     is_flip(false) {}
