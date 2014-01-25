@@ -2009,6 +2009,440 @@ TEST(CrvTest, MutexJoinMultipleWriters)
   EXPECT_EQ(smt::unsat, encoder.check(!(x == 16 && y == 5), tracer()));
 }
 
+TEST(CrvTest, ImmediateDominator)
+{
+  Tracer tracer;
+  EventIters e_iters;
+  EventMap immediate_dominator_map;
+
+  External<char> x('\0');
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.append_write_event(x); // 3
+  tracer.append_write_event(x); // 4
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(6, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(3), immediate_dominator_map.at(e_iters.at(4)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_else();
+  tracer.append_write_event(x); // 3
+  tracer.scope_end();
+  tracer.append_write_event(x); // 4
+  tracer.append_write_event(x); // 5
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(7, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(4)));
+  EXPECT_EQ(e_iters.at(4), immediate_dominator_map.at(e_iters.at(5)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.scope_end();
+  tracer.append_write_event(x); // 3
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(5, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.append_write_event(x); // 3
+  tracer.scope_end();
+  tracer.scope_end();
+  tracer.append_write_event(x); // 4
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(6, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(2), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(4)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.scope_else();
+  tracer.append_write_event(x); // 3
+  tracer.scope_end();
+  tracer.append_write_event(x); // 4
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(6, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(4)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_else();
+  tracer.append_write_event(x); // 3
+  tracer.scope_end();
+  tracer.scope_end();
+  tracer.append_write_event(x); // 4
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(6, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(4)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 3
+  tracer.scope_end();
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(5, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.append_write_event(x); // 3
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 4
+  tracer.scope_end();
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(6, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(3), immediate_dominator_map.at(e_iters.at(4)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_else();
+  tracer.append_write_event(x); // 3
+  tracer.scope_end();
+  tracer.append_write_event(x); // 4
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 5
+  tracer.scope_end();
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(7, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(4)));
+  EXPECT_EQ(e_iters.at(4), immediate_dominator_map.at(e_iters.at(5)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.append_write_event(x); // 3
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 4
+  tracer.scope_else();
+  tracer.append_write_event(x); // 5
+  tracer.scope_end();
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(7, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(3), immediate_dominator_map.at(e_iters.at(4)));
+  EXPECT_EQ(e_iters.at(3), immediate_dominator_map.at(e_iters.at(5)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_else();
+  tracer.scope_end();
+  tracer.append_write_event(x); // 3
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 4
+  tracer.scope_end();
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(6, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(3), immediate_dominator_map.at(e_iters.at(4)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.append_write_event(x); // 3
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 4
+  tracer.scope_else();
+  tracer.scope_end();
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(6, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(3), immediate_dominator_map.at(e_iters.at(4)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.scope_else();
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.append_write_event(x); // 3
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 4
+  tracer.scope_end();
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(6, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(3), immediate_dominator_map.at(e_iters.at(4)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.append_write_event(x); // 3
+  tracer.scope_then(true);
+  tracer.scope_else();
+  tracer.append_write_event(x); // 4
+  tracer.scope_end();
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(6, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(3), immediate_dominator_map.at(e_iters.at(4)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.scope_else();
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 3
+  tracer.scope_end();
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(5, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.scope_then(true);
+  tracer.scope_else();
+  tracer.append_write_event(x); // 3
+  tracer.scope_end();
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(5, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 3
+  tracer.scope_end();
+  tracer.scope_end();
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(5, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.scope_then(true);
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 3
+  tracer.scope_end();
+  tracer.scope_end();
+  tracer.scope_end();
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(5, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.scope_then(true);
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 2
+  tracer.scope_end();
+  tracer.scope_then(true);
+  tracer.append_write_event(x); // 3
+  tracer.scope_end();
+  tracer.scope_end();
+  tracer.append_write_event(x); // 4
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(6, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(4)));
+}
+
 TEST(CrvTest, CommunicationPredecessors)
 {
   tracer().reset();

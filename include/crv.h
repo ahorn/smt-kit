@@ -224,6 +224,7 @@ void EventKinds::push_back<SEND_EVENT>(const EventIter e_iter)
 typedef std::unordered_map<Address, EventKinds> PerAddressMap;
 typedef std::unordered_map<ThreadIdentifier, EventIters> PerThreadMap;
 typedef std::unordered_map<EventIter, EventIters> PerEventMap;
+typedef std::unordered_map<EventIter, EventIter> EventMap;
 
 /// Control flow decision along symbolic path
 struct Flip
@@ -1727,6 +1728,8 @@ private:
   }
 
 public:
+  static EventMap immediate_dominator_map(const Tracer&);
+
   static PerEventMap build_predecessors_map(
     const PerThreadMap& per_thread_map)
   {
