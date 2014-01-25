@@ -21,13 +21,15 @@ void Tracer::add_assertion(Internal<bool>&& assertion)
 
 void Tracer::add_error(Internal<bool>&& error)
 {
-  m_errors.push_back(std::move(error.term));
+  m_errors.push_back(guard() and std::move(error.term));
 }
 
 bool Tracer::decide_flip(
-  const Internal<bool>& guard,
+  const Internal<bool>& g,
   bool direction)
 {
+  assert(!m_scope_stack.empty());
+
   if (m_flip_iter == m_flips.cend())
   {
     m_flips.emplace_back(direction);
@@ -40,11 +42,41 @@ bool Tracer::decide_flip(
   }
 
   if (direction)
-    m_guard = m_guard and guard.term;
+    m_guard = m_guard and g.term;
   else
-    m_guard = m_guard and !guard.term;
+    m_guard = m_guard and not g.term;
+
+  m_scope_stack.top().guard = m_guard;
 
   return direction;
+}
+
+void Tracer::scope_then(const Internal<bool>& g)
+{
+  assert(!m_scope_stack.empty());
+  assert(m_scope_stack.top().level < std::numeric_limits<
+    ScopeLevel>::max());
+
+  m_scope_stack.emplace(guard(), g.term,
+    m_scope_stack.top().level + 1);
+  m_guard = m_guard and g.term;
+}
+
+void Tracer::scope_else()
+{
+  assert(!m_scope_stack.empty());
+
+  ThreadLocalScope& scope = m_scope_stack.top();
+  scope.guard_prime = not scope.guard_prime;
+  m_guard = scope.guard and scope.guard_prime;
+}
+
+void Tracer::scope_end()
+{
+  assert(!m_scope_stack.empty());
+
+  m_guard = m_scope_stack.top().guard;
+  m_scope_stack.pop();
 }
 
 namespace ThisThread

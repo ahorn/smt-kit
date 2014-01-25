@@ -45,30 +45,28 @@ typedef unsigned int EventIdentifier;
 /// Positive if and only if thread is joinable
 typedef unsigned ThreadIdentifier;
 
+/// Number of thread-local nested if-then-else blocks
+typedef unsigned ScopeLevel;
+
 class Event
 {
 public:
   const EventKind kind;
   const EventIdentifier event_id;
   const ThreadIdentifier thread_id;
+  const ScopeLevel scope_level;
   const Address address;
   const smt::Bool guard;
   const smt::UnsafeTerm term;
   const smt::UnsafeTerm offset_term;
 
-  Event(Event&& other)
-  : kind(other.kind),
-    event_id(other.event_id),
-    thread_id(other.thread_id),
-    address(other.address),
-    guard(std::move(other.guard)),
-    term(std::move(other.term)),
-    offset_term(std::move(other.offset_term)) {}
+  Event(const Event&) = delete;
 
   Event(
     const EventKind kind_arg,
     const EventIdentifier event_id_arg,
     const ThreadIdentifier thread_id_arg,
+    const ScopeLevel scope_level_arg,
     const Address address_arg,
     const smt::Bool guard_arg,
     const smt::UnsafeTerm& term_arg,
@@ -76,6 +74,7 @@ public:
   : kind(kind_arg),
     event_id(event_id_arg),
     thread_id(thread_id_arg),
+    scope_level(scope_level_arg),
     address(address_arg),
     guard(guard_arg),
     term(term_arg),
@@ -256,6 +255,49 @@ struct Smt
     /* else */ smt::Int>::type Sort;
 };
 
+/// Nesting of branches within a single thread
+
+/// Facilitate symbolic multi-path analysis where both
+/// branches of control-flow statements are encoded
+
+// TODO: Support Internal<T> inside scopes
+// TODO: Think about Tracer::decide_flip()
+struct ThreadLocalScope
+{
+  /// never null
+  smt::Bool guard;
+
+  /// null if and only if level is zero
+  smt::Bool guard_prime;
+
+  /// starting at zero
+  const ScopeLevel level;
+
+  ThreadLocalScope(const ThreadLocalScope&) = delete;
+
+  /// outermost scope when a thread starts
+  ThreadLocalScope(const smt::Bool& guard_arg)
+  : guard(guard_arg),
+    guard_prime(),
+    level(0)
+  {
+    assert(!guard.is_null());
+  }
+
+  ThreadLocalScope(
+    const smt::Bool& guard_arg,
+    const smt::Bool& guard_prime_arg,
+    const ScopeLevel level_arg)
+  : guard(guard_arg),
+    guard_prime(guard_prime_arg),
+    level(level_arg)
+  {
+    assert(!guard.is_null());
+    assert(!guard_prime_arg.is_null());
+    assert(0 < level);
+  }
+};
+
 class Tracer
 {
 private:
@@ -271,6 +313,7 @@ private:
 
   // always nonempty
   std::stack<ThreadIdentifier> m_thread_id_stack;
+  std::stack<ThreadLocalScope> m_scope_stack;
 
   // never null
   smt::Bool m_guard;
@@ -305,9 +348,11 @@ private:
     const smt::UnsafeTerm& term,
     const smt::UnsafeTerm& offset_term = smt::UnsafeTerm())
   {
+    assert(!m_scope_stack.empty());
+
     const ThreadIdentifier thread_id(current_thread_id());
-    m_events.push_back(Event(kind, event_id, thread_id,
-      address, guard(), term, offset_term));
+    m_events.emplace_back(kind, event_id, thread_id,
+      m_scope_stack.top().level, address, guard(), term, offset_term);
 
     const EventIter e_iter(std::prev(m_events.cend()));
     m_per_address_map[e_iter->address].push_back<kind>(e_iter);
@@ -329,6 +374,7 @@ public:
     m_per_address_map(),
     m_per_thread_map(),
     m_thread_id_stack(),
+    m_scope_stack(),
     m_guard(smt::literal<smt::Bool>(true)),
     m_flip_cnt(0),
     m_flips(),
@@ -340,6 +386,7 @@ public:
     m_barrier_map()
   {
     m_thread_id_stack.push(m_thread_id_cnt++);
+    m_scope_stack.emplace(m_guard);
   }
 
   ThreadIdentifier current_thread_id() const
@@ -386,11 +433,13 @@ public:
     }
     m_thread_id_cnt = 1;
     push_next_thread_id();
-  }
 
-  void reset_guard(const smt::Bool guard = smt::literal<smt::Bool>(true))
-  {
-    m_guard = guard;
+    while (!m_scope_stack.empty())
+    {
+      m_scope_stack.pop();
+    }
+    m_guard = smt::literal<smt::Bool>(true);
+    m_scope_stack.emplace(m_guard);
   }
 
   void reset_flips()
@@ -425,7 +474,6 @@ public:
   {
     reset_event_identifiers();
     reset_events();
-    reset_guard();
     reset_flips();
     reset_assertions();
     reset_errors();
@@ -487,7 +535,6 @@ public:
     m_flip_cnt++;
 
     reset_events();
-    reset_guard();
     reset_assertions();
     reset_errors();
     reset_address();
@@ -508,19 +555,22 @@ public:
     return m_flips;
   }
 
-  /// Encode as conjunction
+  /// Encoded as conjunction
   const Bools& assertions() const
   {
     return m_assertions;
   }
 
-  /// Encode as disjunction 
+  /// Encoded as disjunction 
   const Bools& errors() const
   {
     return m_errors;
   }
 
+  /// Add Boolean term of argument to assertions()
   void add_assertion(Internal<bool>&&);
+
+  /// Add conjunction of guard() and given Boolean term to errors()
   void add_error(Internal<bool>&&);
 
   Address next_address()
@@ -541,6 +591,9 @@ public:
     ThreadIdentifier parent_thread_id(current_thread_id());
     push_next_thread_id();
 
+    m_guard = smt::literal<smt::Bool>(true);
+    m_scope_stack.emplace(m_guard);
+
     append_event<THREAD_BEGIN_EVENT>(
       event_id, 0, smt::UnsafeTerm());
     return parent_thread_id;
@@ -554,6 +607,15 @@ public:
 
     ThreadIdentifier child_thread_id(current_thread_id());
     m_thread_id_stack.pop();
+
+    assert(m_scope_stack.top().level == 0);
+    m_scope_stack.pop();
+    const ThreadLocalScope& parent_scope = m_scope_stack.top();
+    if (parent_scope.guard_prime.is_null())
+      m_guard = parent_scope.guard;
+    else
+      m_guard = parent_scope.guard and parent_scope.guard_prime;
+
     return child_thread_id;
   }
 
@@ -611,6 +673,11 @@ public:
 
   template<typename T>
   void append_send_event(const External<T>&);
+
+  // Symbolic multi-path analysis
+  void scope_then(const Internal<bool>& guard);
+  void scope_else();
+  void scope_end();
 };
 
 // Global for symbolic execution
@@ -1340,13 +1407,14 @@ private:
       for (const EventIter r_iter : a.reads())
       {
         const Event& r = *r_iter;
+        const Time& r_time = time(r);
 
         smt::UnsafeTerm or_rf(smt::literal<smt::Bool>(false));
         for (const EventIter w_iter : a.writes())
         {
           const Event& w = *w_iter;
 
-          const smt::Bool wr_order(time(w).happens_before(time(r)));
+          const smt::Bool wr_order(time(w).happens_before(r_time));
           const smt::Bool rf_bool(flow_bool(s_rf_prefix, w, r));
           const smt::UnsafeTerm wr_equality(w.term == r.term);
 
@@ -1354,9 +1422,10 @@ private:
           and_rf = and_rf and
             smt::implies(
               /* if */ rf_bool,
-              /* then */ wr_order and w.guard and wr_equality);
+              /* then */ r.guard and w.guard and
+                         wr_order and wr_equality);
         }
-        and_rf = and_rf and r.guard and or_rf;
+        and_rf = and_rf and smt::implies(r.guard, or_rf);
       }
     }
     unsafe_add(and_rf);
@@ -1382,11 +1451,12 @@ private:
               continue;
 
             const Event& w_prime = *w_prime_iter;
+            const Time& w_prime_time = time(w_prime);
             const smt::Bool rf_bool(flow_bool(s_rf_prefix, w, r));
-            and_fr = and_fr and w.guard and
-              smt::implies(
-                /* if */ rf_bool and time(w).happens_before(time(w_prime)),
-                /* then */ time(r).happens_before(time(w_prime)));
+            and_fr = and_fr and smt::implies(
+              rf_bool and w_prime.guard and
+              time(w).happens_before(w_prime_time),
+              time(r).happens_before(w_prime_time));
           }
         }
       }
@@ -1444,9 +1514,10 @@ private:
             smt::implies(
               /* if */ pf_bool,
               /* then */ time(push).happens_before(time(pop)) and
-                         push.guard and push.term == pop.term);
+                         pop.guard and push.guard and
+                         push.term == pop.term);
         }
-        and_pf = and_pf and pop.guard and or_pf;
+        and_pf = and_pf and or_pf;
       }
     }
     unsafe_add(and_pf);
@@ -1563,6 +1634,7 @@ private:
           const smt::Bool ldf_bool(flow_bool(s_ldf_prefix, s, ld));
           const smt::UnsafeTerm sld_equality(s.term == ld.term);
 
+          // part of the initial zero array axiom:
           // for every store s, if ld and s access the same array
           // offset, then t!ld < t!s (i.e. ld must happen before s).
           and_lds = and_lds and
@@ -1574,15 +1646,16 @@ private:
           and_ldf = and_ldf and
             smt::implies(
               /* if */ ldf_bool,
-              /* then */ sld_order and s.guard and
-                sld_equality and s.offset_term == ld.offset_term);
+              /* then */ s.guard and ld.guard and sld_order and
+                         sld_equality and s.offset_term == ld.offset_term);
         }
 
         /* initial array elements are zero */
         smt::UnsafeTerm ld_zero(smt::literal(ld.term.sort(), 0));
-        and_ldf = and_ldf and ld.guard and smt::implies(
+        and_ldf = and_ldf and smt::implies(
           /* if */ not or_ldf,
-          /* then */ and_lds and ld.term == std::move(ld_zero));
+          /* then */ ld.guard and and_lds and
+                     ld.term == std::move(ld_zero));
       }
     }
     unsafe_add(and_ldf);
@@ -1610,10 +1683,10 @@ private:
 
             const Event& s_prime = *s_prime_iter;
             const smt::Bool ldf_bool(flow_bool(s_ldf_prefix, s, ld));
-            and_fld = and_fld and s.guard and
+            and_fld = and_fld and
               smt::implies(
                 /* if */ ldf_bool and time(s).happens_before(time(s_prime)) and
-                         s.offset_term == s_prime.offset_term,
+                         s.offset_term == s_prime.offset_term and s_prime.guard,
                 /* then */ time(ld).happens_before(time(s_prime)));
           }
         }
@@ -1996,7 +2069,8 @@ public:
     const Tracer& tracer)
   {
     m_solver.push();
-    unsafe_add(std::move(condition.term));
+    unsafe_add(tracer.guard() and
+      std::move(condition.term));
     encode(tracer, false);
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
@@ -2008,7 +2082,6 @@ public:
 class Thread
 {
 private:
-  const smt::Bool m_guard;
   ThreadIdentifier m_parent_thread_id;
   ThreadIdentifier m_thread_id;
 
@@ -2021,15 +2094,12 @@ public:
   /// The return value of `f` is always ignored.
   template<typename Function, typename... Args>
   Thread(Function&& f, Args&&... args)
-  : m_guard(tracer().guard()),
-    m_parent_thread_id(0),
+  : m_parent_thread_id(0),
     m_thread_id(0)
   {
-    tracer().reset_guard();
     m_parent_thread_id = tracer().append_thread_begin_event();
     f(args...);
     m_thread_id = tracer().append_thread_end_event();
-    tracer().reset_guard(m_guard);
   }
 
   bool joinable() const

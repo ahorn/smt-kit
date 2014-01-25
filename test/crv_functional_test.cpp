@@ -27,6 +27,20 @@ TEST(CrvFunctionalTest, SafeIf)
   EXPECT_FALSE(error);
 }
 
+TEST(CrvFunctionalTest, MultipathSafeIf)
+{
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  crv::External<char> x('A');
+  crv::tracer().scope_then(x == '?');
+  x = 'B';
+  crv::tracer().scope_end();
+  crv::Internal<char> a(x);
+  crv::tracer().add_error(!(a == 'B' || a == 'A'));
+  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+}
+
 void fib_t0(
   const unsigned N,
   crv::External<int>& i,

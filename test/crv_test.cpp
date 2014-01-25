@@ -125,11 +125,12 @@ TEST(CrvTest, Event)
   tracer().reset();
 
   EXPECT_TRUE(tracer().events().empty());
-  Event e(READ_EVENT, 2, 3, 5, smt::literal<smt::Bool>(true),
+  Event e(READ_EVENT, 2, 3, 4, 5, smt::literal<smt::Bool>(true),
     smt::any<smt::Bv<char>>("a"), smt::Bv<size_t>());
   EXPECT_EQ(READ_EVENT, e.kind);
   EXPECT_EQ(2, e.event_id);
   EXPECT_EQ(3, e.thread_id);
+  EXPECT_EQ(4, e.scope_level);
   EXPECT_EQ(5, e.address);
   EXPECT_FALSE(e.guard.is_null());
   EXPECT_FALSE(e.term.is_null());
@@ -567,14 +568,12 @@ TEST(CrvTest, Guard)
   // Do not call reset_address(); otherwise,
   // we get that false_bool == true_bool.
   tracer().reset_events();
-  tracer().reset_guard();
   tracer().reset_flips();
   false_bool = false;
   true_bool = true;
   EXPECT_EQ(smt::unsat, encoder.check(false_bool, tracer()));
 
   tracer().reset_events();
-  tracer().reset_guard();
   tracer().reset_flips();
   false_bool = false;
   true_bool = true;
@@ -588,7 +587,6 @@ TEST(CrvTest, Guard)
   EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer()));
 
   tracer().reset_events();
-  tracer().reset_guard();
   tracer().reset_flips();
   false_bool = false;
   true_bool = true;
@@ -602,7 +600,6 @@ TEST(CrvTest, Guard)
   EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer()));
 
   tracer().reset_events();
-  tracer().reset_guard();
   tracer().reset_flips();
   false_bool = false;
   true_bool = true;
@@ -625,7 +622,6 @@ TEST(CrvTest, Guard)
   EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer()));
 
   tracer().reset_events();
-  tracer().reset_guard();
   tracer().reset_flips();
   false_bool = false;
   true_bool = true;
@@ -1321,6 +1317,120 @@ TEST(CrvTest, ArrayIndex)
   EXPECT_EQ(smt::unsat, encoder.check(sum == 0, tracer()));
 
   EXPECT_FALSE(tracer().flip());
+}
+
+TEST(CrvTest, SatScopeWithNondeterminsticGuardInSingleThread)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<bool> nondet_bool;
+  External<char> x;
+  Internal<char> a('\0');
+
+  x = 'A';
+  tracer().scope_then(nondet_bool);
+  x = 'B';
+  tracer().scope_else();
+  x = 'C';
+  tracer().scope_end();
+  a = x;
+
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'C', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B' && a != 'C', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'C', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'B' && a == 'C', tracer()));
+}
+
+TEST(CrvTest, SatScopeWithNondeterminsticGuardAndArrayInSingleThread)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<bool> nondet_bool;
+  External<char[3]> xs;
+  Internal<char> a('\0');
+
+  xs[2] = 'A';
+  tracer().scope_then(nondet_bool);
+  xs[2] = 'B';
+  tracer().scope_else();
+  xs[2] = 'C';
+  tracer().scope_end();
+  a = xs[2];
+
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'C', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B' && a != 'C', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'C', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'B' && a == 'C', tracer()));
+}
+
+TEST(CrvTest, SatScopeWithDeterminsticGuardAndArrayInSingleThread)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<char[3]> x;
+  Internal<char> p('\0');
+  Internal<char> a('\0');
+  
+  p = '?';
+  x[2] = 'A';
+  tracer().scope_then(p == '?');
+  x[2] = 'B';
+  tracer().scope_else();
+  x[2] = 'C'; // unreachable
+  tracer().scope_end();
+  a = x[2];
+
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'C', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a == 'C', tracer()));
+}
+
+TEST(CrvTest, UnsatScopeInSingleThread)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<int> var;
+
+  tracer().scope_then(0 < var);
+  tracer().add_error(var == 0);
+  tracer().scope_end();
+
+  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+}
+
+TEST(CrvTest, UnsatScopeInMultipleThread)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<int> var;
+
+  tracer().append_thread_begin_event();
+  tracer().scope_then(0 < var);
+  tracer().add_error(var == 0);
+  tracer().scope_end();
+  tracer().append_thread_end_event();
+
+  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+}
+
+TEST(CrvTest, UnsatScopeErrorConditionDueToFalseGuard)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<bool> false_bool(false);
+  tracer().scope_then(false_bool);
+  tracer().add_error(true);
+  tracer().scope_end();
+
+  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
 }
 
 TEST(CrvTest, SatFlipWithNondeterminsticGuardInSingleThread)
@@ -2094,7 +2204,6 @@ TEST(CrvTest, CommunicationWithTrueGuard)
   c.send(7);
   tracer().append_thread_end_event();
 
-  tracer().reset_guard();
   tracer().append_thread_begin_event();
   c.recv();
   c.send(6);
@@ -2119,7 +2228,6 @@ TEST(CrvTest, CommunicationWithFalseGuard)
   c.send(7);
   tracer().append_thread_end_event();
 
-  tracer().reset_guard();
   tracer().append_thread_begin_event();
   c.recv();
   c.send(6);
