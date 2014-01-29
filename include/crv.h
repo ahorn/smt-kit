@@ -39,7 +39,11 @@ enum EventKind : unsigned short
 };
 
 /// Positive unless event is_sync()
+
+/// An address must not be exposed to users of APIs modelled with partial orders
 typedef unsigned int Address;
+
+/// Unique identifier of an instruction in a loop-free (i.e. unrolled) program
 typedef unsigned int EventIdentifier;
 
 /// Positive if and only if thread is joinable
@@ -677,11 +681,12 @@ public:
   template<typename T>
   void append_store_event(const External<T>&);
 
+  /// Incoming channel communication and/or message passing
   template<typename T>
-  typename Smt<T>::Sort append_recv_event(const External<T>&);
+  typename Smt<T>::Sort append_recv_event(const Address);
 
-  template<typename T>
-  void append_send_event(const External<T>&);
+  /// Outgoing channel communication and/or message passing
+  void append_send_event(const Address, const smt::UnsafeTerm&);
 
   // Symbolic multi-path analysis
   void scope_then(const Internal<bool>& guard);
@@ -1065,25 +1070,14 @@ void Tracer::append_store_event(const External<T>& external)
 }
 
 template<typename T>
-typename Smt<T>::Sort Tracer::append_recv_event(const External<T>& channel)
+typename Smt<T>::Sort Tracer::append_recv_event(const Address address)
 {
-  assert(channel.offset_term.is_null());
-
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
   // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
-  append_event<RECV_EVENT>(event_id, channel.address, term);
+  append_event<RECV_EVENT>(event_id, address, term);
 
   return term;
-}
-
-template<typename T>
-void Tracer::append_send_event(const External<T>& channel)
-{
-  assert(!channel.term.is_null());
-  assert(channel.offset_term.is_null());
-
-  append_event<SEND_EVENT>(m_event_id_cnt++, channel.address, channel.term);
 }
 
 }
@@ -2228,34 +2222,39 @@ public:
   }
 };
 
-/// CSP-style communication
+/// Go-style concurrency
+
+/// A Channel<T> object is like a channel in the Go language without
+/// the concept of higher-order channels (i.e. channels of channels).
 template<typename T>
 class Channel
 {
 private:
-  External<T> m_channel;
+  const Address m_address;
 
 public:
+  Channel()
+  : m_address(tracer().next_address()) {}
+
   void send(T v)
   {
     send(Internal<T>(v));
   }
 
-  void send(const Internal<T>& payload)
+  void send(const Internal<T>& data)
   {
-    m_channel.term = payload.term;
-    tracer().append_send_event(m_channel);
+    tracer().append_send_event(m_address, data.term);
   }
 
-  void send(const External<T>& payload)
+  void send(const External<T>& data)
   {
-    m_channel.term = append_input_event(payload);
-    tracer().append_send_event(m_channel);
+    smt::UnsafeTerm term = append_input_event(data);
+    tracer().append_send_event(m_address, std::move(term));
   }
 
-  Internal<T> recv() const
+  Internal<T> recv()
   {
-    return Internal<T>(tracer().append_recv_event(m_channel));
+    return Internal<T>(tracer().append_recv_event<T>(m_address));
   }
 };
 

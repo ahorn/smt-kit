@@ -24,6 +24,12 @@ void Tracer::add_error(Internal<bool>&& error)
   m_errors.push_back(guard() and std::move(error.term));
 }
 
+void Tracer::append_send_event(const Address address, const smt::UnsafeTerm& term)
+{
+  assert(!term.is_null());
+  append_event<SEND_EVENT>(m_event_id_cnt++, address, term);
+}
+
 bool Tracer::decide_flip(
   const Internal<bool>& g,
   bool direction)
