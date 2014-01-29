@@ -45,6 +45,9 @@ typedef unsigned int EventIdentifier;
 /// Positive if and only if thread is joinable
 typedef unsigned ThreadIdentifier;
 
+/// Unique number for each basic block when in multi-path mode
+typedef unsigned BlockIdentifier;
+
 /// Number of thread-local nested if-then-else blocks
 typedef unsigned ScopeLevel;
 
@@ -54,6 +57,7 @@ public:
   const EventKind kind;
   const EventIdentifier event_id;
   const ThreadIdentifier thread_id;
+  const BlockIdentifier block_id;
   const ScopeLevel scope_level;
   const Address address;
   const smt::Bool guard;
@@ -66,6 +70,7 @@ public:
     const EventKind kind_arg,
     const EventIdentifier event_id_arg,
     const ThreadIdentifier thread_id_arg,
+    const BlockIdentifier block_id_arg,
     const ScopeLevel scope_level_arg,
     const Address address_arg,
     const smt::Bool guard_arg,
@@ -74,6 +79,7 @@ public:
   : kind(kind_arg),
     event_id(event_id_arg),
     thread_id(thread_id_arg),
+    block_id(block_id_arg),
     scope_level(scope_level_arg),
     address(address_arg),
     guard(guard_arg),
@@ -223,7 +229,6 @@ void EventKinds::push_back<SEND_EVENT>(const EventIter e_iter)
 
 typedef std::unordered_map<Address, EventKinds> PerAddressMap;
 typedef std::unordered_map<ThreadIdentifier, EventIters> PerThreadMap;
-typedef std::unordered_map<EventIter, EventIters> PerEventMap;
 typedef std::unordered_map<EventIter, EventIter> EventMap;
 
 /// Control flow decision along symbolic path
@@ -306,6 +311,7 @@ private:
 
   EventIdentifier m_event_id_cnt;
   ThreadIdentifier m_thread_id_cnt;
+  BlockIdentifier m_block_id_cnt;
   Events m_events;
 
   // Index event list by various keys
@@ -352,7 +358,7 @@ private:
     assert(!m_scope_stack.empty());
 
     const ThreadIdentifier thread_id(current_thread_id());
-    m_events.emplace_back(kind, event_id, thread_id,
+    m_events.emplace_back(kind, event_id, thread_id, m_block_id_cnt,
       m_scope_stack.top().level, address, guard(), term, offset_term);
 
     const EventIter e_iter(std::prev(m_events.cend()));
@@ -371,6 +377,7 @@ public:
   Tracer()
   : m_event_id_cnt(0),
     m_thread_id_cnt(1),
+    m_block_id_cnt(0),
     m_events(),
     m_per_address_map(),
     m_per_thread_map(),
@@ -435,6 +442,7 @@ public:
     m_thread_id_cnt = 1;
     push_next_thread_id();
 
+    m_block_id_cnt = 0;
     while (!m_scope_stack.empty())
     {
       m_scope_stack.pop();
@@ -1727,56 +1735,30 @@ private:
     encode_store_serialization(per_address_map);
   }
 
-public:
-  static EventMap immediate_dominator_map(const Tracer&);
-
-  static PerEventMap build_predecessors_map(
-    const PerThreadMap& per_thread_map)
+  static bool is_any_event(const EventIter e_iter)
   {
-    // TODO: implement communication-select feature
-    bool is_communication_select(false);
-    PerEventMap predecessors_map;
-    for (const PerThreadMap::value_type& pair : per_thread_map)
-    {
-      // ignore main thread
-      if (pair.first == 1)
-        continue;
+    return true;
+  }
 
-      const EventIters& events = pair.second;
-      assert(!events.empty());
+  static bool is_communication_event(const EventIter e_iter)
+  {
+    // note: immediate_dominator_map() already allows THREAD_END_EVENT
+    const EventKind e_kind(e_iter->kind);
+    return e_kind == RECV_EVENT || e_kind == SEND_EVENT;
+  }
 
-      EventIters::const_reverse_iterator criter(events.crbegin());
-      assert(criter != events.crend());
+public:
+  template<typename UnaryPredicate>
+  static EventMap immediate_dominator_map(const Tracer&, UnaryPredicate);
 
-      EventIter e_iter(*criter);
-      assert(e_iter->is_thread_end());
+  static EventMap immediate_dominator_map(const Tracer& tracer)
+  {
+    return Encoder::immediate_dominator_map(tracer, is_any_event);
+  }
 
-      EventIter e_prime_iter(e_iter);
-      for (criter++; criter != events.crend(); criter++)
-      {
-        const EventKind e_kind((*criter)->kind);
-        if (e_kind != RECV_EVENT && e_kind != SEND_EVENT)
-          continue;
-
-        e_prime_iter = *criter;
-        EventIters& predecessors = predecessors_map[e_iter];
-        if (!is_communication_select)
-        {
-          e_iter = e_prime_iter;
-          for (const EventIter p_iter : predecessors)
-          {
-            predecessors_map[p_iter].push_back(e_iter);
-          }
-        }
-        predecessors.push_back(e_prime_iter); 
-      }
-
-      // at least one event in every thread has no predecessors
-      assert(e_prime_iter->is_recv() || e_prime_iter->is_send() ||
-        e_prime_iter->is_thread_end());
-      predecessors_map[e_prime_iter];
-    }
-    return predecessors_map;
+  static EventMap communication_immediate_dominator_map(const Tracer& tracer)
+  {
+    return Encoder::immediate_dominator_map(tracer, is_communication_event);
   }
 
   /// Maps recv/send events on same channel but in different threads
@@ -1811,35 +1793,44 @@ public:
   }
 
 private:
-  static smt::Bool communication_preds(
+  static smt::Bool communication_match(
     const PerAddressMap& per_address_map,
     const MatchableMap& matchable_map,
-    const EventIters& predecessors)
+    const EventIter e_iter)
+  {
+    assert(e_iter->is_recv() || e_iter->is_send());
+
+    const EventKinds& a = per_address_map.at(e_iter->address);
+    const EventIters& matchables = e_iter->is_recv() ?
+      a.sends() : a.recvs();
+
+    smt::Bool or_match(smt::literal<smt::Bool>(false));
+    for (const EventIter e_prime_iter : matchables)
+    {
+      if (e_iter->thread_id == e_prime_iter->thread_id)
+        continue;
+
+      const MatchableMap::key_type match_pair(
+        e_iter->is_recv() ?
+          std::make_pair(e_iter, e_prime_iter)
+        : std::make_pair(e_prime_iter, e_iter));
+
+      or_match = or_match or matchable_map.at(match_pair);
+    }
+
+    return or_match;
+  }
+
+  static smt::Bool communication_match(
+    const PerAddressMap& per_address_map,
+    const MatchableMap& matchable_map,
+    const EventIters e_iters)
   {
     smt::Bool and_match(smt::literal<smt::Bool>(true));
-    for (const EventIter e_iter : predecessors)
+    for (const EventIter e_iter : e_iters)
     {
-      assert(e_iter->is_recv() || e_iter->is_send());
-
-      const EventKinds& a = per_address_map.at(e_iter->address);
-      const EventIters& matchables = e_iter->is_recv() ?
-        a.sends() : a.recvs();
-
-      smt::Bool or_match(smt::literal<smt::Bool>(false));
-      for (const EventIter e_prime_iter : matchables)
-      {
-        if (e_iter->thread_id == e_prime_iter->thread_id)
-          continue;
-
-        const MatchableMap::key_type match_pair(
-          e_iter->is_recv() ?
-            std::make_pair(e_iter, e_prime_iter)
-          : std::make_pair(e_prime_iter, e_iter));
-
-        or_match = or_match or matchable_map.at(match_pair);
-      }
-
-      and_match = and_match and or_match;
+      and_match = and_match and communication_match(
+        per_address_map, matchable_map, e_iter);
     }
     return and_match;
   }
@@ -1883,7 +1874,7 @@ private:
     const PerThreadMap& per_thread_map = tracer.per_thread_map();
 
     auto matchable_map(build_matchable_map(per_address_map));
-    auto predecessors_map(build_predecessors_map(per_thread_map));
+    auto cidom_map(Encoder::communication_immediate_dominator_map(tracer));
 
     Bools inits;
     smt::UnsafeTerm ext_match(smt::literal<smt::Bool>(true));
@@ -1907,19 +1898,23 @@ private:
             /* if */ match_bool,
             /* then */ r.term == s.term));
 
+          EventIters cidoms;
+          if (cidom_map.find(r_iter) != cidom_map.cend())
+            cidoms.push_back(cidom_map.at(r_iter));
+
+          if (cidom_map.find(s_iter) != cidom_map.cend())
+            cidoms.push_back(cidom_map.at(s_iter));
+
           smt::UnsafeTerm rs_ext(match_bool ==
-            (communication_preds(per_address_map, matchable_map,
-               predecessors_map.at(r_iter)) and
-             communication_preds(per_address_map, matchable_map,
-               predecessors_map.at(s_iter)) and
-             communication_excl(per_address_map, matchable_map,
-               r_iter, s_iter) and r.guard and s.guard));
+            (communication_match(per_address_map, matchable_map, cidoms) and
+             communication_excl(per_address_map, matchable_map, r_iter, s_iter) and
+             r.guard and s.guard));
 
           ext_match = ext_match and rs_ext and rs_value and
             (match_bool == r_time.simultaneous(time(s)));
 
-          if (predecessors_map.at(r_iter).empty() &&
-              predecessors_map.at(s_iter).empty())
+          if (cidom_map.find(r_iter) == cidom_map.cend() &&
+              cidom_map.find(r_iter) == cidom_map.cend())
             inits.push_back(match_bool);
         }
       }
@@ -1942,8 +1937,8 @@ private:
           finalizer_prefix + std::to_string(e_iter->event_id)));
         finalizers = finalizers and finalizer_bool;
         ext_match = ext_match and
-          (finalizer_bool == communication_preds(per_address_map,
-             matchable_map, predecessors_map.at(e_iter)));
+          (finalizer_bool == communication_match(per_address_map,
+             matchable_map, cidom_map.at(e_iter)));
       }
       unsafe_add(not finalizers);
     }
@@ -2080,6 +2075,85 @@ public:
     return result;
   }
 };
+
+template<typename UnaryPredicate>
+EventMap Encoder::immediate_dominator_map(const Tracer& tracer,
+  UnaryPredicate predicate)
+{
+  EventMap map;
+  const PerThreadMap& per_thread_map = tracer.per_thread_map();
+
+  EventIters::const_reverse_iterator criter;
+  std::vector<EventIter> worklist;
+  EventIter e_iter, e_prime_iter;
+  ScopeLevel scope_level;
+
+  for (const PerThreadMap::value_type& pair : per_thread_map)
+  {
+    const EventIters& events = pair.second;
+
+    if (events.size() < 2)
+      continue;
+
+    assert(worklist.empty());
+    worklist.reserve(events.size());
+
+    criter = events.crbegin();
+    e_iter = *criter++;
+
+    // unless we're looking at the main thread, THREAD_END_EVENT
+    // is always in the returned map regardless of predicate
+    assert(pair.first == 1 || e_iter->is_thread_end());
+
+    for (; criter != events.crend(); criter++)
+    {
+      e_prime_iter = *criter;
+      if (!predicate(e_prime_iter))
+        continue;
+
+      scope_level = e_prime_iter->scope_level;
+
+      if (scope_level > e_iter->scope_level)
+      {
+        // save event for later
+        worklist.push_back(e_iter);
+      }
+      else if (scope_level == e_iter->scope_level)
+      {
+        // TODO: support Tracer::decide_flip() inside scopes
+        if (e_iter->block_id == e_prime_iter->block_id)
+        {
+          // both events are in the same branch, i.e. e_prime_iter
+          // is the direct predecessor of e_iter in the unrolled CFG
+          map.emplace(e_iter, e_prime_iter);
+        }
+        else
+        {
+          // crossing over to another branch or even a different
+          // "if-then-else" block, e.g. if (*) { a } if (*) { b }
+          worklist.push_back(e_iter);
+        }
+      }
+      else
+      {
+        // note: scope level may have decreased by more than one,
+        // e.g. if (*) { if (*) { a } }
+        while (!worklist.empty() &&
+          scope_level <= worklist.back()->scope_level)
+        {
+          map.emplace(worklist.back(), e_prime_iter);
+          worklist.pop_back();
+        }
+
+        // process first event in "then" branch
+        map.emplace(e_iter, e_prime_iter);
+      }
+
+      e_iter = e_prime_iter;
+    }
+  }
+  return map;
+}
 
 /// Symbolic thread using partial order encoding
 class Thread

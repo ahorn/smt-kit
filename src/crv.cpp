@@ -53,10 +53,12 @@ bool Tracer::decide_flip(
 
 void Tracer::scope_then(const Internal<bool>& g)
 {
+  assert(m_block_id_cnt < std::numeric_limits<BlockIdentifier>::max());
   assert(!m_scope_stack.empty());
   assert(m_scope_stack.top().level < std::numeric_limits<
     ScopeLevel>::max());
 
+  m_block_id_cnt++;
   m_scope_stack.emplace(guard(), g.term,
     m_scope_stack.top().level + 1);
   m_guard = m_guard and g.term;
@@ -64,8 +66,10 @@ void Tracer::scope_then(const Internal<bool>& g)
 
 void Tracer::scope_else()
 {
+  assert(m_block_id_cnt < std::numeric_limits<BlockIdentifier>::max());
   assert(!m_scope_stack.empty());
 
+  m_block_id_cnt++;
   ThreadLocalScope& scope = m_scope_stack.top();
   scope.guard_prime = not scope.guard_prime;
   m_guard = scope.guard and scope.guard_prime;
@@ -77,76 +81,6 @@ void Tracer::scope_end()
 
   m_guard = m_scope_stack.top().guard;
   m_scope_stack.pop();
-}
-
-EventMap Encoder::immediate_dominator_map(const Tracer& tracer)
-{
-  EventMap map;
-  const PerThreadMap& per_thread_map = tracer.per_thread_map();
-
-  EventIters::const_reverse_iterator criter;
-  std::vector<EventIter> worklist;
-  EventIter e_iter, e_prime_iter;
-  ScopeLevel scope_level;
-
-  for (const PerThreadMap::value_type& pair : per_thread_map)
-  {
-    const EventIters& events = pair.second;
-
-    if (events.size() < 2)
-      continue;
-
-    assert(worklist.empty());
-    worklist.reserve(events.size());
-
-    criter = events.crbegin();
-    e_iter = *criter++;
-    for (; criter != events.crend(); criter++)
-    {
-      e_prime_iter = *criter;
-      scope_level = e_prime_iter->scope_level;
-      assert(std::next(e_prime_iter) == e_iter);
-
-      if (scope_level > e_iter->scope_level)
-      {
-        // save event for later
-        worklist.push_back(e_iter);
-      }
-      else if (scope_level == e_iter->scope_level)
-      {
-        // TODO: support Tracer::decide_flip() inside scopes
-        if (e_iter->guard.addr() == e_prime_iter->guard.addr())
-        {
-          // both events are in the same branch, i.e. e_prime_iter
-          // is the direct predecessor of e_iter in the unrolled CFG
-          map.emplace(e_iter, e_prime_iter);
-        }
-        else
-        {
-          // crossing over to another branch or even a different
-          // "if-then-else" block, e.g. if (*) { a } if (*) { b }
-          worklist.push_back(e_iter);
-        }
-      }
-      else
-      {
-        // note: scope level may have decreased by more than one,
-        // e.g. if (*) { if (*) { a } }
-        while (!worklist.empty() &&
-          scope_level <= worklist.back()->scope_level)
-        {
-          map.emplace(worklist.back(), e_prime_iter);
-          worklist.pop_back();
-        }
-
-        // process first event in "then" branch
-        map.emplace(e_iter, e_prime_iter);
-      }
-
-      e_iter = e_prime_iter;
-    }
-  }
-  return map;
 }
 
 namespace ThisThread

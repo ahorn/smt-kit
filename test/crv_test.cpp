@@ -125,13 +125,14 @@ TEST(CrvTest, Event)
   tracer().reset();
 
   EXPECT_TRUE(tracer().events().empty());
-  Event e(READ_EVENT, 2, 3, 4, 5, smt::literal<smt::Bool>(true),
+  Event e(READ_EVENT, 2, 3, 4, 5, 6, smt::literal<smt::Bool>(true),
     smt::any<smt::Bv<char>>("a"), smt::Bv<size_t>());
   EXPECT_EQ(READ_EVENT, e.kind);
   EXPECT_EQ(2, e.event_id);
   EXPECT_EQ(3, e.thread_id);
-  EXPECT_EQ(4, e.scope_level);
-  EXPECT_EQ(5, e.address);
+  EXPECT_EQ(4, e.block_id);
+  EXPECT_EQ(5, e.scope_level);
+  EXPECT_EQ(6, e.address);
   EXPECT_FALSE(e.guard.is_null());
   EXPECT_FALSE(e.term.is_null());
   EXPECT_TRUE(e.offset_term.is_null());
@@ -2441,20 +2442,79 @@ TEST(CrvTest, ImmediateDominator)
   EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
   EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(3)));
   EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(4)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  EXPECT_TRUE(tracer.decide_flip(true));
+  tracer.append_write_event(x); // 2
+  EXPECT_TRUE(tracer.decide_flip(false));
+  tracer.append_write_event(x); // 3
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(5, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(2), immediate_dominator_map.at(e_iters.at(3)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  tracer.append_write_event(x); // 2
+  EXPECT_TRUE(tracer.decide_flip(true));
+  tracer.append_write_event(x); // 3
+  EXPECT_TRUE(tracer.decide_flip(false));
+  tracer.append_write_event(x); // 4
+  tracer.append_write_event(x); // 5
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(7, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(2), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(3), immediate_dominator_map.at(e_iters.at(4)));
+  EXPECT_EQ(e_iters.at(4), immediate_dominator_map.at(e_iters.at(5)));
+
+  tracer.reset();
+
+  tracer.append_thread_begin_event();
+  tracer.append_write_event(x); // 1
+  EXPECT_TRUE(tracer.decide_flip(true));
+  tracer.append_write_event(x); // 2
+  tracer.append_write_event(x); // 3
+  EXPECT_TRUE(tracer.decide_flip(false));
+  tracer.append_write_event(x); // 4
+  tracer.append_write_event(x); // 5
+  tracer.append_thread_end_event();
+
+  e_iters = tracer.per_thread_map().at(2);
+  immediate_dominator_map = Encoder::immediate_dominator_map(tracer);
+
+  EXPECT_EQ(7, e_iters.size());
+  EXPECT_EQ(e_iters.at(0), immediate_dominator_map.at(e_iters.at(1)));
+  EXPECT_EQ(e_iters.at(1), immediate_dominator_map.at(e_iters.at(2)));
+  EXPECT_EQ(e_iters.at(2), immediate_dominator_map.at(e_iters.at(3)));
+  EXPECT_EQ(e_iters.at(3), immediate_dominator_map.at(e_iters.at(4)));
+  EXPECT_EQ(e_iters.at(4), immediate_dominator_map.at(e_iters.at(5)));
 }
 
-TEST(CrvTest, CommunicationPredecessors)
+TEST(CrvTest, CommunicationImmediateDominator)
 {
   tracer().reset();
 
   tracer().append_thread_begin_event();
   tracer().append_thread_end_event();
 
-  PerEventMap predecessors_map(Encoder::build_predecessors_map(
-    tracer().per_thread_map()));
-  EXPECT_FALSE(predecessors_map.empty());
-  EXPECT_EQ(0, predecessors_map.at(
-    tracer().per_thread_map().at(2).back()).size());
+  EventMap cidom_map(Encoder::communication_immediate_dominator_map(tracer()));
+  EXPECT_TRUE(cidom_map.empty());
 
   tracer().reset();
 
@@ -2467,8 +2527,8 @@ TEST(CrvTest, CommunicationPredecessors)
   tracer().append_thread_end_event();
 
   const PerThreadMap& per_thread_map = tracer().per_thread_map();
-  predecessors_map = Encoder::build_predecessors_map(per_thread_map);
-  EXPECT_FALSE(predecessors_map.empty());
+  cidom_map = Encoder::communication_immediate_dominator_map(tracer());
+  EXPECT_FALSE(cidom_map.empty());
 
   EventIters event_iters;
   for (const EventIter e_iter : per_thread_map.at(2))
@@ -2488,16 +2548,14 @@ TEST(CrvTest, CommunicationPredecessors)
   EXPECT_TRUE(e_prime_iter->is_send());
 
   // look up predecessors of a THREAD_END_EVENT
-  EXPECT_EQ(1, predecessors_map.at(e_iter).size());
-  EXPECT_EQ(e_prime_iter, predecessors_map.at(e_iter).front());
+  EXPECT_EQ(e_prime_iter, cidom_map.at(e_iter));
 
   e_iter = e_prime_iter;
   e_prime_iter = event_iters[0];
   EXPECT_TRUE(e_prime_iter->is_recv());
 
-  EXPECT_EQ(1, predecessors_map.at(e_iter).size());
-  EXPECT_EQ(e_prime_iter, predecessors_map.at(e_iter).front());
-  EXPECT_EQ(0, predecessors_map.at(e_prime_iter).size());
+  EXPECT_EQ(e_prime_iter, cidom_map.at(e_iter));
+  EXPECT_EQ(cidom_map.cend(), cidom_map.find(e_prime_iter));
 }
 
 TEST(CrvTest, DeadlockSingleSend)
@@ -2660,6 +2718,60 @@ TEST(CrvTest, CommunicationWithFalseGuard)
   c.send(5);
   EXPECT_TRUE(tracer().decide_flip(6 != c.recv()));
   c.send(7);
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  c.recv();
+  c.send(6);
+  Internal<int> r(c.recv());
+  tracer().append_thread_end_event();
+
+  // if there is a deadlock (which there is), then receive
+  // events can take on nondeterministic values.
+  EXPECT_EQ(smt::sat, encoder.check(r != 7, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(r == 7, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer()));
+}
+
+TEST(CrvTest, ScopeCommunicationWithElse)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Channel<int> c;
+
+  tracer().append_thread_begin_event();
+  c.send(5);
+  tracer().scope_then(6 == c.recv());
+  c.send(7);
+  tracer().scope_else();
+  c.send(8);
+  tracer().scope_end();
+  tracer().append_thread_end_event();
+
+  tracer().append_thread_begin_event();
+  c.recv();
+  c.send(6);
+  Internal<int> r(c.recv());
+  tracer().append_thread_end_event();
+
+  EXPECT_EQ(smt::unsat, encoder.check(r != 7, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(r == 7, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer()));
+}
+
+TEST(CrvTest, ScopeCommunicationWithFalseThen)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Channel<int> c;
+
+  tracer().append_thread_begin_event();
+  c.send(5);
+  tracer().scope_then(6 != c.recv());
+  c.send(7);
+  tracer().scope_end();
   tracer().append_thread_end_event();
 
   tracer().append_thread_begin_event();
