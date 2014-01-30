@@ -34,8 +34,8 @@ enum EventKind : unsigned short
   PUSH_EVENT,
   LOAD_EVENT,
   STORE_EVENT,
-  RECV_EVENT,
-  SEND_EVENT,
+  CHANNEL_RECV_EVENT,
+  CHANNEL_SEND_EVENT,
 };
 
 /// Positive unless event is_sync()
@@ -100,8 +100,8 @@ public:
   bool is_write() const { return kind == WRITE_EVENT; }
   bool is_pop() const { return kind == POP_EVENT; }
   bool is_push() const { return kind == PUSH_EVENT; }
-  bool is_recv() const { return kind == RECV_EVENT; }
-  bool is_send() const { return kind == SEND_EVENT; }
+  bool is_channel_recv() const { return kind == CHANNEL_RECV_EVENT; }
+  bool is_channel_send() const { return kind == CHANNEL_SEND_EVENT; }
   bool is_thread_begin() const { return kind == THREAD_BEGIN_EVENT; }
   bool is_thread_end() const { return kind == THREAD_END_EVENT; }
   bool is_sync() const { return kind < READ_EVENT; }
@@ -155,8 +155,8 @@ private:
   EventIters m_pushes;
   EventIters m_loads;
   EventIters m_stores;
-  EventIters m_recvs;
-  EventIters m_sends;
+  EventIters m_channel_recvs;
+  EventIters m_channel_sends;
 
 public:
   EventKinds()
@@ -166,8 +166,8 @@ public:
     m_pushes(),
     m_loads(),
     m_stores(),
-    m_recvs(),
-    m_sends() {}
+    m_channel_recvs(),
+    m_channel_sends() {}
 
   // See member function template specializations
   template<EventKind kind>
@@ -179,8 +179,8 @@ public:
   const EventIters& pushes() const { return m_pushes; }
   const EventIters& loads()  const { return m_loads;  }
   const EventIters& stores() const { return m_stores; }
-  const EventIters& recvs()  const { return m_recvs;  }
-  const EventIters& sends()  const { return m_sends;  }
+  const EventIters& channel_recvs()  const { return m_channel_recvs; }
+  const EventIters& channel_sends()  const { return m_channel_sends; }
 };
 
 template<> inline
@@ -220,15 +220,15 @@ void EventKinds::push_back<STORE_EVENT>(const EventIter e_iter)
 }
 
 template<> inline
-void EventKinds::push_back<RECV_EVENT>(const EventIter e_iter)
+void EventKinds::push_back<CHANNEL_RECV_EVENT>(const EventIter e_iter)
 {
-  m_recvs.push_back(e_iter);
+  m_channel_recvs.push_back(e_iter);
 }
 
 template<> inline
-void EventKinds::push_back<SEND_EVENT>(const EventIter e_iter)
+void EventKinds::push_back<CHANNEL_SEND_EVENT>(const EventIter e_iter)
 {
-  m_sends.push_back(e_iter);
+  m_channel_sends.push_back(e_iter);
 }
 
 typedef std::unordered_map<Address, EventKinds> PerAddressMap;
@@ -683,10 +683,10 @@ public:
 
   /// Incoming channel communication and/or message passing
   template<typename T>
-  typename Smt<T>::Sort append_recv_event(const Address);
+  typename Smt<T>::Sort append_channel_recv_event(const Address);
 
   /// Outgoing channel communication and/or message passing
-  void append_send_event(const Address, const smt::UnsafeTerm&);
+  void append_channel_send_event(const Address, const smt::UnsafeTerm&);
 
   // Symbolic multi-path analysis
   void scope_then(const Internal<bool>& guard);
@@ -1070,12 +1070,12 @@ void Tracer::append_store_event(const External<T>& external)
 }
 
 template<typename T>
-typename Smt<T>::Sort Tracer::append_recv_event(const Address address)
+typename Smt<T>::Sort Tracer::append_channel_recv_event(const Address address)
 {
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
   // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
-  append_event<RECV_EVENT>(event_id, address, term);
+  append_event<CHANNEL_RECV_EVENT>(event_id, address, term);
 
   return term;
 }
@@ -1738,7 +1738,7 @@ private:
   {
     // note: immediate_dominator_map() already allows THREAD_END_EVENT
     const EventKind e_kind(e_iter->kind);
-    return e_kind == RECV_EVENT || e_kind == SEND_EVENT;
+    return e_kind == CHANNEL_RECV_EVENT || e_kind == CHANNEL_SEND_EVENT;
   }
 
 public:
@@ -1755,7 +1755,7 @@ public:
     return Encoder::immediate_dominator_map(tracer, is_communication_event);
   }
 
-  /// Maps recv/send events on same channel but in different threads
+  /// Maps channel_recv/channel_send events on same channel but in different threads
   typedef std::unordered_map<std::pair<EventIter, EventIter>,
     smt::Bool> MatchableMap;
 
@@ -1767,9 +1767,9 @@ public:
     for (const PerAddressMap::value_type& pair : per_address_map)
     {
       const EventKinds& a = pair.second;
-      for (const EventIter r_iter : a.recvs())
+      for (const EventIter r_iter : a.channel_recvs())
       {
-        for (const EventIter s_iter : a.sends())
+        for (const EventIter s_iter : a.channel_sends())
         {
           if (r_iter->thread_id == s_iter->thread_id)
             continue;
@@ -1792,11 +1792,11 @@ private:
     const MatchableMap& matchable_map,
     const EventIter e_iter)
   {
-    assert(e_iter->is_recv() || e_iter->is_send());
+    assert(e_iter->is_channel_recv() || e_iter->is_channel_send());
 
     const EventKinds& a = per_address_map.at(e_iter->address);
-    const EventIters& matchables = e_iter->is_recv() ?
-      a.sends() : a.recvs();
+    const EventIters& matchables = e_iter->is_channel_recv() ?
+      a.channel_sends() : a.channel_recvs();
 
     smt::Bool or_match(smt::literal<smt::Bool>(false));
     for (const EventIter e_prime_iter : matchables)
@@ -1805,7 +1805,7 @@ private:
         continue;
 
       const MatchableMap::key_type match_pair(
-        e_iter->is_recv() ?
+        e_iter->is_channel_recv() ?
           std::make_pair(e_iter, e_prime_iter)
         : std::make_pair(e_prime_iter, e_iter));
 
@@ -1835,15 +1835,15 @@ private:
     const EventIter r_iter,
     const EventIter s_iter)
   {
-    assert(r_iter->is_recv());
-    assert(s_iter->is_send());
+    assert(r_iter->is_channel_recv());
+    assert(s_iter->is_channel_send());
     assert(r_iter->thread_id != s_iter->thread_id);
 
     const EventKinds& r_a = per_address_map.at(r_iter->address);
     const EventKinds& s_a = per_address_map.at(s_iter->address);
 
     smt::Bool or_match(smt::literal<smt::Bool>(false));
-    for (const EventIter e_iter : r_a.sends())
+    for (const EventIter e_iter : r_a.channel_sends())
     {
       if (r_iter->thread_id == e_iter->thread_id || e_iter == s_iter)
         continue;
@@ -1851,7 +1851,7 @@ private:
       or_match = or_match or
         matchable_map.at(std::make_pair(r_iter, e_iter));
     }
-    for (const EventIter e_iter : s_a.recvs())
+    for (const EventIter e_iter : s_a.channel_recvs())
     {
       if (s_iter->thread_id == e_iter->thread_id || e_iter == r_iter)
         continue;
@@ -1875,10 +1875,10 @@ private:
     for (const PerAddressMap::value_type& pair : per_address_map)
     {
       const EventKinds& a = pair.second;
-      for (const EventIter r_iter : a.recvs())
+      for (const EventIter r_iter : a.channel_recvs())
       {
         const Time& r_time = time(*r_iter);
-        for (const EventIter s_iter : a.sends())
+        for (const EventIter s_iter : a.channel_sends())
         {
           if (r_iter->thread_id == s_iter->thread_id)
             continue;
@@ -2243,18 +2243,18 @@ public:
 
   void send(const Internal<T>& data)
   {
-    tracer().append_send_event(m_address, data.term);
+    tracer().append_channel_send_event(m_address, data.term);
   }
 
   void send(const External<T>& data)
   {
     smt::UnsafeTerm term = append_input_event(data);
-    tracer().append_send_event(m_address, std::move(term));
+    tracer().append_channel_send_event(m_address, std::move(term));
   }
 
   Internal<T> recv()
   {
-    return Internal<T>(tracer().append_recv_event<T>(m_address));
+    return Internal<T>(tracer().append_channel_recv_event<T>(m_address));
   }
 };
 

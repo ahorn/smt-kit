@@ -2533,8 +2533,8 @@ TEST(CrvTest, CommunicationImmediateDominator)
   EventIters event_iters;
   for (const EventIter e_iter : per_thread_map.at(2))
   {
-    if (e_iter->is_send() ||
-        e_iter->is_recv() || 
+    if (e_iter->is_channel_send() ||
+        e_iter->is_channel_recv() || 
         e_iter->is_thread_end())
       event_iters.push_back(e_iter);
   }
@@ -2545,14 +2545,14 @@ TEST(CrvTest, CommunicationImmediateDominator)
   EXPECT_TRUE(e_iter->is_thread_end());
 
   EventIter e_prime_iter = event_iters[1];
-  EXPECT_TRUE(e_prime_iter->is_send());
+  EXPECT_TRUE(e_prime_iter->is_channel_send());
 
   // look up predecessors of a THREAD_END_EVENT
   EXPECT_EQ(e_prime_iter, cidom_map.at(e_iter));
 
   e_iter = e_prime_iter;
   e_prime_iter = event_iters[0];
-  EXPECT_TRUE(e_prime_iter->is_recv());
+  EXPECT_TRUE(e_prime_iter->is_channel_recv());
 
   EXPECT_EQ(e_prime_iter, cidom_map.at(e_iter));
   EXPECT_EQ(cidom_map.cend(), cidom_map.find(e_prime_iter));
