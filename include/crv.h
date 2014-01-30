@@ -1757,13 +1757,12 @@ public:
 
   /// Maps channel_recv/channel_send events on same channel but in different threads
   typedef std::unordered_map<std::pair<EventIter, EventIter>,
-    smt::Bool> MatchableMap;
+    smt::Bool> MatchBoolMap;
 
-  static MatchableMap build_matchable_map(
-    const PerAddressMap& per_address_map)
+  static MatchBoolMap match_bool_map(const PerAddressMap& per_address_map)
   {
     const std::string match_prefix("match!{");
-    MatchableMap matchable_map;
+    MatchBoolMap match_bool_map;
     for (const PerAddressMap::value_type& pair : per_address_map)
     {
       const EventKinds& a = pair.second;
@@ -1778,18 +1777,18 @@ public:
             std::to_string(r_iter->event_id) + "," +
             std::to_string(s_iter->event_id) + "}");
 
-          matchable_map[std::make_pair(r_iter, s_iter)] =
+          match_bool_map[std::make_pair(r_iter, s_iter)] =
             smt::any<smt::Bool>(std::move(match_symbol));
         }
       }
     }
-    return matchable_map;
+    return match_bool_map;
   }
 
 private:
   static smt::Bool communication_match(
     const PerAddressMap& per_address_map,
-    const MatchableMap& matchable_map,
+    const MatchBoolMap& match_bool_map,
     const EventIter e_iter)
   {
     assert(e_iter->is_channel_recv() || e_iter->is_channel_send());
@@ -1804,12 +1803,12 @@ private:
       if (e_iter->thread_id == e_prime_iter->thread_id)
         continue;
 
-      const MatchableMap::key_type match_pair(
+      const MatchBoolMap::key_type match_pair(
         e_iter->is_channel_recv() ?
           std::make_pair(e_iter, e_prime_iter)
         : std::make_pair(e_prime_iter, e_iter));
 
-      or_match = or_match or matchable_map.at(match_pair);
+      or_match = or_match or match_bool_map.at(match_pair);
     }
 
     return or_match;
@@ -1817,21 +1816,21 @@ private:
 
   static smt::Bool communication_match(
     const PerAddressMap& per_address_map,
-    const MatchableMap& matchable_map,
+    const MatchBoolMap& match_bool_map,
     const EventIters e_iters)
   {
     smt::Bool and_match(smt::literal<smt::Bool>(true));
     for (const EventIter e_iter : e_iters)
     {
       and_match = and_match and communication_match(
-        per_address_map, matchable_map, e_iter);
+        per_address_map, match_bool_map, e_iter);
     }
     return and_match;
   }
 
   static smt::Bool communication_excl(
     const PerAddressMap& per_address_map,
-    const MatchableMap& matchable_map,
+    const MatchBoolMap& match_bool_map,
     const EventIter r_iter,
     const EventIter s_iter)
   {
@@ -1849,7 +1848,7 @@ private:
         continue;
 
       or_match = or_match or
-        matchable_map.at(std::make_pair(r_iter, e_iter));
+        match_bool_map.at(std::make_pair(r_iter, e_iter));
     }
     for (const EventIter e_iter : s_a.channel_recvs())
     {
@@ -1857,7 +1856,7 @@ private:
         continue;
 
       or_match = or_match or
-        matchable_map.at(std::make_pair(e_iter, s_iter));
+        match_bool_map.at(std::make_pair(e_iter, s_iter));
     }
     return not or_match;
   }
@@ -1867,7 +1866,7 @@ private:
     const PerAddressMap& per_address_map = tracer.per_address_map();
     const PerThreadMap& per_thread_map = tracer.per_thread_map();
 
-    auto matchable_map(build_matchable_map(per_address_map));
+    auto match_bool_map(Encoder::match_bool_map(per_address_map));
     auto cidom_map(Encoder::communication_immediate_dominator_map(tracer));
 
     Bools inits;
@@ -1886,7 +1885,7 @@ private:
           const Event& r = *r_iter;
           const Event& s = *s_iter;
           const smt::Bool& match_bool =
-            matchable_map.at(std::make_pair(r_iter, s_iter));
+            match_bool_map.at(std::make_pair(r_iter, s_iter));
 
           smt::UnsafeTerm rs_value(smt::implies(
             /* if */ match_bool,
@@ -1900,8 +1899,8 @@ private:
             cidoms.push_back(cidom_map.at(s_iter));
 
           smt::UnsafeTerm rs_ext(match_bool ==
-            (communication_match(per_address_map, matchable_map, cidoms) and
-             communication_excl(per_address_map, matchable_map, r_iter, s_iter) and
+            (communication_match(per_address_map, match_bool_map, cidoms) and
+             communication_excl(per_address_map, match_bool_map, r_iter, s_iter) and
              r.guard and s.guard));
 
           ext_match = ext_match and rs_ext and rs_value and
@@ -1932,7 +1931,7 @@ private:
         finalizers = finalizers and finalizer_bool;
         ext_match = ext_match and
           (finalizer_bool == communication_match(per_address_map,
-             matchable_map, cidom_map.at(e_iter)));
+             match_bool_map, cidom_map.at(e_iter)));
       }
       unsafe_add(not finalizers);
     }
