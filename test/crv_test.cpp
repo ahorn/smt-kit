@@ -155,30 +155,30 @@ TEST(CrvTest, Tracer)
 
   tracer.append_nondet_write_event(external0);
   EXPECT_EQ(1, tracer.events().size());
-  EXPECT_EQ(1, tracer.per_address_map().size());
-  EXPECT_EQ(0, tracer.per_address_map().at(external0.address).reads().size());
-  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).writes().size());
+  EXPECT_EQ(1, tracer.per_address_index().size());
+  EXPECT_EQ(0, tracer.per_address_index().at(external0.address).reads().size());
+  EXPECT_EQ(1, tracer.per_address_index().at(external0.address).writes().size());
 
   tracer.append_read_event(external0);
   EXPECT_EQ(2, tracer.events().size());
-  EXPECT_EQ(1, tracer.per_address_map().size());
-  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).reads().size());
-  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).writes().size());
+  EXPECT_EQ(1, tracer.per_address_index().size());
+  EXPECT_EQ(1, tracer.per_address_index().at(external0.address).reads().size());
+  EXPECT_EQ(1, tracer.per_address_index().at(external0.address).writes().size());
 
   tracer.append_write_event(external1);
   EXPECT_EQ(3, tracer.events().size());
-  EXPECT_EQ(2, tracer.per_address_map().size());
+  EXPECT_EQ(2, tracer.per_address_index().size());
 
-  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).reads().size());
-  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).reads().front()->event_id);
+  EXPECT_EQ(1, tracer.per_address_index().at(external0.address).reads().size());
+  EXPECT_EQ(1, tracer.per_address_index().at(external0.address).reads().front()->event_id);
 
-  EXPECT_EQ(1, tracer.per_address_map().at(external0.address).writes().size());
-  EXPECT_EQ(0, tracer.per_address_map().at(external0.address).writes().front()->event_id);
+  EXPECT_EQ(1, tracer.per_address_index().at(external0.address).writes().size());
+  EXPECT_EQ(0, tracer.per_address_index().at(external0.address).writes().front()->event_id);
 
-  EXPECT_EQ(0, tracer.per_address_map().at(external1.address).reads().size());
+  EXPECT_EQ(0, tracer.per_address_index().at(external1.address).reads().size());
 
-  EXPECT_EQ(1, tracer.per_address_map().at(external1.address).writes().size());
-  EXPECT_EQ(2, tracer.per_address_map().at(external1.address).writes().front()->event_id);
+  EXPECT_EQ(1, tracer.per_address_index().at(external1.address).writes().size());
+  EXPECT_EQ(2, tracer.per_address_index().at(external1.address).writes().front()->event_id);
 
   const ThreadIdentifier parent_thread_id(tracer.append_thread_begin_event());
   EXPECT_EQ(1, parent_thread_id);
@@ -204,15 +204,15 @@ TEST(CrvTest, Tracer)
 
   external2.term = tracer.append_load_event(external2);
   EXPECT_EQ(7, tracer.events().size());
-  EXPECT_EQ(1, tracer.per_address_map().at(external2.address).loads().size());
-  EXPECT_EQ(5, tracer.per_address_map().at(external2.address).loads().front()->event_id);
-  EXPECT_EQ(0, tracer.per_address_map().at(external2.address).stores().size());
+  EXPECT_EQ(1, tracer.per_address_index().at(external2.address).loads().size());
+  EXPECT_EQ(5, tracer.per_address_index().at(external2.address).loads().front()->event_id);
+  EXPECT_EQ(0, tracer.per_address_index().at(external2.address).stores().size());
 
   tracer.append_store_event(external2);
   EXPECT_EQ(8, tracer.events().size());
-  EXPECT_EQ(1, tracer.per_address_map().at(external2.address).loads().size());
-  EXPECT_EQ(1, tracer.per_address_map().at(external2.address).stores().size());
-  EXPECT_EQ(6, tracer.per_address_map().at(external2.address).stores().front()->event_id);
+  EXPECT_EQ(1, tracer.per_address_index().at(external2.address).loads().size());
+  EXPECT_EQ(1, tracer.per_address_index().at(external2.address).stores().size());
+  EXPECT_EQ(6, tracer.per_address_index().at(external2.address).stores().front()->event_id);
 }
 
 TEST(CrvTest, Barrier)
@@ -927,20 +927,20 @@ TEST(CrvTest, Array)
   External<char> x0(xs[2]);
   EXPECT_EQ(5, tracer().events().size());
   EXPECT_NE(xs.address, x0.address);
-  EXPECT_EQ(0, tracer().per_address_map().at(x0.address).reads().size());
-  EXPECT_EQ(1, tracer().per_address_map().at(x0.address).writes().size());
-  EXPECT_EQ(1, tracer().per_address_map().at(xs.address).loads().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(x0.address).reads().size());
+  EXPECT_EQ(1, tracer().per_address_index().at(x0.address).writes().size());
+  EXPECT_EQ(1, tracer().per_address_index().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(xs.address).stores().size());
   EXPECT_FALSE(x0.term.is_null());
   EXPECT_TRUE(x0.offset_term.is_null());
 
   x0 = xs[i];
   EXPECT_EQ(7, tracer().events().size());
   EXPECT_NE(xs.address, x0.address);
-  EXPECT_EQ(0, tracer().per_address_map().at(x0.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(xs.address).loads().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(x0.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(xs.address).stores().size());
   EXPECT_FALSE(x0.term.is_null());
   EXPECT_TRUE(x0.offset_term.is_null());
 
@@ -948,13 +948,13 @@ TEST(CrvTest, Array)
   EXPECT_EQ(10, tracer().events().size());
   EXPECT_NE(xs.address, x1.address);
   EXPECT_NE(x0.address, x1.address);
-  EXPECT_EQ(1, tracer().per_address_map().at(j.address).reads().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(x0.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(x1.address).reads().size());
-  EXPECT_EQ(1, tracer().per_address_map().at(x1.address).writes().size());
-  EXPECT_EQ(3, tracer().per_address_map().at(xs.address).loads().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_EQ(1, tracer().per_address_index().at(j.address).reads().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(x0.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x0.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(x1.address).reads().size());
+  EXPECT_EQ(1, tracer().per_address_index().at(x1.address).writes().size());
+  EXPECT_EQ(3, tracer().per_address_index().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(xs.address).stores().size());
   EXPECT_FALSE(x1.term.is_null());
   EXPECT_TRUE(x1.offset_term.is_null());
 
@@ -965,13 +965,13 @@ TEST(CrvTest, Array)
   EXPECT_EQ(14, tracer().events().size());
   EXPECT_NE(xs.address, x1.address);
   EXPECT_NE(x0.address, x1.address);
-  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(x0.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(x1.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
-  EXPECT_EQ(4, tracer().per_address_map().at(xs.address).loads().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_EQ(3, tracer().per_address_index().at(j.address).reads().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(x0.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x0.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(x1.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x1.address).writes().size());
+  EXPECT_EQ(4, tracer().per_address_index().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(xs.address).stores().size());
   EXPECT_FALSE(x1.term.is_null());
   EXPECT_TRUE(x1.offset_term.is_null());
 
@@ -983,15 +983,15 @@ TEST(CrvTest, Array)
   EXPECT_NE(x1.address, x2.address);
   EXPECT_NE(x0.address, x2.address);
   EXPECT_EQ(16, tracer().events().size());
-  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(x0.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(x1.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(x2.address).reads().size());
-  EXPECT_EQ(1, tracer().per_address_map().at(x2.address).writes().size());
-  EXPECT_EQ(5, tracer().per_address_map().at(xs.address).loads().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_EQ(3, tracer().per_address_index().at(j.address).reads().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(x0.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x0.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(x1.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x1.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(x2.address).reads().size());
+  EXPECT_EQ(1, tracer().per_address_index().at(x2.address).writes().size());
+  EXPECT_EQ(5, tracer().per_address_index().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(xs.address).stores().size());
   EXPECT_FALSE(x2.term.is_null());
   EXPECT_TRUE(x2.offset_term.is_null());
 
@@ -1000,15 +1000,15 @@ TEST(CrvTest, Array)
   EXPECT_NE(x1.address, x2.address);
   EXPECT_NE(x0.address, x2.address);
   EXPECT_EQ(18, tracer().events().size());
-  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(x0.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(x1.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(x2.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
-  EXPECT_EQ(6, tracer().per_address_map().at(xs.address).loads().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_EQ(3, tracer().per_address_index().at(j.address).reads().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(x0.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x0.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(x1.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x1.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(x2.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x2.address).writes().size());
+  EXPECT_EQ(6, tracer().per_address_index().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(xs.address).stores().size());
   EXPECT_FALSE(x2.term.is_null());
   EXPECT_TRUE(x2.offset_term.is_null());
 
@@ -1042,13 +1042,13 @@ TEST(CrvTest, Array)
   EXPECT_NE(x0.address, x3.address);
   EXPECT_NE(xs.address, x3.address);
   EXPECT_EQ(24, tracer().events().size());
-  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
-  EXPECT_EQ(1, tracer().per_address_map().at(x3.address).writes().size());
-  EXPECT_EQ(7, tracer().per_address_map().at(xs.address).loads().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_EQ(3, tracer().per_address_index().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x2.address).writes().size());
+  EXPECT_EQ(1, tracer().per_address_index().at(x3.address).writes().size());
+  EXPECT_EQ(7, tracer().per_address_index().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(xs.address).stores().size());
   EXPECT_FALSE(x3.term.is_null());
   EXPECT_TRUE(x3.offset_term.is_null());
 
@@ -1058,70 +1058,70 @@ TEST(CrvTest, Array)
   EXPECT_NE(x1.address, x3.address);
   EXPECT_NE(x0.address, x3.address);
   EXPECT_EQ(28, tracer().events().size());
-  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x3.address).writes().size());
-  EXPECT_EQ(8, tracer().per_address_map().at(xs.address).loads().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_EQ(3, tracer().per_address_index().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x2.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x3.address).writes().size());
+  EXPECT_EQ(8, tracer().per_address_index().at(xs.address).loads().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(xs.address).stores().size());
   EXPECT_FALSE(x3.term.is_null());
   EXPECT_TRUE(x3.offset_term.is_null());
 
   xs[i] = 'A';
   EXPECT_EQ(29, tracer().events().size());
-  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x3.address).writes().size());
-  EXPECT_EQ(8, tracer().per_address_map().at(xs.address).loads().size());
-  EXPECT_EQ(1, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_EQ(3, tracer().per_address_index().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x2.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x3.address).writes().size());
+  EXPECT_EQ(8, tracer().per_address_index().at(xs.address).loads().size());
+  EXPECT_EQ(1, tracer().per_address_index().at(xs.address).stores().size());
 
   Internal<char> p('A');
   xs[i] = p;
   EXPECT_EQ(30, tracer().events().size());
-  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x3.address).writes().size());
-  EXPECT_EQ(8, tracer().per_address_map().at(xs.address).loads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_EQ(3, tracer().per_address_index().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x2.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x3.address).writes().size());
+  EXPECT_EQ(8, tracer().per_address_index().at(xs.address).loads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(xs.address).stores().size());
 
   xs[i] = make_temporary_internal<char>();
   EXPECT_EQ(31, tracer().events().size());
-  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x3.address).writes().size());
-  EXPECT_EQ(8, tracer().per_address_map().at(xs.address).loads().size());
-  EXPECT_EQ(3, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_EQ(3, tracer().per_address_index().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x2.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x3.address).writes().size());
+  EXPECT_EQ(8, tracer().per_address_index().at(xs.address).loads().size());
+  EXPECT_EQ(3, tracer().per_address_index().at(xs.address).stores().size());
 
   External<char> q('B');
   EXPECT_EQ(32, tracer().events().size());
-  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x3.address).writes().size());
-  EXPECT_EQ(0, tracer().per_address_map().at(q.address).reads().size());
-  EXPECT_EQ(1, tracer().per_address_map().at(q.address).writes().size());
-  EXPECT_EQ(8, tracer().per_address_map().at(xs.address).loads().size());
-  EXPECT_EQ(3, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_EQ(3, tracer().per_address_index().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x2.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x3.address).writes().size());
+  EXPECT_EQ(0, tracer().per_address_index().at(q.address).reads().size());
+  EXPECT_EQ(1, tracer().per_address_index().at(q.address).writes().size());
+  EXPECT_EQ(8, tracer().per_address_index().at(xs.address).loads().size());
+  EXPECT_EQ(3, tracer().per_address_index().at(xs.address).stores().size());
 
   xs[i] = q;
   EXPECT_EQ(34, tracer().events().size());
-  EXPECT_EQ(3, tracer().per_address_map().at(j.address).reads().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x0.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x1.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x2.address).writes().size());
-  EXPECT_EQ(2, tracer().per_address_map().at(x3.address).writes().size());
-  EXPECT_EQ(1, tracer().per_address_map().at(q.address).reads().size());
-  EXPECT_EQ(1, tracer().per_address_map().at(q.address).writes().size());
-  EXPECT_EQ(8, tracer().per_address_map().at(xs.address).loads().size());
-  EXPECT_EQ(4, tracer().per_address_map().at(xs.address).stores().size());
+  EXPECT_EQ(3, tracer().per_address_index().at(j.address).reads().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x0.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x1.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x2.address).writes().size());
+  EXPECT_EQ(2, tracer().per_address_index().at(x3.address).writes().size());
+  EXPECT_EQ(1, tracer().per_address_index().at(q.address).reads().size());
+  EXPECT_EQ(1, tracer().per_address_index().at(q.address).writes().size());
+  EXPECT_EQ(8, tracer().per_address_index().at(xs.address).loads().size());
+  EXPECT_EQ(4, tracer().per_address_index().at(xs.address).stores().size());
 }
 
 TEST(CrvTest, ExternalArrayWithLiteralOffset) {

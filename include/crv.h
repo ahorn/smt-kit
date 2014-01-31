@@ -36,6 +36,8 @@ enum EventKind : unsigned short
   STORE_EVENT,
   CHANNEL_RECV_EVENT,
   CHANNEL_SEND_EVENT,
+  MESSAGE_RECV_EVENT,
+  MESSAGE_SEND_EVENT,
 };
 
 /// Positive unless event is_sync()
@@ -102,6 +104,8 @@ public:
   bool is_push() const { return kind == PUSH_EVENT; }
   bool is_channel_recv() const { return kind == CHANNEL_RECV_EVENT; }
   bool is_channel_send() const { return kind == CHANNEL_SEND_EVENT; }
+  bool is_message_recv() const { return kind == MESSAGE_RECV_EVENT; }
+  bool is_message_send() const { return kind == MESSAGE_SEND_EVENT; }
   bool is_thread_begin() const { return kind == THREAD_BEGIN_EVENT; }
   bool is_thread_end() const { return kind == THREAD_END_EVENT; }
   bool is_sync() const { return kind < READ_EVENT; }
@@ -157,6 +161,8 @@ private:
   EventIters m_stores;
   EventIters m_channel_recvs;
   EventIters m_channel_sends;
+  EventIters m_message_recvs;
+  EventIters m_message_sends;
 
 public:
   EventKinds()
@@ -167,7 +173,9 @@ public:
     m_loads(),
     m_stores(),
     m_channel_recvs(),
-    m_channel_sends() {}
+    m_channel_sends(),
+    m_message_recvs(),
+    m_message_sends() {}
 
   // See member function template specializations
   template<EventKind kind>
@@ -179,8 +187,12 @@ public:
   const EventIters& pushes() const { return m_pushes; }
   const EventIters& loads()  const { return m_loads;  }
   const EventIters& stores() const { return m_stores; }
+
   const EventIters& channel_recvs()  const { return m_channel_recvs; }
   const EventIters& channel_sends()  const { return m_channel_sends; }
+
+  const EventIters& message_recvs()  const { return m_message_recvs; }
+  const EventIters& message_sends()  const { return m_message_sends; }
 };
 
 template<> inline
@@ -231,7 +243,21 @@ void EventKinds::push_back<CHANNEL_SEND_EVENT>(const EventIter e_iter)
   m_channel_sends.push_back(e_iter);
 }
 
-typedef std::unordered_map<Address, EventKinds> PerAddressMap;
+template<> inline
+void EventKinds::push_back<MESSAGE_RECV_EVENT>(const EventIter e_iter)
+{
+  m_message_recvs.push_back(e_iter);
+}
+
+template<> inline
+void EventKinds::push_back<MESSAGE_SEND_EVENT>(const EventIter e_iter)
+{
+  m_message_sends.push_back(e_iter);
+}
+
+typedef std::unordered_map<EventIter, EventIters> PerEventMap;
+typedef std::unordered_map<Address, EventKinds> PerAddressIndex;
+typedef std::unordered_map<ThreadIdentifier, EventKinds> PerThreadIndex;
 typedef std::unordered_map<ThreadIdentifier, EventIters> PerThreadMap;
 typedef std::unordered_map<EventIter, EventIter> EventMap;
 
@@ -310,6 +336,11 @@ struct ThreadLocalScope
 
 class Tracer
 {
+public:
+  // 2^(N-1)-1 where N is the number of bits in Address
+  static constexpr Address s_max_reserved_address =
+    std::numeric_limits<Address>::max() / 2;
+
 private:
   static const std::string s_value_prefix;
 
@@ -319,7 +350,8 @@ private:
   Events m_events;
 
   // Index event list by various keys
-  PerAddressMap m_per_address_map;
+  PerAddressIndex m_per_address_index;
+  PerThreadIndex m_per_thread_index;
   PerThreadMap m_per_thread_map;
 
   // always nonempty
@@ -335,7 +367,7 @@ private:
   Bools m_assertions;
   Bools m_errors;
 
-  Address m_next_address;
+  Address m_next_reserved_address;
 
   // Generated barrier identifiers irrespective of threads
   std::list<EventIdentifier> m_barrier_list;
@@ -366,7 +398,8 @@ private:
       m_scope_stack.top().level, address, guard(), term, offset_term);
 
     const EventIter e_iter(std::prev(m_events.cend()));
-    m_per_address_map[e_iter->address].push_back<kind>(e_iter);
+    m_per_address_index[e_iter->address].push_back<kind>(e_iter);
+    m_per_thread_index[thread_id].push_back<kind>(e_iter);
     m_per_thread_map[thread_id].push_back(e_iter);
   }
 
@@ -383,7 +416,8 @@ public:
     m_thread_id_cnt(1),
     m_block_id_cnt(0),
     m_events(),
-    m_per_address_map(),
+    m_per_address_index(),
+    m_per_thread_index(),
     m_per_thread_map(),
     m_thread_id_stack(),
     m_scope_stack(),
@@ -393,7 +427,7 @@ public:
     m_flip_iter(m_flips.cbegin()),
     m_assertions(),
     m_errors(),
-    m_next_address(1),
+    m_next_reserved_address(1),
     m_barrier_list(),
     m_barrier_map()
   {
@@ -418,9 +452,14 @@ public:
     return m_events;
   }
 
-  const PerAddressMap& per_address_map() const
+  const PerAddressIndex& per_address_index() const
   {
-    return m_per_address_map;
+    return m_per_address_index;
+  }
+
+  const PerThreadIndex& per_thread_index() const
+  {
+    return m_per_thread_index;
   }
 
   const PerThreadMap& per_thread_map() const
@@ -436,7 +475,8 @@ public:
   void reset_events()
   {
     m_events.clear();
-    m_per_address_map.clear();
+    m_per_address_index.clear();
+    m_per_thread_index.clear();
     m_per_thread_map.clear();
 
     while (!m_thread_id_stack.empty())
@@ -474,7 +514,7 @@ public:
 
   void reset_address()
   {
-    m_next_address = 1;
+    m_next_reserved_address = 1;
   }
 
   void reset_barrier()
@@ -586,10 +626,10 @@ public:
   /// Add conjunction of guard() and given Boolean term to errors()
   void add_error(Internal<bool>&&);
 
-  Address next_address()
+  Address next_reserved_address()
   {
-    assert(m_next_address < std::numeric_limits<Address>::max());
-    return m_next_address++;
+    assert(m_next_reserved_address < s_max_reserved_address);
+    return m_next_reserved_address++;
   }
 
   bool decide_flip(const Internal<bool>&, bool direction = true);
@@ -681,12 +721,19 @@ public:
   template<typename T>
   void append_store_event(const External<T>&);
 
-  /// Incoming channel communication and/or message passing
+  /// Incoming channel communication
   template<typename T>
   typename Smt<T>::Sort append_channel_recv_event(const Address);
 
-  /// Outgoing channel communication and/or message passing
+  /// Outgoing channel communication
   void append_channel_send_event(const Address, const smt::UnsafeTerm&);
+
+  /// Incoming message
+  template<typename T>
+  typename Smt<T>::Sort append_message_recv_event(const Address);
+
+  /// Outgoing message
+  void append_message_send_event(const Address, const smt::UnsafeTerm&);
 
   // Symbolic multi-path analysis
   void scope_then(const Internal<bool>& guard);
@@ -876,7 +923,7 @@ protected:
 
 public:
   External()
-  : address(tracer().next_address()),
+  : address(tracer().next_reserved_address()),
     term(),
     offset_term()
   {
@@ -884,7 +931,7 @@ public:
   }
 
   External(T v)
-  : address(tracer().next_address()),
+  : address(tracer().next_reserved_address()),
     term(smt::literal<typename Smt<T>::Sort>(v)),
     offset_term()
   {
@@ -892,7 +939,7 @@ public:
   }
 
   External(Internal<T>&& other)
-  : address(tracer().next_address()),
+  : address(tracer().next_reserved_address()),
     term(std::move(other.term)),
     offset_term()
   {
@@ -904,7 +951,7 @@ public:
    * break the side effects of this copy constructor.
    */
   External(const External& other)
-  : address(tracer().next_address()),
+  : address(tracer().next_reserved_address()),
     term(),
     offset_term()
   {
@@ -983,7 +1030,7 @@ template<typename U, class Enable>
 __External<typename External<T>::Range>
 External<T>::operator[](const Internal<size_t>& offset)
 {
-  tracer().next_address();
+  tracer().next_reserved_address();
   return __External<Range>(address, offset.term);
 }
 
@@ -1076,6 +1123,17 @@ typename Smt<T>::Sort Tracer::append_channel_recv_event(const Address address)
   typename Smt<T>::Sort term(make_value_symbol<T>());
   // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
   append_event<CHANNEL_RECV_EVENT>(event_id, address, term);
+
+  return term;
+}
+
+template<typename T>
+typename Smt<T>::Sort Tracer::append_message_recv_event(const Address address)
+{
+  const EventIdentifier event_id(m_event_id_cnt);
+  typename Smt<T>::Sort term(make_value_symbol<T>());
+  // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
+  append_event<MESSAGE_RECV_EVENT>(event_id, address, term);
 
   return term;
 }
@@ -1348,6 +1406,12 @@ public:
 
 class Encoder
 {
+public:
+  static constexpr Address s_max_channel_address =
+    Tracer::s_max_reserved_address;
+  static constexpr Address s_wildcard_address =
+    std::numeric_limits<Address>::max();
+
 private:
   static const std::string s_time_prefix;
   static const std::string s_rf_prefix;
@@ -1401,10 +1465,10 @@ private:
 #endif
   }
 
-  void encode_read_from(const PerAddressMap& per_address_map)
+  void encode_read_from(const PerAddressIndex& per_address_index)
   {
     smt::UnsafeTerm and_rf(smt::literal<smt::Bool>(true));
-    for (const PerAddressMap::value_type& pair : per_address_map)
+    for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
       for (const EventIter r_iter : a.reads())
@@ -1434,10 +1498,10 @@ private:
     unsafe_add(and_rf);
   }
 
-  void encode_from_read(const PerAddressMap& per_address_map)
+  void encode_from_read(const PerAddressIndex& per_address_index)
   {
     smt::UnsafeTerm and_fr(smt::literal<smt::Bool>(true));
-    for (const PerAddressMap::value_type& pair : per_address_map)
+    for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
       for (const EventIter r_iter : a.reads())
@@ -1467,10 +1531,10 @@ private:
     unsafe_add(and_fr);
   }
 
-  void encode_write_serialization(const PerAddressMap& per_address_map)
+  void encode_write_serialization(const PerAddressIndex& per_address_index)
   {
     smt::UnsafeTerm and_ws(smt::literal<smt::Bool>(true));
-    for (const PerAddressMap::value_type& pair : per_address_map)
+    for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
       if (a.writes().size() < 2)
@@ -1491,16 +1555,16 @@ private:
 
   void encode_memory_concurrency(const Tracer& tracer)
   {
-    const PerAddressMap& per_address_map = tracer.per_address_map();
-    encode_read_from(per_address_map);
-    encode_from_read(per_address_map);
-    encode_write_serialization(per_address_map);
+    const PerAddressIndex& per_address_index = tracer.per_address_index();
+    encode_read_from(per_address_index);
+    encode_from_read(per_address_index);
+    encode_write_serialization(per_address_index);
   }
 
-  void encode_pop_from(const PerAddressMap& per_address_map)
+  void encode_pop_from(const PerAddressIndex& per_address_index)
   {
     smt::UnsafeTerm and_pf(smt::literal<smt::Bool>(true));
-    for (const PerAddressMap::value_type& pair : per_address_map)
+    for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
       for (const EventIter pop_iter : a.pops())
@@ -1527,10 +1591,10 @@ private:
   }
 
   // Make sure "pop-from" is like an injective function
-  void encode_pop_from_injectivity(const PerAddressMap& per_address_map)
+  void encode_pop_from_injectivity(const PerAddressIndex& per_address_index)
   {
     smt::UnsafeTerm and_pop_excl(smt::literal<smt::Bool>(true));
-    for (const PerAddressMap::value_type& pair : per_address_map)
+    for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
       if (a.pops().size() < 2)
@@ -1549,10 +1613,10 @@ private:
     unsafe_add(and_pop_excl);
   }
 
-  void encode_stack_lifo_order(const PerAddressMap& per_address_map)
+  void encode_stack_lifo_order(const PerAddressIndex& per_address_index)
   {
     smt::UnsafeTerm and_stack(smt::literal<smt::Bool>(true));
-    for (const PerAddressMap::value_type& pair : per_address_map)
+    for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
       for (const EventIter push_iter : a.pushes())
@@ -1608,18 +1672,18 @@ private:
   // Encode partial order model of stack abstract data type (ADT)
   void encode_stack_api(const Tracer& tracer)
   {
-    const PerAddressMap& per_address_map = tracer.per_address_map();
-    encode_pop_from(per_address_map);
-    encode_pop_from_injectivity(per_address_map);
-    encode_stack_lifo_order(per_address_map);
+    const PerAddressIndex& per_address_index = tracer.per_address_index();
+    encode_pop_from(per_address_index);
+    encode_pop_from_injectivity(per_address_index);
+    encode_stack_lifo_order(per_address_index);
   }
 
   // Similar to "read-from" axiom except that offsets must be equal and
   // loads from initial array return zero
-  void encode_load_from(const PerAddressMap& per_address_map)
+  void encode_load_from(const PerAddressIndex& per_address_index)
   {
     smt::UnsafeTerm and_ldf(smt::literal<smt::Bool>(true));
-    for (const PerAddressMap::value_type& pair : per_address_map)
+    for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
       for (const EventIter ld_iter : a.loads())
@@ -1665,10 +1729,10 @@ private:
   }
 
   // Similar to "from-read" axiom except that offsets must be equal
-  void encode_from_load(const PerAddressMap& per_address_map)
+  void encode_from_load(const PerAddressIndex& per_address_index)
   {
     smt::UnsafeTerm and_fld(smt::literal<smt::Bool>(true));
-    for (const PerAddressMap::value_type& pair : per_address_map)
+    for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
       for (const EventIter ld_iter : a.loads())
@@ -1699,10 +1763,10 @@ private:
   }
 
   // Serialize every store regardless of array offset
-  void encode_store_serialization(const PerAddressMap& per_address_map)
+  void encode_store_serialization(const PerAddressIndex& per_address_index)
   {
     smt::UnsafeTerm and_ss(smt::literal<smt::Bool>(true));
-    for (const PerAddressMap::value_type& pair : per_address_map)
+    for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
       if (a.stores().size() < 2)
@@ -1723,10 +1787,10 @@ private:
 
   void encode_array_api(const Tracer& tracer)
   {
-    const PerAddressMap& per_address_map = tracer.per_address_map();
-    encode_load_from(per_address_map);
-    encode_from_load(per_address_map);
-    encode_store_serialization(per_address_map);
+    const PerAddressIndex& per_address_index = tracer.per_address_index();
+    encode_load_from(per_address_index);
+    encode_from_load(per_address_index);
+    encode_store_serialization(per_address_index);
   }
 
   static bool is_any_event(const EventIter e_iter)
@@ -1738,7 +1802,7 @@ private:
   {
     // note: immediate_dominator_map() already allows THREAD_END_EVENT
     const EventKind e_kind(e_iter->kind);
-    return e_kind == CHANNEL_RECV_EVENT || e_kind == CHANNEL_SEND_EVENT;
+    return CHANNEL_RECV_EVENT <= e_kind && e_kind <= MESSAGE_SEND_EVENT;
   }
 
 public:
@@ -1755,17 +1819,70 @@ public:
     return Encoder::immediate_dominator_map(tracer, is_communication_event);
   }
 
-  /// Maps channel_recv/channel_send events on same channel but in different threads
+  /// matchable recv/send events in different threads
   typedef std::unordered_map<std::pair<EventIter, EventIter>,
     smt::Bool> MatchBoolMap;
 
-  static MatchBoolMap match_bool_map(const PerAddressMap& per_address_map)
+  static ThreadIdentifier dest_thread_id(const EventIter e_iter)
   {
-    const std::string match_prefix("match!{");
-    MatchBoolMap match_bool_map;
-    for (const PerAddressMap::value_type& pair : per_address_map)
+    assert(e_iter->address != s_wildcard_address);
+    assert(e_iter->is_message_recv() ^ e_iter->is_message_send());
+
+    const ThreadIdentifier thread_id = e_iter->address - s_max_channel_address;
+    assert(thread_id != e_iter->thread_id);
+    return thread_id;
+  }
+
+  // check that a given receive event and is allowed to match a send event
+  static void match_check(const EventIter r_iter, const EventIter s_iter)
+  {
+    const Event& r = *r_iter;
+    const Event& s = *s_iter;
+    assert(r.is_channel_recv() ^ r.is_message_recv());
+    assert(s.is_channel_send() ^ s.is_message_send());
+    assert(s.is_channel_send() == r.is_channel_recv());
+    assert(s.is_message_send() == r.is_message_recv());
+    assert(r.thread_id != s.thread_id);
+    assert(r.address != s_wildcard_address || r.is_message_recv());
+    assert(!r.is_message_recv() || s_max_channel_address < r.address);
+    assert(!s.is_message_send() || s_max_channel_address < r.address);
+    assert(!s.is_message_send() || s.address != s_wildcard_address);
+    assert(!s.is_message_send() || r.address == s_wildcard_address ||
+      (dest_thread_id(s_iter) == r.thread_id &&
+       dest_thread_id(r_iter) == s.thread_id));
+  }
+
+  static std::string match_symbol(const EventIter r_iter, const EventIter s_iter)
+  {
+    static const std::string match_prefix("match!{");
+    match_check(r_iter, s_iter);
+
+    return match_prefix +
+      std::to_string(r_iter->event_id) + "," +
+      std::to_string(s_iter->event_id) + "}";
+  }
+
+  // Build potential match set (i.e. matchables) and match variable cache
+  static void build_matchables(
+    const Tracer& tracer,
+    PerEventMap& per_event_map,
+    MatchBoolMap& match_bool_map)
+  {
+    const PerAddressIndex& per_address_index = tracer.per_address_index();
+    for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
+
+      // every channel event must have a (possibly empty) matchbles set
+      {
+        if (a.channel_recvs().empty())
+          for (const EventIter s_iter : a.channel_sends())
+            per_event_map[s_iter];
+        else if (a.channel_sends().empty())
+          for (const EventIter r_iter : a.channel_recvs())
+            per_event_map[r_iter];
+      }
+          
       for (const EventIter r_iter : a.channel_recvs())
       {
         for (const EventIter s_iter : a.channel_sends())
@@ -1773,105 +1890,170 @@ public:
           if (r_iter->thread_id == s_iter->thread_id)
             continue;
 
-          std::string match_symbol(match_prefix +
-            std::to_string(r_iter->event_id) + "," +
-            std::to_string(s_iter->event_id) + "}");
+          match_bool_map.emplace(std::make_pair(r_iter, s_iter),
+            smt::any<smt::Bool>(match_symbol(r_iter, s_iter)));
 
-          match_bool_map[std::make_pair(r_iter, s_iter)] =
-            smt::any<smt::Bool>(std::move(match_symbol));
+          per_event_map[r_iter].push_back(s_iter);
+          per_event_map[s_iter].push_back(r_iter);
         }
       }
     }
-    return match_bool_map;
+
+    const Events& events = tracer.events();
+    const PerThreadIndex& per_thread_index = tracer.per_thread_index();
+    for (EventIter e_iter = events.cbegin();
+         e_iter != events.cend();
+         e_iter++)
+    {
+      if (e_iter->is_message_recv())
+      {
+        // every message receive event has a (possibly empty) matchables set
+        per_event_map[e_iter];
+
+        if (e_iter->address == s_wildcard_address)
+        {
+          for (EventIter s_iter = events.cbegin();
+               s_iter != events.cend();
+               s_iter++)
+          {
+            if (s_iter->is_message_send() &&
+                e_iter->thread_id != s_iter->thread_id)
+            {
+              match_bool_map.emplace(std::make_pair(e_iter, s_iter),
+                smt::any<smt::Bool>(match_symbol(e_iter, s_iter)));
+
+              per_event_map[e_iter].push_back(s_iter);
+              per_event_map[s_iter].push_back(e_iter);
+            }
+          }
+        }
+        else
+        {
+          const EventIters& message_sends = per_thread_index.at(
+            dest_thread_id(e_iter)).message_sends();
+          for (const EventIter s_iter : message_sends)
+          {
+            if (dest_thread_id(s_iter) != e_iter->thread_id)
+              continue;
+
+            match_bool_map.emplace(std::make_pair(e_iter, s_iter),
+              smt::any<smt::Bool>(match_symbol(e_iter, s_iter)));
+
+            per_event_map[e_iter].push_back(s_iter);
+            per_event_map[s_iter].push_back(e_iter);
+          }
+        }
+      }
+      else if (e_iter->is_message_send())
+      {
+        // every message send event has a (possibly empty) matchables set
+        per_event_map[e_iter];
+
+        const EventIters& message_recvs = per_thread_index.at(
+          dest_thread_id(e_iter)).message_recvs();
+
+        for (const EventIter r_iter : message_recvs)
+        {
+            if (r_iter->address != s_wildcard_address &&
+                dest_thread_id(r_iter) != e_iter->thread_id)
+              continue;
+
+            match_bool_map.emplace(std::make_pair(r_iter, e_iter),
+              smt::any<smt::Bool>(match_symbol(r_iter, e_iter)));
+
+            per_event_map[e_iter].push_back(r_iter);
+            per_event_map[r_iter].push_back(e_iter);
+        }
+      }
+    }
   }
 
 private:
-  static smt::Bool communication_match(
-    const PerAddressMap& per_address_map,
+  // Encode potential match set of channel or message passing event
+  static smt::Bool communication_match_disjunction(
+    const PerEventMap& per_event_map,
     const MatchBoolMap& match_bool_map,
     const EventIter e_iter)
   {
-    assert(e_iter->is_channel_recv() || e_iter->is_channel_send());
-
-    const EventKinds& a = per_address_map.at(e_iter->address);
-    const EventIters& matchables = e_iter->is_channel_recv() ?
-      a.channel_sends() : a.channel_recvs();
+    assert(is_communication_event(e_iter));
 
     smt::Bool or_match(smt::literal<smt::Bool>(false));
-    for (const EventIter e_prime_iter : matchables)
-    {
-      if (e_iter->thread_id == e_prime_iter->thread_id)
-        continue;
-
-      const MatchBoolMap::key_type match_pair(
-        e_iter->is_channel_recv() ?
-          std::make_pair(e_iter, e_prime_iter)
-        : std::make_pair(e_prime_iter, e_iter));
-
-      or_match = or_match or match_bool_map.at(match_pair);
-    }
+    const EventIters& matchables = per_event_map.at(e_iter);
+    if (e_iter->is_channel_recv() || e_iter->is_message_recv())
+      for (const EventIter s_iter : matchables)
+      {
+        assert(s_iter->is_channel_send() || s_iter->is_message_send());
+        or_match = or_match or match_bool_map.at(
+          std::make_pair(e_iter, s_iter));
+      }
+    else
+      for (const EventIter r_iter : matchables)
+      {
+        assert(r_iter->is_channel_recv() || r_iter->is_message_recv());
+        or_match = or_match or match_bool_map.at(
+          std::make_pair(r_iter, e_iter));
+      }
 
     return or_match;
   }
 
-  static smt::Bool communication_match(
-    const PerAddressMap& per_address_map,
+  static smt::Bool communication_match_conjunction(
+    const PerEventMap& per_event_map,
     const MatchBoolMap& match_bool_map,
     const EventIters e_iters)
   {
     smt::Bool and_match(smt::literal<smt::Bool>(true));
     for (const EventIter e_iter : e_iters)
-    {
-      and_match = and_match and communication_match(
-        per_address_map, match_bool_map, e_iter);
-    }
+      and_match = and_match and communication_match_disjunction(
+        per_event_map, match_bool_map, e_iter);
+
     return and_match;
   }
 
   static smt::Bool communication_excl(
-    const PerAddressMap& per_address_map,
+    const PerEventMap& per_event_map,
     const MatchBoolMap& match_bool_map,
     const EventIter r_iter,
     const EventIter s_iter)
   {
-    assert(r_iter->is_channel_recv());
-    assert(s_iter->is_channel_send());
-    assert(r_iter->thread_id != s_iter->thread_id);
-
-    const EventKinds& r_a = per_address_map.at(r_iter->address);
-    const EventKinds& s_a = per_address_map.at(s_iter->address);
+    match_check(r_iter, s_iter);
 
     smt::Bool or_match(smt::literal<smt::Bool>(false));
-    for (const EventIter e_iter : r_a.channel_sends())
+    for (const EventIter e_iter : per_event_map.at(r_iter))
     {
-      if (r_iter->thread_id == e_iter->thread_id || e_iter == s_iter)
+      if (e_iter == s_iter)
         continue;
 
-      or_match = or_match or
-        match_bool_map.at(std::make_pair(r_iter, e_iter));
+      assert(e_iter->is_channel_send() || e_iter->is_message_send());
+      or_match = or_match or match_bool_map.at(
+        std::make_pair(r_iter, e_iter));
     }
-    for (const EventIter e_iter : s_a.channel_recvs())
+    for (const EventIter e_iter : per_event_map.at(s_iter))
     {
-      if (s_iter->thread_id == e_iter->thread_id || e_iter == r_iter)
+      if (e_iter == r_iter)
         continue;
 
-      or_match = or_match or
-        match_bool_map.at(std::make_pair(e_iter, s_iter));
+      assert(e_iter->is_channel_recv() || e_iter->is_message_recv());
+      or_match = or_match or match_bool_map.at(
+        std::make_pair(e_iter, s_iter));
     }
     return not or_match;
   }
 
   void encode_communication_concurrency(const Tracer& tracer, bool check_deadlocks)
   {
-    const PerAddressMap& per_address_map = tracer.per_address_map();
-    const PerThreadMap& per_thread_map = tracer.per_thread_map();
+    const PerAddressIndex& per_address_index = tracer.per_address_index();
+    const PerThreadIndex& per_thread_index = tracer.per_thread_index();
 
-    auto match_bool_map(Encoder::match_bool_map(per_address_map));
+    PerEventMap per_event_map;
+    MatchBoolMap match_bool_map;
+    build_matchables(tracer, per_event_map, match_bool_map);
+
     auto cidom_map(Encoder::communication_immediate_dominator_map(tracer));
 
     Bools inits;
     smt::UnsafeTerm ext_match(smt::literal<smt::Bool>(true));
-    for (const PerAddressMap::value_type& pair : per_address_map)
+    for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
       for (const EventIter r_iter : a.channel_recvs())
@@ -1899,8 +2081,10 @@ private:
             cidoms.push_back(cidom_map.at(s_iter));
 
           smt::UnsafeTerm rs_ext(match_bool ==
-            (communication_match(per_address_map, match_bool_map, cidoms) and
-             communication_excl(per_address_map, match_bool_map, r_iter, s_iter) and
+            (communication_match_conjunction(per_event_map,
+               match_bool_map, cidoms) and
+             communication_excl(per_event_map,
+               match_bool_map, r_iter, s_iter) and
              r.guard and s.guard));
 
           ext_match = ext_match and rs_ext and rs_value and
@@ -1917,7 +2101,7 @@ private:
     {
       const std::string finalizer_prefix("finalizer!");
       smt::Bool finalizers(smt::literal<smt::Bool>(true));
-      for (const PerThreadMap::value_type& pair : per_thread_map)
+      for (const PerThreadMap::value_type& pair : tracer.per_thread_map())
       {
         // ignore main thread
         if (pair.first == 1)
@@ -1930,8 +2114,8 @@ private:
           finalizer_prefix + std::to_string(e_iter->event_id)));
         finalizers = finalizers and finalizer_bool;
         ext_match = ext_match and
-          (finalizer_bool == communication_match(per_address_map,
-             match_bool_map, cidom_map.at(e_iter)));
+          (finalizer_bool == communication_match_disjunction(
+             per_event_map, match_bool_map, cidom_map.at(e_iter)));
       }
       unsafe_add(not finalizers);
     }
@@ -2233,7 +2417,10 @@ private:
 
 public:
   Channel()
-  : m_address(tracer().next_address()) {}
+  : m_address(tracer().next_reserved_address())
+  {
+    assert(m_address < Encoder::s_max_channel_address);
+  }
 
   void send(T v)
   {
@@ -2254,6 +2441,65 @@ public:
   Internal<T> recv()
   {
     return Internal<T>(tracer().append_channel_recv_event<T>(m_address));
+  }
+};
+
+/// MPI-style concurrency
+
+/// The static member function of Message are intended to
+/// model synchronous MPI calls.
+class Message
+{
+private:
+  static Address to_address(const ThreadIdentifier thread_id)
+  {
+    // disallow main thread
+    assert(0 < thread_id);
+
+    // detect overflows
+    assert(thread_id < Encoder::s_max_channel_address);
+
+    return Encoder::s_max_channel_address + thread_id;
+  }
+
+  Message() {}
+
+public:
+  template<typename T>
+  static void send(const ThreadIdentifier thread_id, T v)
+  {
+    send(thread_id, Internal<T>(v));
+  }
+
+  template<typename T>
+  static void send(const ThreadIdentifier thread_id,
+    const Internal<T>& data)
+  {
+    tracer().append_message_send_event(to_address(thread_id), data.term);
+  }
+
+  template<typename T>
+  static void send(const ThreadIdentifier thread_id,
+    const External<T>& data)
+  {
+    smt::UnsafeTerm term = append_input_event(data);
+    tracer().append_message_send_event(
+      to_address(thread_id), std::move(term));
+  }
+
+  template<typename T>
+  static Internal<T> recv(const ThreadIdentifier thread_id)
+  {
+    return Internal<T>(tracer().append_message_recv_event<T>(
+      to_address(thread_id)));
+  }
+
+  // MPI's synchronous 'wildcard receive'
+  template<typename T>
+  static Internal<T> recv_any()
+  {
+    return Internal<T>(tracer().append_message_recv_event<T>(
+      Encoder::s_wildcard_address));
   }
 };
 

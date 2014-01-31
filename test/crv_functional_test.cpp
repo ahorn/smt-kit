@@ -575,3 +575,39 @@ TEST(CrvFunctionalTest, SatBarrier)
   EXPECT_EQ(smt::sat, encoder.check(i == 2, crv::tracer()));
 }
 
+// See dtg.c benchmark for MOPPER, http://www.cprover.org/mpi/
+TEST(CrvFunctionalTest, DtgMpiDeadlock)
+{
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  const char some_data = 'A';
+
+  crv::tracer().append_thread_begin_event();
+  crv::Message::recv_any<char>();
+  crv::Message::send(4, some_data);
+  crv::Message::recv_any<char>();
+  crv::tracer().append_thread_end_event();
+
+  crv::tracer().append_thread_begin_event();
+  crv::Message::send(1, some_data);
+  crv::Message::send(4, some_data);
+  crv::tracer().append_thread_end_event();
+
+  crv::tracer().append_thread_begin_event();
+  crv::Message::recv_any<char>();
+  crv::Message::send(1, some_data);
+  crv::tracer().append_thread_end_event();
+
+  crv::tracer().append_thread_begin_event();
+  crv::Message::recv<char>(2);
+  crv::Message::recv<char>(1);
+  crv::tracer().append_thread_end_event();
+
+  crv::tracer().append_thread_begin_event();
+  crv::Message::send(3, some_data);
+  crv::tracer().append_thread_end_event();
+
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer()));
+}
+
