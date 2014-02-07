@@ -50,8 +50,13 @@ TEST(CrvTest, EvalLss)
   EXPECT_FALSE(internal::Eval<smt::LSS>::eval(13, 12));
 }
 
+#if __cplusplus <= 201103L
+#define STATIC_EXPECT_TRUE(assertion) EXPECT_TRUE((assertion))
+#define STATIC_EXPECT_FALSE(assertion) EXPECT_FALSE((assertion))
+#else
 #define STATIC_EXPECT_TRUE(assertion) static_assert((assertion), "")
 #define STATIC_EXPECT_FALSE(assertion) static_assert(!(assertion), "")
+#endif
 
 TEST(CrvTest, ConstexprEvalLnot)
 {
