@@ -1033,6 +1033,14 @@ namespace internal
     std::shared_ptr<const Expr<T>> m_ptr;
 
   protected:
+    // See "Virtuality" article by Herb Sutter:
+    //   [If you do not] want to allow polymorphic deletion
+    //   through a base pointer, [then] the destructor
+    //   should be nonvirtual and protected, the latter
+    //   to prevent the unwanted usage.
+    ~Term() {}
+
+  public:
     Term()
     : m_ptr(nullptr) {}
 
@@ -1053,9 +1061,6 @@ namespace internal
       m_ptr = other.m_ptr;
       return *this;
     }
-
-  public:
-    virtual ~Term() {}
 
     operator UnsafeTerm() const
     {
@@ -1096,132 +1101,42 @@ namespace internal
   };
 }
 
-#define SMT_TERM_DEF(name)                                                     \
-class name : public internal::Term<name>                                       \
-{                                                                              \
-private:                                                                       \
-  typedef name Self;                                                           \
-                                                                               \
-public:                                                                        \
-  name()                                                                       \
-  : internal::Term<Self>() {}                                                  \
-                                                                               \
-  name(const Expr<Self>* ptr)                                                  \
-  : internal::Term<Self>(ptr) {}                                               \
-                                                                               \
-  name(std::shared_ptr<const Expr<Self>>&& ptr)                                \
-  : internal::Term<Self>(std::move(ptr)) {}                                    \
-                                                                               \
-  name(const name& other)                                                      \
-  : internal::Term<Self>(other) {}                                             \
-                                                                               \
-  name(name&& other)                                                           \
-  : internal::Term<Self>(std::move(other)) {}                                  \
-                                                                               \
-  name& operator=(const name& other)                                           \
-  {                                                                            \
-    internal::Term<Self>::operator=(other);                                    \
-    return *this;                                                              \
-  }                                                                            \
-};                                                                             \
+// Note: Curiously recurring template pattern (CRTP) is needed to
+// support recursive sorts such as Func<T...>
+#define SMT_TERM_DEF(name)                                         \
+struct name : public internal::Term<name>                          \
+{                                                                  \
+  using internal::Term<name>::Term;                                \
+};                                                                 \
 
 SMT_TERM_DEF(Bool)
 SMT_TERM_DEF(Int)
 SMT_TERM_DEF(Real)
 
 /// Fixed-size bit vector
-template<typename T,
-  typename Enable = typename std::enable_if<std::is_integral<T>::value>::type>
-class Bv : public internal::Term<Bv<T>>
+template<typename T, typename Enable =
+  typename std::enable_if<std::is_integral<T>::value>::type>
+struct Bv : public internal::Term<Bv<T>>
 {
-private:
-  typedef Bv<T> Self;
-
-public:
-  Bv()
-  : internal::Term<Self>() {}
-
-  Bv(const Expr<Self>* ptr)
-  : internal::Term<Self>(ptr) {}
-
-  Bv(std::shared_ptr<const Expr<Self>>&& ptr)
-  : internal::Term<Self>(std::move(ptr)) {}
-
-  Bv(const Bv& other)
-  : internal::Term<Self>(other) {}
-
-  Bv(Bv&& other)
-  : internal::Term<Self>(std::move(other)) {}
-
-  Bv& operator=(const Bv& other)
-  {
-    internal::Term<Self>::operator=(other);
-    return *this;
-  }
+  using internal::Term<Bv<T>>::Term;
 };
 
 /// McCarthy Array
 template<typename Domain, typename Range>
-class Array : public internal::Term<Array<Domain, Range>>
+struct Array : public internal::Term<Array<Domain, Range>>
 {
-private:
-  typedef Array<Domain, Range> Self;
-
-public:
-  Array()
-  : internal::Term<Self>() {}
-
-  Array(const Expr<Self>* ptr)
-  : internal::Term<Self>(ptr) {}
-
-  Array(std::shared_ptr<const Expr<Self>>&& ptr)
-  : internal::Term<Self>(std::move(ptr)) {}
-
-  Array(const Array& other)
-  : internal::Term<Self>(other) {}
-
-  Array(Array&& other)
-  : internal::Term<Self>(std::move(other)) {}
-
-  Array& operator=(const Array& other)
-  {
-    internal::Term<Self>::operator=(other);
-    return *this;
-  }
+  using internal::Term<Array<Domain, Range>>::Term;
 };
 
 /// Uninterpreted function
 template<typename... T>
-class Func : public internal::Term<Func<T...>>
+struct Func : public internal::Term<Func<T...>>
 {
-private:
-  typedef Func<T...> Self;
+  using internal::Term<Func<T...>>::Term;
 
-public:
   // last tuple element
   typedef typename std::tuple_element<sizeof...(T) - 1,
     std::tuple<T...>>::type Range;
-
-  Func()
-  : internal::Term<Self>() {}
-
-  Func(const Expr<Self>* ptr)
-  : internal::Term<Self>(ptr) {}
-
-  Func(std::shared_ptr<const Expr<Self>>&& ptr)
-  : internal::Term<Self>(std::move(ptr)) {}
-
-  Func(const Func& other)
-  : internal::Term<Self>(other) {}
-
-  Func(Func&& other)
-  : internal::Term<Self>(std::move(other)) {}
-
-  Func& operator=(const Func& other)
-  {
-    internal::Term<Self>::operator=(other);
-    return *this;
-  }
 };
 
 namespace internal
