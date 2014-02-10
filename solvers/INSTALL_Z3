@@ -8,3 +8,23 @@ The source code is available under the Microsoft Research License Agreement:
 
 See the z3/README file for instructions on how to compile the Z3 source code
 with any of the following compilers: Visual Studio, g++ or clang++.
+
+You should always use the latest version of Z3:
+
+  cd z3
+  git checkout unstable
+  mkdir target
+
+On Linux with g++, Z3's unstable branch can be built as follows:
+
+  python scripts/mk_make.py --prefix=`pwd`/target
+  cd build
+  make
+  make install
+
+On OS X (10.9) with clang++, the following build instructions
+should work for Z3's unstable branch:
+
+  CXX=clang++ CC=clang python scripts/mk_make.py
+  cd build
+  make
