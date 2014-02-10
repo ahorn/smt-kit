@@ -212,8 +212,8 @@ TEST(SmtCVC4Test, ConstArrayExpr)
 {
   CVC4Solver s;
 
-  const Int init_term(new LiteralExpr<Int, int>(7));
-  const ConstArrayExpr<Int, Int> e0(init_term);
+  const Int init_term(std::make_shared<LiteralExpr<int>>(internal::sort<Int>(), 7));
+  const ConstArrayExpr e0(internal::sort<Array<Int, Int>>(), init_term);
 
   EXPECT_EQ(OK, e0.encode(s));
 

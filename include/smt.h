@@ -895,7 +895,7 @@ public:
   virtual ~Solver() {}
 };
 
-class UnsafeExpr
+class Expr
 {
 private:
   const ExprKind m_expr_kind;
@@ -905,12 +905,12 @@ private:
 
 protected:
   // Allocate sort statically!
-  UnsafeExpr(ExprKind expr_kind, const Sort& sort)
+  Expr(ExprKind expr_kind, const Sort& sort)
   : m_expr_kind(expr_kind), m_sort(sort) {}
 
 public:
-  UnsafeExpr(const UnsafeExpr&) = delete;
-  virtual ~UnsafeExpr() {}
+  Expr(const Expr&) = delete;
+  virtual ~Expr() {}
 
   ExprKind expr_kind() const
   {
@@ -928,35 +928,23 @@ public:
   }
 };
 
-template<typename T>
-class Expr : public virtual UnsafeExpr
-{
-protected:
-  Expr(ExprKind expr_kind)
-  : UnsafeExpr(expr_kind, internal::sort<T>()) {}
-};
-
 /// shared but potentially not well-sorted SMT expression
 
 /// All arithmetic and bit vector operators are overloaded.
 class UnsafeTerm
 {
 private:
-  std::shared_ptr<const UnsafeExpr> m_ptr;
+  std::shared_ptr<const Expr> m_ptr;
 
 public:
   UnsafeTerm()
   : m_ptr(nullptr) {}
 
-  UnsafeTerm(const UnsafeExpr* ptr)
+  UnsafeTerm(const std::shared_ptr<const Expr>& ptr)
   : m_ptr(ptr) {}
 
-  UnsafeTerm(std::shared_ptr<const UnsafeExpr>&& ptr)
+  UnsafeTerm(std::shared_ptr<const Expr>&& ptr)
   : m_ptr(std::move(ptr)) {}
-
-  template<typename T>
-  UnsafeTerm(const std::shared_ptr<const Expr<T>>& ptr)
-  : m_ptr(ptr) {}
 
   UnsafeTerm(const UnsafeTerm& other)
   : m_ptr(other.m_ptr) {}
@@ -973,12 +961,8 @@ public:
   template<typename T>
   explicit operator T() const
   {
-    std::shared_ptr<const Expr<T>> ptr(std::dynamic_pointer_cast<const Expr<T>>(m_ptr));
-
-    // cast is successful
-    assert(is_null() == (ptr.get() == nullptr));
-
-    return T(std::move(ptr));
+    // TODO: Is cast successful?
+    return T(m_ptr);
   }
 
   bool is_null() const
@@ -993,7 +977,7 @@ public:
   }
 
   /// \pre !is_null()
-  const UnsafeExpr& ref() const
+  const Expr& ref() const
   {
     assert(!is_null());
     return *m_ptr;
@@ -1030,7 +1014,7 @@ namespace internal
   class Term
   {
   private:
-    std::shared_ptr<const Expr<T>> m_ptr;
+    std::shared_ptr<const Expr> m_ptr;
 
   protected:
     // See "Virtuality" article by Herb Sutter:
@@ -1044,10 +1028,10 @@ namespace internal
     Term()
     : m_ptr(nullptr) {}
 
-    Term(const Expr<T>* ptr)
+    Term(const std::shared_ptr<const Expr>& ptr)
     : m_ptr(ptr) {}
 
-    Term(std::shared_ptr<const Expr<T>>&& ptr)
+    Term(std::shared_ptr<const Expr>&& ptr)
     : m_ptr(std::move(ptr)) {}
 
     Term(const Term& other)
@@ -1079,7 +1063,7 @@ namespace internal
     }
 
     /// \pre !is_null()
-    const Expr<T>& ref() const
+    const Expr& ref() const
     {
       assert(!is_null());
       return *m_ptr;
@@ -1128,112 +1112,6 @@ struct Array : public internal::Term<Array<Domain, Range>>
   using internal::Term<Array<Domain, Range>>::Term;
 };
 
-/// Uninterpreted function
-template<typename... T>
-struct Func : public internal::Term<Func<T...>>
-{
-  using internal::Term<Func<T...>>::Term;
-
-  // last tuple element
-  typedef typename std::tuple_element<sizeof...(T) - 1,
-    std::tuple<T...>>::type Range;
-};
-
-namespace internal
-{
-  template<typename T>
-  struct RemoveBv
-  {
-    typedef void Type;
-  };
-
-  template<typename T>
-  struct RemoveBv<Bv<T>>
-  {
-    typedef T Type;
-  };
-
-  template<typename T>
-  struct IsPrimitive :
-    std::integral_constant<bool,
-      std::is_integral<typename RemoveBv<T>::Type>::value
-      or std::is_same<Bool, T>::value
-      or std::is_same<Int, T>::value
-      or std::is_same<Real, T>::value>
-  {};
-}
-
-template<typename T>
-class UnsafeLiteralExpr : public virtual UnsafeExpr
-{
-private:
-  const T m_literal;
-
-  virtual Error __encode(Solver& solver) const override
-  {
-    return solver.encode_literal(UnsafeExpr::sort(), m_literal);
-  }
-
-public:
-  // Allocate sort statically!
-  UnsafeLiteralExpr(const Sort& sort, T literal)
-  : UnsafeExpr(LITERAL_EXPR_KIND, sort),
-    m_literal(literal) {}
-
-  const T literal() const
-  {
-    return m_literal;
-  }
-};
-
-template<typename T, typename U = typename internal::RemoveBv<T>::Type,
-  typename Enable = typename std::enable_if<internal::IsPrimitive<T>::value>::type>
-class LiteralExpr : public UnsafeLiteralExpr<U>, public Expr<T>
-{
-public:
-  using UnsafeLiteralExpr<U>::literal;
-
-  LiteralExpr(U literal)
-  : UnsafeExpr(LITERAL_EXPR_KIND, internal::sort<T>()),
-    UnsafeLiteralExpr<U>(internal::sort<T>(), literal),
-    Expr<T>(LITERAL_EXPR_KIND) {}
-};
-
-class UnsafeConstantExpr : public virtual UnsafeExpr
-{
-private:
-  const UnsafeDecl m_decl;
-
-  virtual Error __encode(Solver& solver) const override
-  {
-    return solver.encode_constant(m_decl);
-  }
-
-public:
-  UnsafeConstantExpr(const UnsafeDecl& decl)
-  : UnsafeExpr(CONSTANT_EXPR_KIND, decl.sort()),
-    m_decl(decl) {}
-};
-
-template<typename T>
-class ConstantExpr : public UnsafeConstantExpr, public Expr<T>
-{
-private:
-  const Decl<T> m_decl;
-
-public:
-  ConstantExpr(const Decl<T>& decl)
-  : UnsafeExpr(CONSTANT_EXPR_KIND, internal::sort<T>()),
-    UnsafeConstantExpr(decl),
-    Expr<T>(CONSTANT_EXPR_KIND),
-    m_decl(decl) {}
-
-  const Decl<T>& decl() const
-  {
-    return m_decl;
-  }
-};
-
 namespace internal
 {
   template<typename... T>
@@ -1251,7 +1129,100 @@ namespace internal
     typedef decltype(std::tuple_cat(std::make_tuple(std::declval<T>()),
       std::declval<typename RemoveLast<U...>::Type>())) Type;
   };
+}
 
+/// Uninterpreted function
+template<typename... T>
+struct Func : public internal::Term<Func<T...>>
+{
+  using internal::Term<Func<T...>>::Term;
+
+  static constexpr size_t arity = sizeof...(T) - 1;
+
+  typedef typename internal::RemoveLast<T...>::Type Args;
+
+  // last tuple element
+  typedef typename std::tuple_element<arity,
+    std::tuple<T...>>::type Range;
+};
+
+template<typename T>
+class LiteralExpr : public Expr
+{
+private:
+  const T m_literal;
+
+  virtual Error __encode(Solver& solver) const override
+  {
+    return solver.encode_literal(Expr::sort(), m_literal);
+  }
+
+public:
+  // Allocate sort statically!
+  LiteralExpr(const Sort& sort, T literal)
+  : Expr(LITERAL_EXPR_KIND, sort),
+    m_literal(literal) {}
+
+  const T literal() const
+  {
+    return m_literal;
+  }
+};
+
+class ConstantExpr : public Expr
+{
+private:
+  const UnsafeDecl m_decl;
+
+  virtual Error __encode(Solver& solver) const override
+  {
+    return solver.encode_constant(m_decl);
+  }
+
+public:
+  ConstantExpr(const UnsafeDecl& decl)
+  : Expr(CONSTANT_EXPR_KIND, decl.sort()),
+    m_decl(decl) {}
+
+  const UnsafeDecl& decl() const
+  {
+    return m_decl;
+  }
+};
+
+template<size_t arity>
+class FuncAppExpr : public Expr
+{
+private:
+  const UnsafeDecl m_func_decl;
+  const std::array<UnsafeTerm, arity> m_args;
+
+  virtual Error __encode(Solver& solver) const override
+  {
+    return solver.encode_func_app(m_func_decl, arity, m_args.data());
+  }
+
+public:
+  FuncAppExpr(
+    const UnsafeDecl& func_decl,
+    std::array<UnsafeTerm, arity>&& args)
+  : Expr(FUNC_APP_EXPR_KIND, func_decl.sort().sorts(arity)),
+    m_func_decl(func_decl),
+    m_args(std::move(args)) {}
+
+  const std::array<UnsafeTerm, arity>& args() const
+  {
+    return m_args;
+  }
+
+  const UnsafeDecl& func_decl() const
+  {
+    return m_func_decl;
+  }
+};
+
+namespace internal
+{
   template<size_t... seqs>
   struct __Sequence
   {
@@ -1283,78 +1254,41 @@ namespace internal
     constexpr size_t N = std::tuple_size<Tuple>::value;
     return __to_array<Result, Tuple>(tuple, typename __BuildSequence<N>::type());
   }
+
+  template<typename T>
+  struct RemoveBv
+  {
+    typedef void Type;
+  };
+
+  template<typename T>
+  struct RemoveBv<Bv<T>>
+  {
+    typedef T Type;
+  };
+
+  template<typename T>
+  struct IsPrimitive :
+    std::integral_constant<bool,
+      std::is_integral<typename RemoveBv<T>::Type>::value
+      or std::is_same<Bool, T>::value
+      or std::is_same<Int, T>::value
+      or std::is_same<Real, T>::value>
+  {};
 }
-
-template<size_t arity>
-class UnsafeFuncAppExpr : public virtual UnsafeExpr
-{
-private:
-  const UnsafeDecl m_func_decl;
-  const std::array<UnsafeTerm, arity> m_args;
-
-  virtual Error __encode(Solver& solver) const override
-  {
-    return solver.encode_func_app(m_func_decl, arity, m_args.data());
-  }
-
-public:
-  UnsafeFuncAppExpr(
-    UnsafeDecl func_decl,
-    std::array<UnsafeTerm, arity>&& args)
-  : UnsafeExpr(FUNC_APP_EXPR_KIND, func_decl.sort().sorts(arity)),
-    m_func_decl(func_decl),
-    m_args(std::move(args)) {}
-};
-
-template<typename... T>
-class FuncAppExpr
-: public UnsafeFuncAppExpr<std::tuple_size<
-    typename internal::RemoveLast<T...>::Type>::value>,
-  public Expr<typename Func<T...>::Range>
-{
-public:
-  typedef typename internal::RemoveLast<T...>::Type Args;
-
-private:
-  const Decl<Func<T...>> m_func_decl;
-  const Args m_args;
-
-public:
-  FuncAppExpr(
-    Decl<Func<T...>> func_decl,
-    Args args)
-  : UnsafeExpr(FUNC_APP_EXPR_KIND,
-      internal::sort<typename Func<T...>::Range>()),
-    UnsafeFuncAppExpr<std::tuple_size<typename
-        internal::RemoveLast<T...>::Type>::value>(
-      func_decl,
-      internal::to_array<UnsafeTerm, Args>(args)),
-    Expr<typename Func<T...>::Range>(FUNC_APP_EXPR_KIND),
-    m_func_decl(func_decl),
-    m_args(args) {}
-
-  const Decl<Func<T...>>& func_decl() const
-  {
-    return m_func_decl;
-  }
-
-  const Args& args() const
-  {
-    return m_args;
-  }
-};
 
 template<typename T>
 inline UnsafeTerm literal(const Sort& sort, const T literal)
 {
-  return UnsafeTerm(new UnsafeLiteralExpr<T>(sort, literal));
+  return UnsafeTerm(std::make_shared<LiteralExpr<T>>(sort, literal));
 }
 
-template<typename T, typename U,
-  typename Enable = typename std::enable_if<std::is_integral<U>::value>::type>
+template<typename T, typename U, typename Enable =
+  typename std::enable_if<std::is_integral<U>::value and
+  internal::IsPrimitive<T>::value>::type>
 inline T literal(const U literal)
 {
-  return T(new LiteralExpr<T, U>(literal));
+  return T(std::make_shared<LiteralExpr<U>>(internal::sort<T>(), literal));
 }
 
 UnsafeTerm constant(const UnsafeDecl& decl);
@@ -1362,7 +1296,7 @@ UnsafeTerm constant(const UnsafeDecl& decl);
 template<typename T>
 T constant(const Decl<T>& decl)
 {
-  return T(new ConstantExpr<T>(decl));
+  return T(std::make_shared<ConstantExpr>(decl));
 }
 
 UnsafeTerm apply(
@@ -1407,9 +1341,11 @@ Range apply(
 template<typename... T>
 typename Func<T...>::Range apply(
   const Decl<Func<T...>>& func_decl,
-  const typename FuncAppExpr<T...>::Args& args)
+  const typename Func<T...>::Args& args)
 {
-  return typename Func<T...>::Range(new FuncAppExpr<T...>(func_decl, args));
+  return typename Func<T...>::Range(
+    std::make_shared<FuncAppExpr<Func<T...>::arity>>(func_decl,
+    internal::to_array<UnsafeTerm, typename Func<T...>::Args>(args)));
 }
 
 // Use globally unique symbol names!
@@ -1419,103 +1355,67 @@ T any(const std::string& symbol)
   return constant(Decl<T>(symbol));
 }
 
-class UnsafeUnaryExpr : public virtual UnsafeExpr
+template<Opcode opcode>
+class UnaryExpr : public Expr
 {
 private:
-  const Opcode m_opcode;
   const UnsafeTerm m_operand;
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_unary(m_opcode, UnsafeExpr::sort(), m_operand);
+    return solver.encode_unary(opcode, Expr::sort(), m_operand);
   }
 
 public:
   // Allocate sort statically!
-  UnsafeUnaryExpr(
+  UnaryExpr(
     const Sort& sort,
-    Opcode opcode,
     const UnsafeTerm& operand)
-  : UnsafeExpr(UNARY_EXPR_KIND, sort),
-    m_opcode(opcode),
+  : Expr(UNARY_EXPR_KIND, sort),
     m_operand(operand)
   {
     assert(!m_operand.is_null());
   }
-};
 
-template<Opcode opcode, typename T, typename U = T>
-class UnaryExpr : public UnsafeUnaryExpr, public Expr<U>
-{
-private:
-  const T m_operand;
-
-public:
-  UnaryExpr(const T& operand)
-  : UnsafeExpr(UNARY_EXPR_KIND, internal::sort<U>()),
-    UnsafeUnaryExpr(internal::sort<U>(), opcode, operand),
-    Expr<U>(UNARY_EXPR_KIND),
-    m_operand(operand) {}
-
-  const T& operand() const
+  const UnsafeTerm& operand() const
   {
     return m_operand;
   }
 };
 
-class UnsafeBinaryExpr : public virtual UnsafeExpr
+template<Opcode opcode>
+class BinaryExpr : public Expr
 {
 private:
-  const Opcode m_opcode;
   const UnsafeTerm m_loperand;
   const UnsafeTerm m_roperand;
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_binary(m_opcode, UnsafeExpr::sort(),
+    return solver.encode_binary(opcode, Expr::sort(),
       m_loperand, m_roperand);
   }
 
 public:
   // Allocate sort statically!
-  UnsafeBinaryExpr(
+  BinaryExpr(
     const Sort& sort,
-    Opcode opcode,
     const UnsafeTerm& loperand,
     const UnsafeTerm& roperand)
-  : UnsafeExpr(BINARY_EXPR_KIND, sort),
-    m_opcode(opcode),
+  : Expr(BINARY_EXPR_KIND, sort),
     m_loperand(loperand),
     m_roperand(roperand)
   {
     assert(!m_loperand.is_null());
     assert(!m_roperand.is_null());
   }
-};
 
-template<Opcode opcode, typename T, typename U = T>
-class BinaryExpr : public UnsafeBinaryExpr, public Expr<U>
-{
-private:
-  const T m_loperand;
-  const T m_roperand;
-
-public:
-  BinaryExpr(
-    const T& loperand,
-    const T& roperand)
-  : UnsafeExpr(BINARY_EXPR_KIND, internal::sort<U>()),
-    UnsafeBinaryExpr(internal::sort<U>(), opcode, loperand, roperand),
-    Expr<U>(BINARY_EXPR_KIND),
-    m_loperand(loperand),
-    m_roperand(roperand) {}
-
-  const T& loperand() const
+  const UnsafeTerm& loperand() const
   {
     return m_loperand;
   }
 
-  const T& roperand() const
+  const UnsafeTerm& roperand() const
   {
     return m_roperand;
   }
@@ -1524,48 +1424,43 @@ public:
 template<typename T>
 class Terms
 {
-private:
-  template<Opcode opcode, typename U, typename V>
-  friend class NaryExpr;
-
-  UnsafeTerms m_terms;
-
 public:
+  UnsafeTerms terms;
+
   Terms(size_t count)
-  : m_terms()
+  : terms()
   {
-    m_terms.reserve(count);
+    terms.reserve(count);
   }
 
   Terms(Terms&& other)
-  : m_terms(std::move(other.m_terms)) {}
+  : terms(std::move(other.terms)) {}
 
   void push_back(const T& term)
   {
-    m_terms.push_back(term);
+    terms.push_back(term);
   }
 
   size_t size() const
   {
-    return m_terms.size();
+    return terms.size();
   }
 
   T at(size_t pos) const
   {
-    return static_cast<const T>(m_terms.at(pos));
+    return static_cast<const T>(terms.at(pos));
   }
 };
 
-class UnsafeNaryExpr : public virtual UnsafeExpr
+template<Opcode opcode>
+class NaryExpr : public Expr
 {
 private:
-  const Opcode m_opcode;
   const UnsafeTerms m_operands;
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_nary(m_opcode, UnsafeExpr::sort(),
-      m_operands);
+    return solver.encode_nary(opcode, Expr::sort(), m_operands);
   }
 
 protected:
@@ -1577,12 +1472,10 @@ protected:
 public:
   // Sort must be statically allocated and
   // there must be at least one operand.
-  UnsafeNaryExpr(
+  NaryExpr(
     const Sort& sort,
-    Opcode opcode,
     UnsafeTerms&& operands)
-  : UnsafeExpr(NARY_EXPR_KIND, sort),
-    m_opcode(opcode),
+  : Expr(NARY_EXPR_KIND, sort),
     m_operands(std::move(operands))
   {
     assert(!m_operands.empty());
@@ -1590,43 +1483,23 @@ public:
 
   // Sort must be statically allocated and
   // there must be at least one operand.
-  UnsafeNaryExpr(
+  NaryExpr(
     const Sort& sort,
-    Opcode opcode,
     const UnsafeTerms& operands)
-  : UnsafeExpr(NARY_EXPR_KIND, sort),
-    m_opcode(opcode),
+  : Expr(NARY_EXPR_KIND, sort),
     m_operands(operands)
   {
     assert(!m_operands.empty());
   }
-};
-
-template<Opcode opcode, typename T, typename U = T>
-class NaryExpr : public UnsafeNaryExpr, public Expr<U>
-{
-public:
-  // There must be at least one operand.
-  NaryExpr(Terms<T>&& operands)
-  : UnsafeExpr(NARY_EXPR_KIND, internal::sort<U>()),
-    UnsafeNaryExpr(internal::sort<U>(), opcode,
-      std::move(operands.m_terms)),
-    Expr<U>(NARY_EXPR_KIND) {}
-
-  // There must be at least one operand.
-  NaryExpr(const Terms<T>& operands)
-  : UnsafeExpr(NARY_EXPR_KIND, internal::sort<U>()),
-    UnsafeNaryExpr(internal::sort<U>(), opcode, operands.m_terms),
-    Expr<U>(NARY_EXPR_KIND) {}
 
   size_t size() const
   {
-    return UnsafeNaryExpr::operands().size();
+    return m_operands.size();
   }
 
-  T operand(size_t pos) const
+  const UnsafeTerm& operand(size_t n) const
   {
-    return static_cast<const T>(UnsafeNaryExpr::operands().at(pos));
+    return m_operands.at(n);
   }
 };
 
@@ -1635,51 +1508,37 @@ UnsafeTerm distinct(UnsafeTerms&& terms);
 template<typename T>
 Bool distinct(Terms<T>&& terms)
 {
-  return Bool(new NaryExpr<NEQ, T, Bool>(std::move(terms)));
+  return Bool(std::make_shared<NaryExpr<NEQ>>(
+    internal::sort<Bool>(), std::move(terms.terms)));
 }
 
-class UnsafeConstArrayExpr : public virtual UnsafeExpr
+class ConstArrayExpr : public Expr
 {
 private:
   const UnsafeTerm m_init;
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_const_array(UnsafeExpr::sort(), m_init);
+    return solver.encode_const_array(Expr::sort(), m_init);
   }
 
 public:
   // Allocate sort statically!
-  UnsafeConstArrayExpr(const Sort& sort, const UnsafeTerm& init)
-  : UnsafeExpr(CONST_ARRAY_EXPR_KIND, sort),
+  ConstArrayExpr(const Sort& sort, const UnsafeTerm& init)
+  : Expr(CONST_ARRAY_EXPR_KIND, sort),
     m_init(init)
   {
     assert(!m_init.is_null());
+    assert(sort.is_array());
   }
-};
 
-template<typename Domain, typename Range>
-class ConstArrayExpr
-: public UnsafeConstArrayExpr, public Expr<Array<Domain, Range>>
-{
-private:
-  const Range m_init;
-
-public:
-  ConstArrayExpr(const Range& init)
-  : UnsafeExpr(CONST_ARRAY_EXPR_KIND,
-      internal::sort<Array<Domain, Range>>()),
-    UnsafeConstArrayExpr(internal::sort<Array<Domain, Range>>(), init),
-    Expr<Array<Domain, Range>>(CONST_ARRAY_EXPR_KIND),
-    m_init(init) {}
-
-  const Range& init() const
+  const UnsafeTerm& init() const
   {
     return m_init;
   }
 };
 
-class UnsafeArraySelectExpr : public virtual UnsafeExpr
+class ArraySelectExpr : public Expr
 {
 private:
   const UnsafeTerm m_array;
@@ -1691,47 +1550,29 @@ private:
   }
 
 public:
-  UnsafeArraySelectExpr(
+  ArraySelectExpr(
     const UnsafeTerm& array,
     const UnsafeTerm& index)
-  : UnsafeExpr(ARRAY_SELECT_EXPR_KIND, array.sort().sorts(1)),
+  : Expr(ARRAY_SELECT_EXPR_KIND, array.sort().sorts(/* range */ 1)),
     m_array(array),
     m_index(index)
   {
     assert(!m_array.is_null());
     assert(!m_index.is_null());
   }
-};
 
-template<typename Domain, typename Range>
-class ArraySelectExpr : public UnsafeArraySelectExpr, public Expr<Range>
-{
-private:
-  const Array<Domain, Range> m_array;
-  const Domain m_index;
-
-public:
-  ArraySelectExpr(
-    const Array<Domain, Range>& array,
-    const Domain& index)
-  : UnsafeExpr(ARRAY_SELECT_EXPR_KIND, internal::sort<Range>()),
-    UnsafeArraySelectExpr(array, index),
-    Expr<Range>(ARRAY_SELECT_EXPR_KIND),
-    m_array(array),
-    m_index(index) {}
-
-  const Array<Domain, Range>& array() const
+  const UnsafeTerm& array() const
   {
     return m_array;
   }
 
-  const Domain& index() const
+  const UnsafeTerm& index() const
   {
     return m_index;
   }
 };
 
-class UnsafeArrayStoreExpr : public virtual UnsafeExpr
+class ArrayStoreExpr : public Expr
 {
 private:
   const UnsafeTerm m_array;
@@ -1745,11 +1586,11 @@ private:
 
 public:
   // Allocate sort statically!
-  UnsafeArrayStoreExpr(
+  ArrayStoreExpr(
     const UnsafeTerm& array,
     const UnsafeTerm& index,
     const UnsafeTerm& value)
-  : UnsafeExpr(ARRAY_STORE_EXPR_KIND, array.sort()),
+  : Expr(ARRAY_STORE_EXPR_KIND, array.sort()),
     m_array(array),
     m_index(index),
     m_value(value)
@@ -1758,44 +1599,18 @@ public:
     assert(!m_index.is_null());
     assert(!m_value.is_null());
   }
-};
 
-template<typename Domain, typename Range>
-class ArrayStoreExpr
-: public UnsafeArrayStoreExpr, public Expr<Array<Domain, Range>>
-{
-private:
-  const Array<Domain, Range> m_array;
-  const Domain m_index;
-  const Range m_value;
-
-public:
-  ArrayStoreExpr(
-    const Array<Domain, Range>& array,
-    const Domain& index,
-    const Range& value)
-  : UnsafeExpr(ARRAY_STORE_EXPR_KIND,
-      internal::sort<Array<Domain, Range>>()),
-    UnsafeArrayStoreExpr(
-      array,
-      index,
-      value),
-    Expr<Array<Domain, Range>>(ARRAY_STORE_EXPR_KIND),
-    m_array(array),
-    m_index(index),
-    m_value(value) {}
-
-  const Array<Domain, Range>& array() const
+  const UnsafeTerm& array() const
   {
     return m_array;
   }
 
-  const Domain& index() const
+  const UnsafeTerm& index() const
   {
     return m_index;
   }
 
-  const Range& value() const
+  const UnsafeTerm& value() const
   {
     return m_value;
   }
@@ -1810,7 +1625,7 @@ Range select(
   const Array<Domain, Range>& array,
   const Domain& index)
 {
-  return Range(new ArraySelectExpr<Domain, Range>(array, index));
+  return Range(std::make_shared<ArraySelectExpr>(array, index));
 }
 
 UnsafeTerm store(
@@ -1825,7 +1640,7 @@ Array<Domain, Range> store(
   const Range& value)
 {
   return Array<Domain, Range>(
-    new ArrayStoreExpr<Domain, Range>(array, index, value));
+    std::make_shared<ArrayStoreExpr>(array, index, value));
 }
 
 UnsafeTerm implies(
@@ -1852,7 +1667,8 @@ struct Identity<LAND, Bool>
     std::is_base_of<smt::internal::Term<T>, T>::value>::type>                  \
   inline T operator op(const T& arg)                                           \
   {                                                                            \
-    return T(new smt::UnaryExpr<smt::opcode, T>(arg));                         \
+    return T(std::make_shared<smt::UnaryExpr<smt::opcode>>(                    \
+      smt::internal::sort<T>(), arg));                                         \
   }                                                                            \
 
 #define SMT_BUILTIN_BINARY_OP(op, opcode)                                      \
@@ -1860,7 +1676,8 @@ struct Identity<LAND, Bool>
     std::is_base_of<smt::internal::Term<T>, T>::value>::type>                  \
   inline T operator op(const T& larg, const T& rarg)                           \
   {                                                                            \
-    return T(new smt::BinaryExpr<smt::opcode, T>(larg, rarg));                 \
+    return T(std::make_shared<smt::BinaryExpr<smt::opcode>>(                   \
+      smt::internal::sort<T>(), larg, rarg));                                  \
   }                                                                            \
   template<typename T, typename U, typename Enable =                           \
     typename std::enable_if<std::is_base_of<smt::internal::Term<T>, T>::value  \
@@ -1883,8 +1700,8 @@ struct Identity<LAND, Bool>
       std::is_base_of<smt::internal::Term<T>, T>::value>::type>                \
   inline smt::Bool operator op(const T& larg, const T& rarg)                   \
   {                                                                            \
-    return smt::Bool(                                                          \
-      new smt::BinaryExpr<smt::opcode, T, smt::Bool>(larg, rarg));             \
+    return smt::Bool(std::make_shared<smt::BinaryExpr<smt::opcode>>(           \
+      smt::internal::sort<smt::Bool>(), larg, rarg));                          \
   }                                                                            \
   template<typename T, typename U, typename Enable =                           \
     typename std::enable_if<std::is_base_of<smt::internal::Term<T>, T>::value  \
@@ -1920,15 +1737,16 @@ SMT_BUILTIN_BINARY_REL(==, EQL)
   template<typename T>                                                         \
   inline smt::Bv<T> operator op(const smt::Bv<T>& arg)                         \
   {                                                                            \
-    return smt::Bv<T>(new smt::UnaryExpr<smt::opcode, smt::Bv<T>>(arg));       \
+    return smt::Bv<T>(std::make_shared<smt::UnaryExpr<smt::opcode>>(           \
+      smt::internal::sort<smt::Bv<T>>(), arg));                                \
   }                                                                            \
 
 #define SMT_BUILTIN_BV_BINARY_OP(op, opcode)                                   \
   template<typename T>                                                         \
   inline smt::Bv<T> operator op(const smt::Bv<T>& larg, const smt::Bv<T>& rarg)\
   {                                                                            \
-    return smt::Bv<T>(                                                         \
-      new smt::BinaryExpr<smt::opcode, smt::Bv<T>>(larg, rarg));               \
+    return smt::Bv<T>(std::make_shared<smt::BinaryExpr<smt::opcode>>(          \
+      smt::internal::sort<smt::Bv<T>>(), larg, rarg));                         \
   }                                                                            \
   template<typename T>                                                         \
   inline smt::Bv<T> operator op(const smt::Bv<T>& larg, const T rscalar)       \
@@ -1950,15 +1768,15 @@ SMT_BUILTIN_BV_BINARY_OP(^, XOR)
 #define SMT_BUILTIN_BOOL_UNARY_OP(op, opcode)                                  \
   inline smt::Bool operator op(const smt::Bool& arg)                           \
   {                                                                            \
-    return smt::Bool(                                                          \
-      new smt::UnaryExpr<smt::opcode, smt::Bool>(arg));                        \
+    return smt::Bool(std::make_shared<smt::UnaryExpr<smt::opcode>>(            \
+      smt::internal::sort<smt::Bool>(), arg));                                 \
   }                                                                            \
 
 #define SMT_BUILTIN_BOOL_BINARY_OP(op, opcode)                                 \
   inline smt::Bool operator op(const smt::Bool& larg, const smt::Bool& rarg)   \
   {                                                                            \
-    return smt::Bool(                                                          \
-      new smt::BinaryExpr<smt::opcode, smt::Bool>(larg, rarg));                \
+    return smt::Bool(std::make_shared<smt::BinaryExpr<smt::opcode>>(           \
+      smt::internal::sort<smt::Bool>(), larg, rarg));                          \
   }                                                                            \
   inline smt::Bool operator op(const smt::Bool& larg, const bool rscalar)      \
   {                                                                            \
@@ -1979,58 +1797,56 @@ SMT_BUILTIN_BOOL_BINARY_OP(!=, NEQ)
 #define SMT_UNSAFE_UNARY_OP(op, opcode)                                        \
   inline smt::UnsafeTerm operator op(const smt::UnsafeTerm& arg)               \
   {                                                                            \
-    return smt::UnsafeTerm(                                                    \
-      new smt::UnsafeUnaryExpr(arg.sort(), smt::opcode, arg));                 \
+    return smt::UnsafeTerm(std::make_shared<smt::UnaryExpr<smt::opcode>>(      \
+      arg.sort(), arg));                                                       \
   }                                                                            \
 
 #define SMT_UNSAFE_BINARY_OP(op, opcode)                                       \
   inline smt::UnsafeTerm operator op(const smt::UnsafeTerm& larg,              \
     const smt::UnsafeTerm& rarg)                                               \
   {                                                                            \
-    return smt::UnsafeTerm(new smt::UnsafeBinaryExpr(                          \
-      larg.sort(), smt::opcode, larg, rarg));                                  \
+    return smt::UnsafeTerm(std::make_shared<smt::BinaryExpr<smt::opcode>>(     \
+      larg.sort(), larg, rarg));                                               \
   }                                                                            \
   template<typename T, typename Enable =                                       \
     typename std::enable_if<std::is_integral<T>::value>::type>                 \
   inline smt::UnsafeTerm operator op(const T lscalar,                          \
     const smt::UnsafeTerm& rarg)                                               \
   {                                                                            \
-    return smt::UnsafeTerm(new smt::UnsafeBinaryExpr(                          \
-      rarg.sort(), smt::opcode, literal(rarg.sort(), lscalar), rarg));         \
+    return smt::UnsafeTerm(std::make_shared<smt::BinaryExpr<smt::opcode>>(     \
+      rarg.sort(), literal(rarg.sort(), lscalar), rarg));                      \
   }                                                                            \
   template<typename T, typename Enable =                                       \
     typename std::enable_if<std::is_integral<T>::value>::type>                 \
   inline smt::UnsafeTerm operator op(                                          \
     const smt::UnsafeTerm& larg, const T rscalar)                              \
   {                                                                            \
-    return smt::UnsafeTerm(new smt::UnsafeBinaryExpr(                          \
-      larg.sort(), smt::opcode, larg, literal(larg.sort(), rscalar)));         \
+    return smt::UnsafeTerm(std::make_shared<smt::BinaryExpr<smt::opcode>>(     \
+      larg.sort(), larg, literal(larg.sort(), rscalar)));                      \
   }                                                                            \
 
 #define SMT_UNSAFE_BINARY_REL(op, opcode)                                      \
   inline smt::UnsafeTerm operator op(const smt::UnsafeTerm& larg,              \
     const smt::UnsafeTerm& rarg)                                               \
   {                                                                            \
-    return smt::UnsafeTerm(new smt::UnsafeBinaryExpr(                          \
-      smt::internal::sort<smt::Bool>(), smt::opcode, larg, rarg));             \
+    return smt::UnsafeTerm(std::make_shared<smt::BinaryExpr<smt::opcode>>(     \
+      smt::internal::sort<smt::Bool>(), larg, rarg));                          \
   }                                                                            \
   template<typename T, typename Enable =                                       \
     typename std::enable_if<std::is_integral<T>::value>::type>                 \
   inline smt::UnsafeTerm operator op(const T lscalar,                          \
     const smt::UnsafeTerm& rarg)                                               \
   {                                                                            \
-    return smt::UnsafeTerm(new smt::UnsafeBinaryExpr(                          \
-      smt::internal::sort<smt::Bool>(), smt::opcode,                           \
-        literal(rarg.sort(), lscalar), rarg));                                 \
+    return smt::UnsafeTerm(std::make_shared<smt::BinaryExpr<smt::opcode>>(     \
+      smt::internal::sort<smt::Bool>(), literal(rarg.sort(), lscalar), rarg)); \
   }                                                                            \
   template<typename T, typename Enable =                                       \
     typename std::enable_if<std::is_integral<T>::value>::type>                 \
   inline smt::UnsafeTerm operator op(                                          \
     const smt::UnsafeTerm& larg, const T rscalar)                              \
   {                                                                            \
-    return smt::UnsafeTerm(new smt::UnsafeBinaryExpr(                          \
-      smt::internal::sort<smt::Bool>(), smt::opcode, larg,                     \
-        literal(larg.sort(), rscalar)));                                       \
+    return smt::UnsafeTerm(std::make_shared<smt::BinaryExpr<smt::opcode>>(     \
+      smt::internal::sort<smt::Bool>(), larg, literal(larg.sort(), rscalar))); \
   }                                                                            \
 
 SMT_UNSAFE_UNARY_OP(-, SUB)

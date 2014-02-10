@@ -12,7 +12,7 @@ TEST(SmtZ3Test, BvNoCastLiteralExpr)
 {
   Z3Solver s;
 
-  const LiteralExpr<Bv<int>> e0(42);
+  const LiteralExpr<int> e0(internal::sort<Bv<int>>(), 42);
   EXPECT_EQ(OK, e0.encode(s));
 
   const z3::expr expr(s.expr());
@@ -33,7 +33,7 @@ TEST(SmtZ3Test, BvCastLiteralExpr)
 {
   Z3Solver s;
 
-  const LiteralExpr<Bv<char>> e0('A');
+  const LiteralExpr<char> e0(internal::sort<Bv<char>>(), 'A');
   EXPECT_EQ(OK, e0.encode(s));
 
   const z3::expr expr(s.expr());
@@ -62,7 +62,7 @@ TEST(SmtZ3Test, Bv64CastLiteralExpr)
 {
   Z3Solver s;
 
-  const LiteralExpr<Bv<long>> e0(42L);
+  const LiteralExpr<long> e0(internal::sort<Bv<long>>(), 42L);
   EXPECT_EQ(OK, e0.encode(s));
 
   const z3::expr expr(s.expr());
@@ -85,7 +85,7 @@ TEST(SmtZ3Test, BoolLiteralExpr)
 {
   Z3Solver s;
 
-  const LiteralExpr<Bool, bool> e0(true);
+  const LiteralExpr<bool> e0(internal::sort<Bool>(), true);
   EXPECT_EQ(OK, e0.encode(s));
 
   const z3::expr expr(s.expr());
@@ -113,7 +113,7 @@ TEST(SmtZ3Test, IntLiteralExpr)
 {
   Z3Solver s;
 
-  const LiteralExpr<Int, char> e0('A');
+  const LiteralExpr<char> e0(internal::sort<Int>(), 'A');
   EXPECT_EQ(OK, e0.encode(s));
 
   const z3::expr expr(s.expr());
@@ -142,7 +142,7 @@ TEST(SmtZ3Test, RealLiteralExpr)
   Z3Solver s;
 
   // note that float and double are unsupported
-  const LiteralExpr<Real, int> e0(7);
+  const LiteralExpr<int> e0(internal::sort<Real>(), 7);
   EXPECT_EQ(OK, e0.encode(s));
 
   const z3::expr expr(s.expr());
@@ -210,8 +210,9 @@ TEST(SmtZ3Test, UnaryExpr)
 {
   Z3Solver s;
 
-  const Bv<int> e0_term(new LiteralExpr<Bv<int>>(42));
-  const UnaryExpr<SUB, Bv<int>> e1(e0_term);
+  const Bv<int> e0_term(std::make_shared<LiteralExpr<int>>(
+    internal::sort<Bv<int>>(), 42));
+  const UnaryExpr<SUB> e1(internal::sort<Bv<int>>(), e0_term);
 
   EXPECT_EQ(OK, e1.encode(s));
 
@@ -242,9 +243,9 @@ TEST(SmtZ3Test, BinaryExpr)
   Z3Solver s;
   z3::expr expr(s.context());
 
-  const Bv<long> e0_term(new LiteralExpr<Bv<long>>(42L));
-  const Bv<long> e1_term(new LiteralExpr<Bv<long>>(7L));
-  const BinaryExpr<ADD, Bv<long>> e2(e0_term, e1_term);
+  const Bv<long> e0_term(std::make_shared<LiteralExpr<long>>(internal::sort<Bv<long>>(), 42L));
+  const Bv<long> e1_term(std::make_shared<LiteralExpr<long>>(internal::sort<Bv<long>>(), 7L));
+  const BinaryExpr<ADD> e2(internal::sort<Bv<long>>(), e0_term, e1_term);
 
   EXPECT_EQ(OK, e2.encode(s));
 
@@ -269,7 +270,7 @@ TEST(SmtZ3Test, BinaryExpr)
   }
   solver.pop();
 
-  const BinaryExpr<LSS, Bv<long>, Bool> e3(e0_term, e1_term);
+  const BinaryExpr<LSS> e3(internal::sort<Bool>(), e0_term, e1_term);
 
   EXPECT_EQ(OK, e3.encode(s));
 
@@ -284,7 +285,7 @@ TEST(SmtZ3Test, BinaryExpr)
   }
   solver.pop();
 
-  const BinaryExpr<GTR, Bv<long>, Bool> e4(e0_term, e1_term);
+  const BinaryExpr<GTR> e4(internal::sort<Bool>(), e0_term, e1_term);
 
   EXPECT_EQ(OK, e4.encode(s));
 
@@ -377,7 +378,7 @@ TEST(SmtZ3Test, LogicalImplication)
   const Decl<Bool> d1("y");
   const Bool e0_term = constant(d0);
   const Bool e1_term = constant(d1);
-  const BinaryExpr<IMP, Bool> e2(e0_term, e1_term);
+  const BinaryExpr<IMP> e2(internal::sort<Bool>(), e0_term, e1_term);
 
   EXPECT_EQ(OK, e2.encode(s));
 
@@ -409,8 +410,9 @@ TEST(SmtZ3Test, UnaryFuncAppExpr)
   Z3Solver s;
 
   Decl<Func<Int, Bv<long>>> d0("f");
-  const Int e1_term(new LiteralExpr<Int, int>(7));
-  const FuncAppExpr<Int, Bv<long>> e2(d0, std::make_tuple(e1_term));
+  const Int e1_term(std::make_shared<LiteralExpr<int>>(
+    internal::sort<Int>(), 7));
+  const FuncAppExpr<1> e2(d0, { e1_term });
 
   EXPECT_EQ(OK, e2.encode(s));
   const z3::expr app_expr(s.expr());
@@ -456,9 +458,9 @@ TEST(SmtZ3Test, BinaryFuncAppExpr)
 
   const Decl<Func<Int, Bv<bool>, Bv<long>>> d0("f");
   const Decl<Bv<bool>> d2("x");
-  const Int e1_term(new LiteralExpr<Int, int>(7));
+  const Int e1_term(std::make_shared<LiteralExpr<int>>(internal::sort<Int>(), 7));
   const Bv<bool> e2_term = constant(d2);
-  const FuncAppExpr<Int, Bv<bool>, Bv<long>> e3(d0, std::make_tuple(e1_term, e2_term));
+  const FuncAppExpr<2> e3(d0, { e1_term, e2_term });
 
   EXPECT_EQ(OK, e3.encode(s));
   const z3::expr app_expr(s.expr());
@@ -505,8 +507,9 @@ TEST(SmtZ3Test, ConstArrayExpr)
 {
   Z3Solver s;
 
-  const Int init_term(new LiteralExpr<Int, int>(7));
-  const ConstArrayExpr<Int, Int> e0(init_term);
+  const Int init_term(std::make_shared<LiteralExpr<int>>(
+    internal::sort<Int>(), 7));
+  const ConstArrayExpr e0(internal::sort<Array<Int, Int>>(), init_term);
 
   EXPECT_EQ(OK, e0.encode(s));
 
@@ -551,7 +554,7 @@ TEST(SmtZ3Test, ArraySelectExpr)
   const Decl<Int> index_decl("i");
   const Array<Int, Bool> array_term = constant(array_decl);
   const Int index_term = constant(index_decl);
-  const ArraySelectExpr<Int, Bool> e0(array_term, index_term);
+  const ArraySelectExpr e0(array_term, index_term);
 
   EXPECT_EQ(OK, e0.encode(s));
 
@@ -585,8 +588,9 @@ TEST(SmtZ3Test, ArrayStoreExpr)
   const Decl<Int> index_decl("i");
   const Array<Int, Int> array_term = constant(array_decl);
   const Int index_term = constant(index_decl);
-  const Int value_term(new LiteralExpr<Int, int>(7));
-  const ArrayStoreExpr<Int, Int> e0(array_term, index_term, value_term);
+  const Int value_term(std::make_shared<LiteralExpr<int>>(
+    internal::sort<Int>(), 7));
+  const ArrayStoreExpr e0(array_term, index_term, value_term);
 
   EXPECT_EQ(OK, e0.encode(s));
 

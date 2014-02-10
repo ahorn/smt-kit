@@ -27,14 +27,17 @@ const Sort& bv_sort(bool is_signed, size_t size)
 
 UnsafeTerm constant(const UnsafeDecl& decl)
 {
-  return UnsafeTerm(new UnsafeConstantExpr(decl));
+  return UnsafeTerm(std::make_shared<ConstantExpr>(decl));
 }
 
 UnsafeTerm apply(
   const UnsafeDecl& func_decl,
   const UnsafeTerm& arg)
 {
-  return UnsafeTerm(new UnsafeFuncAppExpr<1>(func_decl, { arg }));
+  constexpr size_t arity = 1;
+  std::array<UnsafeTerm, arity> args = { arg };
+  return UnsafeTerm(std::make_shared<FuncAppExpr<arity>>(
+    func_decl, std::move(args)));
 }
 
 UnsafeTerm apply(
@@ -42,35 +45,40 @@ UnsafeTerm apply(
   const UnsafeTerm& larg,
   const UnsafeTerm& rarg)
 {
-  return UnsafeTerm(new UnsafeFuncAppExpr<2>(func_decl, { larg, rarg }));
+  constexpr size_t arity = 2;
+  std::array<UnsafeTerm, arity> args = { larg, rarg };
+  return UnsafeTerm(std::make_shared<FuncAppExpr<arity>>(
+    func_decl, std::move(args)));
 }
 
 UnsafeTerm distinct(UnsafeTerms&& terms)
 {
-  return UnsafeTerm(new UnsafeNaryExpr(
-    internal::sort<Bool>(), NEQ, std::move(terms)));
+  return UnsafeTerm(std::make_shared<NaryExpr<NEQ>>(
+    internal::sort<Bool>(), std::move(terms)));
 }
 
 UnsafeTerm select(
   const UnsafeTerm& array,
   const UnsafeTerm& index)
 {
-  return UnsafeTerm(new UnsafeArraySelectExpr(array, index));
+  return UnsafeTerm(std::make_shared<ArraySelectExpr>(
+    array, index));
 }
 
 UnsafeTerm implies(
   const UnsafeTerm& larg,
   const UnsafeTerm& rarg)
 {
-  return UnsafeTerm(new UnsafeBinaryExpr(
-    internal::sort<Bool>(), IMP, larg, rarg));
+  return UnsafeTerm(std::make_shared<BinaryExpr<IMP>>(
+    internal::sort<Bool>(), larg, rarg));
 }
 
 Bool implies(
   const Bool& larg,
   const Bool& rarg)
 {
-  return Bool(new BinaryExpr<IMP, Bool>(larg, rarg));
+  return Bool(std::make_shared<BinaryExpr<IMP>>(
+    internal::sort<Bool>(), larg, rarg));
 }
 
 UnsafeTerm store(
@@ -78,7 +86,8 @@ UnsafeTerm store(
   const UnsafeTerm& index,
   const UnsafeTerm& value)
 {
-  return UnsafeTerm(new UnsafeArrayStoreExpr(array, index, value));
+  return UnsafeTerm(std::make_shared<ArrayStoreExpr>(
+    array, index, value));
 }
 
 Error Solver::encode_constant(
