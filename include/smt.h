@@ -961,7 +961,7 @@ public:
   template<typename T>
   explicit operator T() const
   {
-    // TODO: Is cast successful?
+    assert(is_null() || internal::sort<T>() == sort());
     return T(m_ptr);
   }
 
@@ -1029,19 +1029,33 @@ namespace internal
     : m_ptr(nullptr) {}
 
     Term(const std::shared_ptr<const Expr>& ptr)
-    : m_ptr(ptr) {}
+    : m_ptr(ptr)
+    {
+      assert(is_null() || internal::sort<T>() == sort());
+    }
 
     Term(std::shared_ptr<const Expr>&& ptr)
-    : m_ptr(std::move(ptr)) {}
+    : m_ptr(std::move(ptr))
+    {
+      assert(is_null() || internal::sort<T>() == sort());
+    }
 
     Term(const Term& other)
-    : m_ptr(other.m_ptr) {}
+    : m_ptr(other.m_ptr)
+    {
+      assert(is_null() || internal::sort<T>() == sort());
+    }
 
     Term(Term&& other)
-    : m_ptr(std::move(other.m_ptr)) {}
+    : m_ptr(std::move(other.m_ptr))
+    {
+      assert(is_null() || internal::sort<T>() == sort());
+    }
 
     Term& operator=(const Term& other) 
     {
+      assert(other.is_null() || internal::sort<T>() == other.sort());
+
       m_ptr = other.m_ptr;
       return *this;
     }
