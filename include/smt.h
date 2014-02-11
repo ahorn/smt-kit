@@ -1397,6 +1397,7 @@ public:
   }
 };
 
+/// Two operand instruction whose operands must be the same sort
 template<Opcode opcode>
 class BinaryExpr : public Expr
 {
@@ -1411,7 +1412,7 @@ private:
   }
 
 public:
-  // Allocate sort statically!
+  // Allocate sort statically, operands must have the same sort!
   BinaryExpr(
     const Sort& sort,
     const UnsafeTerm& loperand,
@@ -1422,6 +1423,7 @@ public:
   {
     assert(!m_loperand.is_null());
     assert(!m_roperand.is_null());
+    assert(m_loperand.sort() == m_roperand.sort());
   }
 
   const UnsafeTerm& loperand() const
