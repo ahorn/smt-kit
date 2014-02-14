@@ -1404,6 +1404,7 @@ public:
   }
 };
 
+#define _SUP_READ_FROM_ 1
 class Encoder
 {
 public:
@@ -1414,6 +1415,10 @@ public:
 
 private:
   static const std::string s_time_prefix;
+#ifdef _SUP_READ_FROM_
+  static const std::string s_sup_time_prefix;
+#endif
+
   static const std::string s_rf_prefix;
   static const std::string s_pf_prefix;
   static const std::string s_ldf_prefix;
@@ -1442,6 +1447,11 @@ private:
 
   smt::Z3Solver m_solver;
   std::unordered_map<EventIdentifier, Time> m_time_map;
+
+#ifdef _SUP_READ_FROM_
+  std::unordered_map<EventIdentifier, Time> m_sup_time_map;
+#endif
+
   const Time m_epoch;
 
   /// Uses e's identifier to build a numerical SMT variable
@@ -1465,6 +1475,65 @@ private:
 #endif
   }
 
+#ifdef _SUP_READ_FROM_
+
+  /// Uses a read event's identifier to build a numerical SMT variable
+  const Time& sup_time(const Event& e)
+  {
+    assert(e.is_read());
+
+    if (m_sup_time_map.find(e.event_id) == m_sup_time_map.cend())
+    {
+      Time time(smt::any<TimeSort>(prefix_event_id(s_sup_time_prefix, e)));
+      m_solver.add(m_epoch.happens_before(time));
+      m_sup_time_map.insert(std::make_pair(e.event_id, time));
+    }
+
+    return m_sup_time_map.at(e.event_id);
+  }
+
+  // Unpublished quadratic-size encoding
+  void encode_read_from(const PerAddressIndex& per_address_index)
+  {
+    smt::UnsafeTerm and_rf(smt::literal<smt::Bool>(true));
+    for (const PerAddressIndex::value_type& pair : per_address_index)
+    {
+      const EventKinds& a = pair.second;
+      for (const EventIter r_iter : a.reads())
+      {
+        const Event& r = *r_iter;
+        const Time& r_time = time(r);
+        const Time& r_sup_time = sup_time(r);
+
+        smt::UnsafeTerm or_rf(smt::literal<smt::Bool>(false));
+        for (const EventIter w_iter : a.writes())
+        {
+          const Event& w = *w_iter;
+
+          const smt::Bool wr_order(time(w).simultaneous_or_happens_before(r_time));
+          const smt::Bool wr_sup(r_sup_time.simultaneous(time(w)));
+          const smt::Bool rf_bool(flow_bool(s_rf_prefix, w, r));
+          const smt::UnsafeTerm wr_equality(w.term == r.term);
+
+          or_rf = rf_bool or or_rf;
+          and_rf = and_rf and
+            smt::implies(
+            /* if */ rf_bool,
+            /* then */ r.guard and w.guard and
+                       wr_order and wr_equality and wr_sup) and
+            smt::implies(
+            /* if */ wr_order and w.guard,
+            /* then */ time(w).simultaneous_or_happens_before(r_sup_time));
+        }
+        and_rf = and_rf and smt::implies(r.guard, or_rf);
+      }
+    }
+    unsafe_add(and_rf);
+  }
+
+#else
+
+  // CAV'13 cubic-size encoding
   void encode_read_from(const PerAddressIndex& per_address_index)
   {
     smt::UnsafeTerm and_rf(smt::literal<smt::Bool>(true));
@@ -1498,6 +1567,7 @@ private:
     unsafe_add(and_rf);
   }
 
+  // CAV'13 cubic-size encoding
   void encode_from_read(const PerAddressIndex& per_address_index)
   {
     smt::UnsafeTerm and_fr(smt::literal<smt::Bool>(true));
@@ -1531,6 +1601,8 @@ private:
     unsafe_add(and_fr);
   }
 
+#endif
+
   void encode_write_serialization(const PerAddressIndex& per_address_index)
   {
     smt::UnsafeTerm and_ws(smt::literal<smt::Bool>(true));
@@ -1557,7 +1629,9 @@ private:
   {
     const PerAddressIndex& per_address_index = tracer.per_address_index();
     encode_read_from(per_address_index);
+#ifndef _SUP_READ_FROM_
     encode_from_read(per_address_index);
+#endif
     encode_write_serialization(per_address_index);
   }
 
@@ -2197,6 +2271,9 @@ public:
   : m_solver(smt::QF_LRA_LOGIC),
 #endif
     m_time_map(),
+#ifdef _SUP_READ_FROM_
+    m_sup_time_map(),
+#endif
     m_epoch(smt::literal<TimeSort>(0)) {}
 
   /// Checks only whether there is a communication deadlock

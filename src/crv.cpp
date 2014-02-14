@@ -4,7 +4,12 @@ namespace crv
 {
 
 const std::string Tracer::s_value_prefix = "v!";
+
 const std::string Encoder::s_time_prefix = "t!";
+#ifdef _SUP_READ_FROM_
+const std::string Encoder::s_sup_time_prefix = "s!";
+#endif
+
 const std::string Encoder::s_rf_prefix = "rf!";
 const std::string Encoder::s_pf_prefix = "pf!";
 const std::string Encoder::s_ldf_prefix = "ldf!";
