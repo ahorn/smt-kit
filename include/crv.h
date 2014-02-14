@@ -288,7 +288,7 @@ struct Smt
   typedef typename std::conditional<
     /* if */ std::is_same<bool, T>::value,
     /* then */ smt::Bool,
-    /* else */ smt::Int>::type Sort;
+    /* else */ smt::Real>::type Sort;
 };
 
 /// Nesting of branches within a single thread
@@ -1359,7 +1359,7 @@ namespace crv
 #ifdef __BV_TIME__
 typedef smt::Bv<unsigned short> TimeSort;
 #else
-typedef smt::Int TimeSort;
+typedef smt::Real TimeSort;
 #endif
 
 class Time
@@ -1440,7 +1440,7 @@ private:
     return x.event_id == app;
   }
 
-  smt::CVC4Solver m_solver;
+  smt::Z3Solver m_solver;
   std::unordered_map<EventIdentifier, Time> m_time_map;
   const Time m_epoch;
 
@@ -2194,7 +2194,7 @@ public:
 #ifdef __BV_TIME__
   : m_solver(smt::QF_AUFBV_LOGIC),
 #else
-  : m_solver(smt::QF_AUFLIA_LOGIC),
+  : m_solver(smt::QF_LRA_LOGIC),
 #endif
     m_time_map(),
     m_epoch(smt::literal<TimeSort>(0)) {}
