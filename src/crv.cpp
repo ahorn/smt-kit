@@ -21,12 +21,12 @@ Tracer& tracer() {
 
 void Tracer::add_assertion(Internal<bool>&& assertion)
 {
-  m_assertions.push_back(std::move(assertion.term));
+  m_assertions.push_back(Internal<bool>::term(std::move(assertion)));
 }
 
 void Tracer::add_error(Internal<bool>&& error)
 {
-  m_errors.push_back(guard() and std::move(error.term));
+  m_errors.push_back(guard() and Internal<bool>::term(std::move(error)));
 }
 
 void Tracer::append_channel_send_event(const Address address, const smt::UnsafeTerm& term)
@@ -59,9 +59,9 @@ bool Tracer::decide_flip(
   }
 
   if (direction)
-    m_guard = m_guard and g.term;
+    m_guard = m_guard and Internal<bool>::term(g);
   else
-    m_guard = m_guard and not g.term;
+    m_guard = m_guard and not Internal<bool>::term(g);
 
   m_scope_stack.top().guard = m_guard;
 
@@ -76,9 +76,9 @@ void Tracer::scope_then(const Internal<bool>& g)
     ScopeLevel>::max());
 
   m_block_id_cnt++;
-  m_scope_stack.emplace(guard(), g.term,
+  m_scope_stack.emplace(guard(), Internal<bool>::term(g),
     m_scope_stack.top().level + 1);
-  m_guard = m_guard and g.term;
+  m_guard = m_guard and Internal<bool>::term(g);
 }
 
 void Tracer::scope_else()

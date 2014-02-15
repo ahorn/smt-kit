@@ -332,6 +332,8 @@ enum Opcode : unsigned char
   LNOT, // !
   NOT,  // ~
   SUB,  // -
+  ADD,  // +
+  MUL,  // *
   AND,  // &
   OR,   // |
   XOR,  // ^
@@ -339,8 +341,6 @@ enum Opcode : unsigned char
   LOR,  // ||
   IMP,  // logical implication
   EQL,  // ==
-  ADD,  // +
-  MUL,  // *
   QUO,  // /
   REM,  // %
   LSS,  // <

@@ -855,95 +855,411 @@ typename Smt<T>::Sort append_input_event(const External<T>& external)
     return tracer().append_load_event(external);
 }
 
+namespace simplifier
+{
+  /// Functor that applies a binary operation to an SMT term and literal
+  template<class T>
+  class AbstractOp
+  {
+  protected:
+    AbstractOp() {}
+
+    // no polymorphic deletes
+    ~AbstractOp() {}
+
+  public:
+    AbstractOp(const AbstractOp&) = delete;
+
+    typedef typename Smt<T>::Sort Term;
+
+    virtual smt::Opcode opcode() const = 0;
+    virtual Term fuse(const Term& u, const T& v) const = 0;
+    virtual Term fuse(const Term& u, T&& v) const = 0;
+    virtual Term fuse(Term&& u, const T& v) const = 0;
+    virtual Term fuse(Term&& u, T&& v) const = 0;
+  };
+
+  /// Singleton class, use sole static member function
+  template<smt::Opcode _opcode, class T>
+  class Op : public AbstractOp<T>
+  {
+  private:
+    Op() : AbstractOp<T>() {}
+
+  public:
+    using typename AbstractOp<T>::Term;
+
+    static const Op* op_ptr()
+    {
+      static Op s_op;
+      static const Op* const s_op_ptr = &s_op;
+      return s_op_ptr;
+    }
+
+    smt::Opcode opcode() const override
+    {
+      return _opcode;
+    }
+
+    Term fuse(Term&& u, T&& v) const override
+    {
+      return internal::Eval<_opcode>::eval(std::move(u), std::move(v));
+    }
+
+    Term fuse(Term&& u, const T& v) const override
+    {
+      return internal::Eval<_opcode>::eval(std::move(u), v);
+    }
+
+    Term fuse(const Term& u, const T& v) const override
+    {
+      return internal::Eval<_opcode>::eval(u, v);
+    }
+
+    Term fuse(const Term& u, T&& v) const override
+    {
+      return internal::Eval<_opcode>::eval(u, std::move(v));
+    }
+  };
+}
+
+// Uses lazy SMT terms for fast constant propagation in commutative monoids
+
+// Call the static member function Internal<T>::term(const Internal<T>&)
+// to get simplified SMT term
 template<typename T>
 class Internal
 {
-public:
-  typename Smt<T>::Sort term;
+private:
+  // lazy unless m_op == nullptr
+  typename Smt<T>::Sort m_term;
 
-  Internal(const Internal& other)
-  : term(other.term) {}
+  // intermediate result of propagating constants in a commutative monoid
+  // structure where the operator corresponds to m_op->opcode()
+  T m_temporary;
 
-  Internal(Internal&& other)
-  : term(std::move(other.term)) {}
+  // Statically allocated, do not delete!
+  const simplifier::AbstractOp<T>* m_op;
 
-  explicit Internal(typename Smt<T>::Sort&& term_arg)
-  : term(std::move(term_arg)) {}
-
-  Internal(T v)
-  : term(smt::literal<typename Smt<T>::Sort>(v)) {}
-
-  Internal(const External<T>& other)
-  : term()
+  explicit Internal(
+    const typename Smt<T>::Sort& term,
+    const T temporary,
+    const simplifier::AbstractOp<T>* const op)
+  : m_term(term),
+    m_temporary(temporary),
+    m_op(op)
   {
-    term = append_input_event(other);
+    assert(!m_term.is_null());
   }
 
-  Internal& operator=(Internal<T>&& other)
+  explicit Internal(
+    typename Smt<T>::Sort&& term,
+    const T temporary,
+    const simplifier::AbstractOp<T>* const op)
+  : m_term(std::move(term)),
+    m_temporary(temporary),
+    m_op(op)
   {
-    term = std::move(other.term);
+    assert(!m_term.is_null());
+  }
+
+public:
+  Internal(const Internal& other)
+  : m_term(other.m_term),
+    m_temporary(other.m_temporary),
+    m_op(other.m_op)
+  {
+    assert(!m_term.is_null());
+  }
+
+  Internal(Internal&& other)
+  : m_term(std::move(other.m_term)),
+    m_temporary(std::move(other.m_temporary)),
+    m_op(other.m_op)
+  {
+    assert(!m_term.is_null());
+  }
+
+  explicit Internal(typename Smt<T>::Sort&& term)
+  : m_term(std::move(term)),
+    m_temporary(),
+    m_op(nullptr)
+  {
+    assert(!m_term.is_null());
+  }
+
+  Internal(T v)
+  : m_term(smt::literal<typename Smt<T>::Sort>(v)),
+    m_temporary(),
+    m_op(nullptr)
+  {
+    assert(!m_term.is_null());
+  }
+
+  Internal(const External<T>& other)
+  : m_term(),
+    m_temporary(),
+    m_op(nullptr)
+  {
+    m_term = append_input_event(other);
+    assert(!m_term.is_null());
+  }
+
+  bool is_lazy() const
+  {
+    return m_op != nullptr;
+  }
+
+  // \pre: is_lazy()
+  smt::Opcode opcode() const
+  {
+    assert(is_lazy());
+    return m_op->opcode();
+  }
+
+  Internal& operator=(Internal&& other)
+  {
+    m_term = std::move(other.m_term);
+    m_temporary = std::move(other.m_temporary);
+    m_op = other.m_op;
     return *this;
   }
 
   Internal& operator=(const Internal& other)
   {
-    term = other.term;
+    m_term = other.m_term;
+    m_temporary = other.m_temporary;
+    m_op = other.m_op;
     return *this;
+  }
+
+  template<smt::Opcode opcode>
+  static Internal fresh_lazy(const Internal& arg, const T literal)
+  {
+    assert(arg.m_op == nullptr);
+    return Internal(arg.m_term, literal, simplifier::Op<opcode, T>::op_ptr());
+  }
+
+  template<smt::Opcode opcode>
+  static Internal fresh_lazy(Internal&& arg, const T literal)
+  {
+    assert(arg.m_op == nullptr);
+    return Internal(std::move(arg.m_term), literal, simplifier::Op<opcode, T>::op_ptr());
+  }
+
+  template<smt::Opcode opcode>
+  static Internal refresh_lazy(const Internal& arg, const T literal)
+  {
+    assert(arg.m_op != nullptr);
+    assert(arg.opcode() != opcode);
+    return Internal(term(arg), literal, simplifier::Op<opcode, T>::op_ptr());
+  }
+
+  template<smt::Opcode opcode>
+  static Internal refresh_lazy(Internal&& arg, const T literal)
+  {
+    assert(arg.m_op != nullptr);
+    assert(arg.opcode() != opcode);
+    return Internal(term(std::move(arg)), literal, simplifier::Op<opcode, T>::op_ptr());
+  }
+
+  /// Propagate constants in commutative monoids
+  template<smt::Opcode opcode>
+  static Internal propagate(const Internal& arg, const T literal)
+  {
+    return Internal(arg.m_term,
+      internal::Eval<opcode>::eval(arg.m_temporary, literal),
+      simplifier::Op<opcode, T>::op_ptr());
+  }
+
+  /// Propagate constants in commutative monoids
+  template<smt::Opcode opcode>
+  static Internal propagate(Internal&& arg, const T literal)
+  {
+    return Internal(std::move(arg.m_term),
+      internal::Eval<opcode>::eval(std::move(arg.m_temporary), literal),
+      simplifier::Op<opcode, T>::op_ptr());
+  }
+
+  /// Folds constant expressions over commutative monoid operators
+  static typename Smt<T>::Sort term(const Internal& arg)
+  {
+    if (arg.m_op == nullptr)
+      return arg.m_term;
+
+    // lazy term
+    return arg.m_op->fuse(arg.m_term, arg.m_temporary);
+  }
+
+  /// Folds constant expressions over commutative monoid operators
+  static typename Smt<T>::Sort term(Internal&& arg)
+  {
+    if (arg.m_op == nullptr)
+      return std::move(arg.m_term);
+
+    // lazy term
+    return arg.m_op->fuse(std::move(arg.m_term), std::move(arg.m_temporary));
   }
 };
 
-// TODO: Implement simplifications such as constant propagation
 namespace simplifier
 {
+  template<smt::Opcode opcode, typename T>
+  struct IsCommutativeMonoid :
+    std::integral_constant<bool,
+      std::is_integral<T>::value and
+      smt::ADD <= opcode and opcode <= smt::LOR>
+  {};
+
+  /// Constant propagation in commutative monoids
+  struct Lazy
+  {
+    template<smt::Opcode opcode, typename T, typename Enable =
+      typename std::enable_if<IsCommutativeMonoid<opcode, T>::value>::type>
+    static Internal<T> apply(const Internal<T>& arg, const T literal)
+    {
+      if (!arg.is_lazy())
+        return Internal<T>::template fresh_lazy<opcode>(arg, literal);
+
+      if (arg.opcode() == opcode)
+        return Internal<T>::template propagate<opcode>(arg, literal);
+
+      return Internal<T>::template refresh_lazy<opcode>(arg, literal);
+    }
+
+    template<smt::Opcode opcode, typename T, typename Enable =
+      typename std::enable_if<IsCommutativeMonoid<opcode, T>::value>::type>
+    static Internal<T> apply(Internal<T>&& arg, const T literal)
+    {
+      if (!arg.is_lazy())
+        return Internal<T>::template fresh_lazy<opcode>(std::move(arg), literal);
+
+      if (arg.opcode() == opcode)
+        return Internal<T>::template propagate<opcode>(std::move(arg), literal);
+
+      return Internal<T>::template refresh_lazy<opcode>(std::move(arg), literal);
+    }
+
+    template<smt::Opcode opcode, typename T, typename Enable =
+      typename std::enable_if<IsCommutativeMonoid<opcode, T>::value>::type>
+    static Internal<T> apply(const T literal, const Internal<T>& arg)
+    {
+      // by commutativity, Eval::eval(x,y) == Eval::eval(y,x)
+      return apply<opcode>(arg, literal);
+    }
+
+    template<smt::Opcode opcode, typename T, typename Enable =
+      typename std::enable_if<IsCommutativeMonoid<opcode, T>::value>::type>
+    static Internal<T> apply(const T literal, Internal<T>&& arg)
+    {
+      // by commutativity, Eval::eval(x,y) == Eval::eval(y,x)
+      return apply<opcode>(std::move(arg), literal);
+    }
+  };
+
+  // No constant propagation
+  struct Eager
+  {
+    template<smt::Opcode opcode, typename T, typename U, typename V>
+    static Internal<T> apply(const Internal<U>& u, const V literal)
+    {
+      return Internal<T>(internal::Eval<opcode>::eval(
+        Internal<U>::term(u), literal));
+    }
+
+    template<smt::Opcode opcode, typename T, typename U, typename V>
+    static Internal<T> apply(Internal<U>&& u, const V literal)
+    {
+      return Internal<T>(internal::Eval<opcode>::eval(
+        Internal<U>::term(std::move(u)), literal));
+    }
+
+    template<smt::Opcode opcode, typename T, typename U, typename V>
+    static Internal<T> apply(const U literal, const Internal<V>& v)
+    {
+      return Internal<T>(internal::Eval<opcode>::eval(
+        literal, Internal<V>::term(v)));
+    }
+
+    template<smt::Opcode opcode, typename T, typename U, typename V>
+    static Internal<T> apply(const U literal, Internal<V>&& v)
+    {
+      return Internal<T>(internal::Eval<opcode>::eval(
+        literal, Internal<V>::term(std::move(v))));
+    }
+  };
 
   template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(const Internal<U>& larg, const Internal<V>& rarg)
+  static Internal<T> apply(const Internal<U>& u, const Internal<V>& v)
   {
-    return Internal<T>(internal::Eval<opcode>::eval(larg.term, rarg.term));
+    return Internal<T>(internal::Eval<opcode>::eval(
+      Internal<U>::term(u), Internal<V>::term(v)));
   }
 
   template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(const Internal<U>& larg, Internal<V>&& rarg)
+  static Internal<T> apply(const Internal<U>& u, Internal<V>&& v)
   {
-    return Internal<T>(internal::Eval<opcode>::eval(larg.term, std::move(rarg.term)));
+    return Internal<T>(internal::Eval<opcode>::eval(
+      Internal<U>::term(u), Internal<V>::term(std::move(v))));
   }
 
   template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(const Internal<U>& larg, const V literal)
+  static Internal<T> apply(Internal<U>&& u, const Internal<V>& v)
   {
-    return Internal<T>(internal::Eval<opcode>::eval(larg.term, literal));
+    return Internal<T>(internal::Eval<opcode>::eval(
+      Internal<U>::term(std::move(u)), Internal<V>::term(v)));
   }
 
   template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(Internal<U>&& larg, const Internal<V>& rarg)
+  static Internal<T> apply(Internal<U>&& u, Internal<V>&& v)
   {
-    return Internal<T>(internal::Eval<opcode>::eval(std::move(larg.term), rarg.term));
+    return Internal<T>(internal::Eval<opcode>::eval(
+      Internal<U>::term(std::move(u)), Internal<V>::term(std::move(v))));
   }
 
   template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(Internal<U>&& larg, Internal<V>&& rarg)
+  static Internal<T> apply(const Internal<U>& u, const V literal)
   {
-    return Internal<T>(internal::Eval<opcode>::eval(std::move(larg.term), std::move(rarg.term)));
+    return std::conditional<
+      /* if */ std::is_same<T, U>::value and
+               std::is_same<U, V>::value and
+               IsCommutativeMonoid<opcode, T>::value,
+      /* then */ Lazy,
+      /* else */ Eager>::type::template apply<opcode, T>(u, literal);
   }
 
   template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(Internal<U>&& larg, const V literal)
+  static Internal<T> apply(Internal<U>&& u, const V literal)
   {
-    return Internal<T>(internal::Eval<opcode>::eval(std::move(larg.term), literal));
+    return std::conditional<
+      /* if */ std::is_same<T, U>::value and
+               std::is_same<U, V>::value and
+               IsCommutativeMonoid<opcode, T>::value,
+      /* then */ Lazy,
+      /* else */ Eager>::type::template apply<opcode, T>(std::move(u), literal);
   }
 
   template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(const U literal, const Internal<V>& rarg)
+  static Internal<T> apply(const U literal, const Internal<V>& v)
   {
-    return Internal<T>(internal::Eval<opcode>::eval(literal, rarg.term));
+    return std::conditional<
+      /* if */ std::is_same<T, U>::value and
+               std::is_same<U, V>::value and
+               IsCommutativeMonoid<opcode, T>::value,
+      /* then */ Lazy,
+      /* else */ Eager>::type::template apply<opcode, T>(literal, v);
   }
 
   template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(const U literal, Internal<V>&& rarg)
+  static Internal<T> apply(const U literal, Internal<V>&& v)
   {
-    return Internal<T>(internal::Eval<opcode>::eval(literal, std::move(rarg.term)));
+    return std::conditional<
+      /* if */ std::is_same<T, U>::value and
+               std::is_same<U, V>::value and
+               IsCommutativeMonoid<opcode, T>::value,
+      /* then */ Lazy,
+      /* else */ Eager>::type::template apply<opcode, T>(literal, std::move(v));
   }
-
 }
 
 template<typename T> class __External;
@@ -994,7 +1310,7 @@ public:
 
   External(Internal<T>&& other)
   : address(tracer().next_reserved_address()),
-    term(std::move(other.term)),
+    term(Internal<T>::term(std::move(other))),
     offset_term()
   {
     tracer().append_write_event(*this);
@@ -1024,14 +1340,14 @@ public:
 
   External& operator=(const Internal<T>& other)
   {
-    term = other.term;
+    term = Internal<T>::term(other);
     append_output_event();
     return *this;
   }
 
   External& operator=(Internal<T>&& other)
   {
-    term = std::move(other.term);
+    term = Internal<T>::term(std::move(other));
     append_output_event();
     return *this;
   }
@@ -1085,7 +1401,7 @@ __External<typename External<T>::Range>
 External<T>::operator[](const Internal<size_t>& offset)
 {
   tracer().next_reserved_address();
-  return __External<Range>(address, offset.term);
+  return __External<Range>(address, Internal<size_t>::term(offset));
 }
 
 template<typename T>
@@ -1200,7 +1516,7 @@ typename Smt<T>::Sort Tracer::append_message_recv_event(const Address address)
   -> crv::Internal<typename crv::internal::Return<smt::opcode, T>::Type>        \
   {                                                                             \
     typedef typename crv::internal::Return<smt::opcode, T>::Type ReturnType;    \
-    return crv::Internal<ReturnType>(op arg.term);                              \
+    return crv::Internal<ReturnType>(op crv::Internal<T>::term(arg));           \
   }                                                                             \
                                                                                 \
   template<typename T>                                                          \
@@ -1208,7 +1524,7 @@ typename Smt<T>::Sort Tracer::append_message_recv_event(const Address address)
   -> crv::Internal<typename crv::internal::Return<smt::opcode, T>::Type>        \
   {                                                                             \
     typedef typename crv::internal::Return<smt::opcode, T>::Type ReturnType;    \
-    return crv::Internal<ReturnType>(op std::move(arg.term));                   \
+    return crv::Internal<ReturnType>(op crv::Internal<T>::term(std::move(arg)));\
   }                                                                             \
                                                                                 \
   template<typename T>                                                          \
@@ -1372,9 +1688,8 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     V literal)                                                                  \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> u_internal(crv::append_input_event(u));                    \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
-    return crv::Internal<ReturnType>(std::move(u_internal.term) op literal);    \
+    return crv::Internal<ReturnType>(crv::append_input_event(u) op literal);    \
   }                                                                             \
                                                                                 \
   template<typename U, typename V,                                              \
@@ -1384,9 +1699,8 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::External<V>& v)                                                  \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<V> v_internal(crv::append_input_event(v));                    \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
-    return crv::Internal<ReturnType>(literal op std::move(v_internal.term));    \
+    return crv::Internal<ReturnType>(literal op crv::append_input_event(v));    \
   }                                                                             \
 
 CRV_BUILTIN_BINARY_OP(-, SUB)
@@ -2377,8 +2691,7 @@ public:
     const Tracer& tracer)
   {
     m_solver.push();
-    unsafe_add(tracer.guard() and
-      std::move(condition.term));
+    unsafe_add(tracer.guard() and Internal<bool>::term(std::move(condition)));
     encode(tracer, false);
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
@@ -2562,7 +2875,7 @@ public:
 
   void send(const Internal<T>& data)
   {
-    tracer().append_channel_send_event(m_address, data.term);
+    tracer().append_channel_send_event(m_address, Internal<T>::term(data));
   }
 
   void send(const External<T>& data)
@@ -2608,7 +2921,7 @@ public:
   static void send(const ThreadIdentifier thread_id,
     const Internal<T>& data)
   {
-    tracer().append_message_send_event(to_address(thread_id), data.term);
+    tracer().append_message_send_event(to_address(thread_id), Internal<T>::term(data));
   }
 
   template<typename T>
@@ -2650,7 +2963,7 @@ public:
 
   void push(const Internal<T>& internal)
   {
-    m_stack.term = internal.term;
+    m_stack.term = Internal<T>::term(internal);
     tracer().append_push_event(m_stack);
   }
 
