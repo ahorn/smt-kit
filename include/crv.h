@@ -2486,9 +2486,6 @@ private:
 
   void encode_communication_concurrency(const Tracer& tracer, bool check_deadlocks)
   {
-    const PerAddressIndex& per_address_index = tracer.per_address_index();
-    const PerThreadIndex& per_thread_index = tracer.per_thread_index();
-
     PerEventMap per_event_map;
     MatchBoolMap match_bool_map;
     build_matchables(tracer, per_event_map, match_bool_map);
@@ -2497,48 +2494,41 @@ private:
 
     Bools inits;
     smt::UnsafeTerm ext_match(smt::literal<smt::Bool>(true));
-    for (const PerAddressIndex::value_type& pair : per_address_index)
+    for (const MatchBoolMap::value_type& triple : match_bool_map)
     {
-      const EventKinds& a = pair.second;
-      for (const EventIter r_iter : a.channel_recvs())
-      {
-        const Time& r_time = time(*r_iter);
-        for (const EventIter s_iter : a.channel_sends())
-        {
-          if (r_iter->thread_id == s_iter->thread_id)
-            continue;
+      const MatchBoolMap::key_type& key = triple.first;
+      const EventIter r_iter = key.first;
+      const EventIter s_iter = key.second;
+      match_check(r_iter, s_iter);
 
-          const Event& r = *r_iter;
-          const Event& s = *s_iter;
-          const smt::Bool& match_bool =
-            match_bool_map.at(std::make_pair(r_iter, s_iter));
+      const Event& r = *r_iter;
+      const Event& s = *s_iter;
+      const smt::Bool& match_bool = triple.second;
 
-          smt::UnsafeTerm rs_value(smt::implies(
-            /* if */ match_bool,
-            /* then */ r.term == s.term));
+      smt::UnsafeTerm rs_value(smt::implies(
+        /* if */ match_bool,
+        /* then */ r.term == s.term));
 
-          EventIters cidoms;
-          if (cidom_map.find(r_iter) != cidom_map.cend())
-            cidoms.push_back(cidom_map.at(r_iter));
+      EventIters cidoms;
+      if (cidom_map.find(r_iter) != cidom_map.cend())
+        cidoms.push_back(cidom_map.at(r_iter));
 
-          if (cidom_map.find(s_iter) != cidom_map.cend())
-            cidoms.push_back(cidom_map.at(s_iter));
+      if (cidom_map.find(s_iter) != cidom_map.cend())
+        cidoms.push_back(cidom_map.at(s_iter));
 
-          smt::UnsafeTerm rs_ext(match_bool ==
-            (communication_match_conjunction(per_event_map,
-               match_bool_map, cidoms) and
-             communication_excl(per_event_map,
-               match_bool_map, r_iter, s_iter) and
-             r.guard and s.guard));
+      smt::UnsafeTerm rs_ext(match_bool ==
+        (communication_match_conjunction(per_event_map,
+           match_bool_map, cidoms) and
+         communication_excl(per_event_map,
+           match_bool_map, r_iter, s_iter) and
+         r.guard and s.guard));
 
-          ext_match = ext_match and rs_ext and rs_value and
-            (match_bool == r_time.simultaneous(time(s)));
+      ext_match = ext_match and rs_ext and rs_value and
+        (match_bool == time(r).simultaneous(time(s)));
 
-          if (cidom_map.find(r_iter) == cidom_map.cend() &&
-              cidom_map.find(r_iter) == cidom_map.cend())
-            inits.push_back(match_bool);
-        }
-      }
+      if (cidom_map.find(r_iter) == cidom_map.cend() &&
+          cidom_map.find(r_iter) == cidom_map.cend())
+        inits.push_back(match_bool);
     }
 
     if (check_deadlocks)
@@ -2900,7 +2890,7 @@ private:
   static Address to_address(const ThreadIdentifier thread_id)
   {
     // disallow main thread
-    assert(0 < thread_id);
+    assert(1 < thread_id);
 
     // detect overflows
     assert(thread_id < Encoder::s_max_channel_address);
