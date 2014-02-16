@@ -1165,35 +1165,47 @@ namespace simplifier
     }
   };
 
-  // No constant propagation
+  // No constant propagation but literal simplifications
   struct Eager
   {
     template<smt::Opcode opcode, typename T, typename U, typename V>
     static Internal<T> apply(const Internal<U>& u, const V literal)
     {
-      return Internal<T>(internal::Eval<opcode>::eval(
-        Internal<U>::term(u), literal));
+      if (u.is_literal())
+        return Internal<T>(internal::Eval<opcode>::eval(u.literal(), literal));
+      else
+        return Internal<T>(internal::Eval<opcode>::eval(
+          Internal<U>::term(u), literal));
     }
 
     template<smt::Opcode opcode, typename T, typename U, typename V>
     static Internal<T> apply(Internal<U>&& u, const V literal)
     {
-      return Internal<T>(internal::Eval<opcode>::eval(
-        Internal<U>::term(std::move(u)), literal));
+      if (u.is_literal())
+        return Internal<T>(internal::Eval<opcode>::eval(u.literal(), literal));
+      else
+        return Internal<T>(internal::Eval<opcode>::eval(
+          Internal<U>::term(std::move(u)), literal));
     }
 
     template<smt::Opcode opcode, typename T, typename U, typename V>
     static Internal<T> apply(const U literal, const Internal<V>& v)
     {
-      return Internal<T>(internal::Eval<opcode>::eval(
-        literal, Internal<V>::term(v)));
+      if (v.is_literal())
+        return Internal<T>(internal::Eval<opcode>::eval(literal, v.literal()));
+      else
+        return Internal<T>(internal::Eval<opcode>::eval(
+          literal, Internal<V>::term(v)));
     }
 
     template<smt::Opcode opcode, typename T, typename U, typename V>
     static Internal<T> apply(const U literal, Internal<V>&& v)
     {
-      return Internal<T>(internal::Eval<opcode>::eval(
-        literal, Internal<V>::term(std::move(v))));
+      if (v.is_literal())
+        return Internal<T>(internal::Eval<opcode>::eval(literal, v.literal()));
+      else
+        return Internal<T>(internal::Eval<opcode>::eval(
+          literal, Internal<V>::term(std::move(v))));
     }
   };
 

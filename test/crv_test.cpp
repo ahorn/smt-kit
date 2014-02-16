@@ -2983,5 +2983,11 @@ TEST(CrvTest, SimplifyInternalOperations)
   EXPECT_FALSE(b.is_lazy());
   EXPECT_TRUE(b.is_literal());
   EXPECT_EQ(28, b.literal());
+
+  // non-monoid operator
+  b = b / 4;
+  EXPECT_FALSE(b.is_lazy());
+  EXPECT_TRUE(b.is_literal());
+  EXPECT_EQ(7, b.literal());
 }
 
