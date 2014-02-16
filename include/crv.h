@@ -934,80 +934,99 @@ private:
   // lazy unless m_op == nullptr
   typename Smt<T>::Sort m_term;
 
-  // intermediate result of propagating constants in a commutative monoid
-  // structure where the operator corresponds to m_op->opcode()
-  T m_temporary;
+  // Used in either of two ways:
+  //
+  // 1) if m_term.is_null() (thus m_op == nullptr), it represents a literal
+  // 2) if not m_term.is_null() and m_op != nullptr, it is the intermediate
+  //    result of propagating constants in a commutative monoid structure
+  //    where the operator corresponds to m_op->opcode()
+  //
+  // Otherwise, it is undefined.
+  T m_v;
 
   // Statically allocated, do not delete!
+  //
+  // invariant: m_term.is_null() implies m_op == nullptr
   const simplifier::AbstractOp<T>* m_op;
 
   explicit Internal(
     const typename Smt<T>::Sort& term,
-    const T temporary,
+    const T v,
     const simplifier::AbstractOp<T>* const op)
   : m_term(term),
-    m_temporary(temporary),
+    m_v(v),
     m_op(op)
   {
-    assert(!m_term.is_null());
+    assert(!m_term.is_null() || m_op == nullptr);
   }
 
   explicit Internal(
     typename Smt<T>::Sort&& term,
-    const T temporary,
+    const T v,
     const simplifier::AbstractOp<T>* const op)
   : m_term(std::move(term)),
-    m_temporary(temporary),
+    m_v(v),
     m_op(op)
   {
-    assert(!m_term.is_null());
+    assert(!m_term.is_null() || m_op == nullptr);
   }
 
 public:
   Internal(const Internal& other)
   : m_term(other.m_term),
-    m_temporary(other.m_temporary),
+    m_v(other.m_v),
     m_op(other.m_op)
   {
-    assert(!m_term.is_null());
+    assert(!m_term.is_null() || m_op == nullptr);
   }
 
   Internal(Internal&& other)
   : m_term(std::move(other.m_term)),
-    m_temporary(std::move(other.m_temporary)),
+    m_v(std::move(other.m_v)),
     m_op(other.m_op)
   {
-    assert(!m_term.is_null());
+    assert(!m_term.is_null() || m_op == nullptr);
   }
 
   explicit Internal(typename Smt<T>::Sort&& term)
   : m_term(std::move(term)),
-    m_temporary(),
+    m_v(),
     m_op(nullptr)
   {
     assert(!m_term.is_null());
   }
 
   Internal(T v)
-  : m_term(smt::literal<typename Smt<T>::Sort>(v)),
-    m_temporary(),
-    m_op(nullptr)
-  {
-    assert(!m_term.is_null());
-  }
+  : m_term(nullptr),
+    m_v(v),
+    m_op(nullptr) {}
 
   Internal(const External<T>& other)
-  : m_term(),
-    m_temporary(),
+  : m_term(nullptr),
+    m_v(),
     m_op(nullptr)
   {
     m_term = append_input_event(other);
     assert(!m_term.is_null());
   }
 
+  bool is_literal() const
+  {
+    return m_term.is_null();
+  }
+
   bool is_lazy() const
   {
     return m_op != nullptr;
+  }
+
+  // \pre: is_literal()
+  T literal() const
+  {
+    assert(is_literal());
+    assert(m_op == nullptr);
+
+    return m_v;
   }
 
   // \pre: is_lazy()
@@ -1020,46 +1039,34 @@ public:
   Internal& operator=(Internal&& other)
   {
     m_term = std::move(other.m_term);
-    m_temporary = std::move(other.m_temporary);
+    m_v = std::move(other.m_v);
     m_op = other.m_op;
+    assert(!m_term.is_null() || m_op == nullptr);
     return *this;
   }
 
   Internal& operator=(const Internal& other)
   {
     m_term = other.m_term;
-    m_temporary = other.m_temporary;
+    m_v = other.m_v;
     m_op = other.m_op;
+    assert(!m_term.is_null() || m_op == nullptr);
     return *this;
   }
 
+  /// \pre: not is_literal()
   template<smt::Opcode opcode>
-  static Internal fresh_lazy(const Internal& arg, const T literal)
+  static Internal make_lazy(const Internal& arg, const T literal)
   {
-    assert(arg.m_op == nullptr);
-    return Internal(arg.m_term, literal, simplifier::Op<opcode, T>::op_ptr());
-  }
-
-  template<smt::Opcode opcode>
-  static Internal fresh_lazy(Internal&& arg, const T literal)
-  {
-    assert(arg.m_op == nullptr);
-    return Internal(std::move(arg.m_term), literal, simplifier::Op<opcode, T>::op_ptr());
-  }
-
-  template<smt::Opcode opcode>
-  static Internal refresh_lazy(const Internal& arg, const T literal)
-  {
-    assert(arg.m_op != nullptr);
-    assert(arg.opcode() != opcode);
+    assert(!arg.is_literal());
     return Internal(term(arg), literal, simplifier::Op<opcode, T>::op_ptr());
   }
 
+  /// \pre: not is_literal()
   template<smt::Opcode opcode>
-  static Internal refresh_lazy(Internal&& arg, const T literal)
+  static Internal make_lazy(Internal&& arg, const T literal)
   {
-    assert(arg.m_op != nullptr);
-    assert(arg.opcode() != opcode);
+    assert(!arg.is_literal());
     return Internal(term(std::move(arg)), literal, simplifier::Op<opcode, T>::op_ptr());
   }
 
@@ -1067,38 +1074,45 @@ public:
   template<smt::Opcode opcode>
   static Internal propagate(const Internal& arg, const T literal)
   {
-    return Internal(arg.m_term,
-      internal::Eval<opcode>::eval(arg.m_temporary, literal),
-      simplifier::Op<opcode, T>::op_ptr());
+    const simplifier::AbstractOp<T>* const op =
+      arg.is_literal() ? nullptr : simplifier::Op<opcode, T>::op_ptr();
+    return Internal(arg.m_term, internal::Eval<opcode>::eval(arg.m_v, literal), op);
   }
 
   /// Propagate constants in commutative monoids
   template<smt::Opcode opcode>
   static Internal propagate(Internal&& arg, const T literal)
   {
+    const simplifier::AbstractOp<T>* const op =
+      arg.is_literal() ? nullptr : simplifier::Op<opcode, T>::op_ptr();
     return Internal(std::move(arg.m_term),
-      internal::Eval<opcode>::eval(std::move(arg.m_temporary), literal),
-      simplifier::Op<opcode, T>::op_ptr());
+      internal::Eval<opcode>::eval(std::move(arg.m_v), literal), op);
   }
 
   /// Folds constant expressions over commutative monoid operators
   static typename Smt<T>::Sort term(const Internal& arg)
   {
+    if (arg.m_term.is_null())
+      return smt::literal<typename Smt<T>::Sort>(arg.m_v);
+
     if (arg.m_op == nullptr)
       return arg.m_term;
 
     // lazy term
-    return arg.m_op->fuse(arg.m_term, arg.m_temporary);
+    return arg.m_op->fuse(arg.m_term, arg.m_v);
   }
 
   /// Folds constant expressions over commutative monoid operators
   static typename Smt<T>::Sort term(Internal&& arg)
   {
+    if (arg.m_term.is_null())
+      return smt::literal<typename Smt<T>::Sort>(arg.m_v);
+
     if (arg.m_op == nullptr)
       return std::move(arg.m_term);
 
     // lazy term
-    return arg.m_op->fuse(std::move(arg.m_term), std::move(arg.m_temporary));
+    return arg.m_op->fuse(std::move(arg.m_term), std::move(arg.m_v));
   }
 };
 
@@ -1118,26 +1132,20 @@ namespace simplifier
       typename std::enable_if<IsCommutativeMonoid<opcode, T>::value>::type>
     static Internal<T> apply(const Internal<T>& arg, const T literal)
     {
-      if (!arg.is_lazy())
-        return Internal<T>::template fresh_lazy<opcode>(arg, literal);
-
-      if (arg.opcode() == opcode)
+      if ((!arg.is_lazy() || arg.opcode() != opcode) && !arg.is_literal())
+        return Internal<T>::template make_lazy<opcode>(arg, literal);
+      else
         return Internal<T>::template propagate<opcode>(arg, literal);
-
-      return Internal<T>::template refresh_lazy<opcode>(arg, literal);
     }
 
     template<smt::Opcode opcode, typename T, typename Enable =
       typename std::enable_if<IsCommutativeMonoid<opcode, T>::value>::type>
     static Internal<T> apply(Internal<T>&& arg, const T literal)
     {
-      if (!arg.is_lazy())
-        return Internal<T>::template fresh_lazy<opcode>(std::move(arg), literal);
-
-      if (arg.opcode() == opcode)
+      if ((!arg.is_lazy() || arg.opcode() != opcode) && !arg.is_literal())
+        return Internal<T>::template make_lazy<opcode>(std::move(arg), literal);
+      else
         return Internal<T>::template propagate<opcode>(std::move(arg), literal);
-
-      return Internal<T>::template refresh_lazy<opcode>(std::move(arg), literal);
     }
 
     template<smt::Opcode opcode, typename T, typename Enable =

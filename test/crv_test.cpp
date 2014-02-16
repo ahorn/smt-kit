@@ -2809,56 +2809,73 @@ static T roperand(const Internal<T> arg)
   return literal_expr.literal();
 }
 
+// Literals cannot be lazy
 TEST(CrvTest, LazyInternal)
 {
   tracer().reset();
 
-  Internal<int> a(0);
+  External<int> x;
+  Internal<int> a(x);
   EXPECT_FALSE(a.is_lazy());
+  EXPECT_FALSE(a.is_literal());
   EXPECT_EQ(Internal<int>::term(a).addr(), Internal<int>::term(a).addr());
 
-  Internal<int> b(Internal<int>::fresh_lazy<smt::ADD>(a, 5));
+  Internal<int> b(Internal<int>::make_lazy<smt::ADD>(a, 5));
   EXPECT_TRUE(b.is_lazy());
+  EXPECT_FALSE(b.is_literal());
   EXPECT_NE(Internal<int>::term(b).addr(), Internal<int>::term(b).addr());
   EXPECT_EQ(5, roperand<smt::ADD>(b));
 
   Internal<int> c(Internal<int>::propagate<smt::ADD>(b, 3));
   EXPECT_TRUE(c.is_lazy());
+  EXPECT_FALSE(c.is_literal());
   EXPECT_EQ(5 + 3, roperand<smt::ADD>(c));
 
-  Internal<int> d(Internal<int>::refresh_lazy<smt::MUL>(c, 7));
+  Internal<int> d(Internal<int>::make_lazy<smt::MUL>(c, 7));
   EXPECT_TRUE(d.is_lazy());
+  EXPECT_FALSE(d.is_literal());
   EXPECT_EQ(7, roperand<smt::MUL>(d));
 
   Internal<int> e(Internal<int>::propagate<smt::MUL>(d, 8));
   EXPECT_TRUE(e.is_lazy());
+  EXPECT_FALSE(e.is_literal());
   EXPECT_EQ(7 * 8, roperand<smt::MUL>(e));
 
   // rvalue reference arguments
-  Internal<int> x(Internal<int>::fresh_lazy<smt::ADD>(std::move(a), 5));
-  EXPECT_TRUE(x.is_lazy());
-  EXPECT_NE(Internal<int>::term(x).addr(), Internal<int>::term(x).addr());
-  EXPECT_EQ(5, roperand<smt::ADD>(x));
+  Internal<int> f(Internal<int>::make_lazy<smt::ADD>(std::move(a), 5));
+  EXPECT_TRUE(f.is_lazy());
+  EXPECT_FALSE(f.is_literal());
+  EXPECT_NE(Internal<int>::term(f).addr(), Internal<int>::term(f).addr());
+  EXPECT_EQ(5, roperand<smt::ADD>(f));
 
-  Internal<int> y(Internal<int>::propagate<smt::ADD>(std::move(b), 3));
-  EXPECT_TRUE(y.is_lazy());
-  EXPECT_EQ(5 + 3, roperand<smt::ADD>(y));
+  Internal<int> g(Internal<int>::propagate<smt::ADD>(std::move(b), 3));
+  EXPECT_TRUE(g.is_lazy());
+  EXPECT_FALSE(g.is_literal());
+  EXPECT_EQ(5 + 3, roperand<smt::ADD>(g));
 
-  Internal<int> z(Internal<int>::refresh_lazy<smt::MUL>(std::move(c), 7));
-  EXPECT_TRUE(z.is_lazy());
-  EXPECT_EQ(7, roperand<smt::MUL>(z));
+  Internal<int> h(Internal<int>::make_lazy<smt::MUL>(std::move(c), 7));
+  EXPECT_TRUE(h.is_lazy());
+  EXPECT_FALSE(h.is_literal());
+  EXPECT_EQ(7, roperand<smt::MUL>(h));
 }
 
-TEST(CrvTest, SimplifierLazyConstantPropagation)
+TEST(CrvTest, SimplifierMakeLazyAndConstantPropagation)
 {
   tracer().reset();
   Encoder encoder;
 
   External<int> a = 0;
   Internal<int> b = a;
+  EXPECT_FALSE(b.is_lazy());
+  EXPECT_FALSE(b.is_literal());
 
   b = simplifier::Lazy::apply<smt::ADD>(b, 5);
+  EXPECT_TRUE(b.is_lazy());
+  EXPECT_FALSE(b.is_literal());
+
   b = simplifier::Lazy::apply<smt::ADD>(b, 3);
+  EXPECT_TRUE(b.is_lazy());
+  EXPECT_FALSE(b.is_literal());
 
   EXPECT_EQ(smt::unsat, encoder.check(!(b == 8), tracer()));
   EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer()));
@@ -2866,12 +2883,64 @@ TEST(CrvTest, SimplifierLazyConstantPropagation)
 
   // rvalue reference arguments
   Internal<int> c = a;
+  EXPECT_FALSE(c.is_lazy());
+  EXPECT_FALSE(c.is_literal());
+
   Internal<int> d = simplifier::Lazy::apply<smt::ADD>(std::move(c), 5);
+  EXPECT_TRUE(d.is_lazy());
+  EXPECT_FALSE(d.is_literal());
+
   Internal<int> e = simplifier::Lazy::apply<smt::ADD>(std::move(d), 3);
+  EXPECT_TRUE(e.is_lazy());
+  EXPECT_FALSE(e.is_literal());
 
   EXPECT_EQ(smt::unsat, encoder.check(!(e == 8), tracer()));
   EXPECT_EQ(smt::sat, encoder.check(e == 8, tracer()));
   EXPECT_EQ(8, roperand<smt::ADD>(e));
+}
+
+TEST(CrvTest, SimplifierOnlyConstantPropagation)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Internal<int> b(0);
+  EXPECT_TRUE(b.is_literal());
+  EXPECT_EQ(0, b.literal());
+
+  b = simplifier::Lazy::apply<smt::ADD>(b, 5);
+  EXPECT_TRUE(b.is_literal());
+  EXPECT_EQ(5, b.literal());
+
+  b = simplifier::Lazy::apply<smt::ADD>(b, 3);
+  EXPECT_TRUE(b.is_literal());
+  EXPECT_EQ(8, b.literal());
+
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == 8), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer()));
+
+  // rvalue reference arguments, copy constructors and assignment operators
+  Internal<int> c = b;
+  EXPECT_TRUE(c.is_literal());
+  EXPECT_EQ(8, c.literal());
+
+  Internal<int> d = simplifier::Lazy::apply<smt::ADD>(std::move(c), 2);
+  EXPECT_TRUE(d.is_literal());
+  EXPECT_EQ(10, d.literal());
+
+  Internal<int> e = simplifier::Lazy::apply<smt::ADD>(std::move(d), 4);
+  EXPECT_TRUE(e.is_literal());
+  EXPECT_EQ(14, e.literal());
+
+  d = simplifier::Lazy::apply<smt::ADD>(std::move(b), 1);
+  EXPECT_TRUE(d.is_literal());
+  EXPECT_EQ(9, d.literal());
+
+  EXPECT_EQ(smt::unsat, encoder.check(!(e == 14), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(e == 14, tracer()));
+
+  EXPECT_EQ(smt::unsat, encoder.check(!(d == 9), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(d == 9, tracer()));
 }
 
 TEST(CrvTest, SimplifyInternalOperations)
@@ -2881,11 +2950,38 @@ TEST(CrvTest, SimplifyInternalOperations)
 
   External<int> a = 0;
   Internal<int> b = a;
+  EXPECT_FALSE(b.is_lazy());
+  EXPECT_FALSE(b.is_literal());
+
   b = b + 5; 
+  EXPECT_TRUE(b.is_lazy());
+  EXPECT_FALSE(b.is_literal());
+
   b = b + 3; 
+  EXPECT_TRUE(b.is_lazy());
+  EXPECT_FALSE(b.is_literal());
 
   EXPECT_EQ(smt::unsat, encoder.check(!(b == 8), tracer()));
   EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer()));
   EXPECT_EQ(8, roperand<smt::ADD>(b));
+
+  b = 8;
+  EXPECT_FALSE(b.is_lazy());
+  EXPECT_TRUE(b.is_literal());
+
+  b = b + 2;
+  EXPECT_FALSE(b.is_lazy());
+  EXPECT_TRUE(b.is_literal());
+  EXPECT_EQ(10, b.literal());
+
+  b = b + 4;
+  EXPECT_FALSE(b.is_lazy());
+  EXPECT_TRUE(b.is_literal());
+  EXPECT_EQ(14, b.literal());
+
+  b = b * 2;
+  EXPECT_FALSE(b.is_lazy());
+  EXPECT_TRUE(b.is_literal());
+  EXPECT_EQ(28, b.literal());
 }
 
