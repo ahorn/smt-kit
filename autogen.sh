@@ -3,7 +3,7 @@
 # This script generates the configure script and other files required in
 # building the symbolic execution runtime library.
 
-GTEST="gtest-1.6.0"
+GTEST="gtest-1.7.0"
 
 set -e
 

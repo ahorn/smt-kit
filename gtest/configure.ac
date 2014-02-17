@@ -5,13 +5,13 @@ m4_include(m4/acx_pthread.m4)
 # "[1.0.1]"). It also asumes that there won't be any closing parenthesis
 # between "AC_INIT(" and the closing ")" including comments and strings.
 AC_INIT([Google C++ Testing Framework],
-        [1.6.0],
+        [1.7.0],
         [googletestframework@googlegroups.com],
         [gtest])
 
 # Provide various options to initialize the Autoconf and configure processes.
 AC_PREREQ([2.59])
-AC_CONFIG_SRCDIR([./COPYING])
+AC_CONFIG_SRCDIR([./LICENSE])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_HEADERS([build-aux/config.h])
@@ -55,24 +55,9 @@ AS_IF([test "x$with_pthreads" != "xno"],
                [AC_MSG_FAILURE(
                  [--with-pthreads was specified, but unable to be used])])])
        have_pthreads="$acx_pthread_ok"])
-AM_CONDITIONAL([HAVE_PTHREADS],[test "x$have_pthreads" == "xyes"])
+AM_CONDITIONAL([HAVE_PTHREADS],[test "x$have_pthreads" = "xyes"])
 AC_SUBST(PTHREAD_CFLAGS)
 AC_SUBST(PTHREAD_LIBS)
-
-# Work around for internal/gtest-port.h dependency on tr1/tuple
-AC_CHECK_DEFINED(__APPLE__, [CXXFLAGS="$CXXFLAGS -DGTEST_USE_OWN_TR1_TUPLE=1"])
-
-# If we compile with clang++, we'll use LLVM's C++11 standard library
-AC_COMPILE_IFELSE(
-[AC_LANG_PROGRAM([], [[
-#ifndef __clang__
-  not clang
-#endif
-]])],
-[CLANG=yes], [CLANG=no])
-AC_MSG_RESULT([$CLANG])
-
-AS_IF([test x$CLANG = xyes], [CXXFLAGS="$CXXFLAGS -stdlib=libc++"])
 
 # TODO(chandlerc@google.com) Check for the necessary system headers.
 
