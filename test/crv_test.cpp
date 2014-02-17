@@ -551,7 +551,7 @@ TEST(CrvTest, EncoderCheck)
   EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer()));
 
   tracer().reset();
-  External<bool> false_bool(true);
+  External<bool> false_bool(false);
   EXPECT_EQ(smt::unsat, encoder.check(false_bool, tracer()));
 
   // with literal
