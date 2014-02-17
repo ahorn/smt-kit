@@ -323,6 +323,24 @@ TEST(CrvTest, Flip)
   tracer.append_thread_begin_event();
   EXPECT_EQ(2, tracer.current_thread_id());
   tracer.append_thread_end_event();
+
+  // with literal condition
+  tracer.reset();
+  EXPECT_TRUE(tracer.decide_flip(true));
+  EXPECT_FALSE(tracer.flip());
+
+  tracer.reset();
+  EXPECT_FALSE(tracer.decide_flip(false));
+  EXPECT_FALSE(tracer.flip());
+
+  // ignore direction suggestion when condition is a literal
+  tracer.reset();
+  EXPECT_TRUE(tracer.decide_flip(true, false));
+  EXPECT_FALSE(tracer.flip());
+
+  tracer.reset();
+  EXPECT_FALSE(tracer.decide_flip(false, true));
+  EXPECT_FALSE(tracer.flip());
 }
 
 TEST(CrvTest, Value)
@@ -484,8 +502,10 @@ TEST(CrvTest, Assertions)
   tracer().reset();
   Encoder encoder;
 
+  External<bool> true_bool(true);
+
   // satisfy precondition of Encoder::check(const Tracer&)
-  tracer().add_error(true);
+  tracer().add_error(true_bool);
 
   EXPECT_TRUE(tracer().assertions().empty());
   External<int> i = 1;
@@ -522,51 +542,48 @@ TEST(CrvTest, Errors)
   EXPECT_FALSE(tracer().errors().empty());
 }
 
+TEST(CrvTest, EncoderCheck)
+{
+  Encoder encoder;
+
+  tracer().reset();
+  External<bool> true_bool(true);
+  EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer()));
+
+  tracer().reset();
+  External<bool> false_bool(true);
+  EXPECT_EQ(smt::unsat, encoder.check(false_bool, tracer()));
+
+  // with literal
+  tracer().reset();
+  EXPECT_EQ(smt::sat, encoder.check(true, tracer()));
+
+  tracer().reset();
+  EXPECT_EQ(smt::unsat, encoder.check(false, tracer()));
+}
+
 TEST(CrvTest, Guard)
 {
   tracer().reset();
   Encoder encoder;
 
   External<int> i;
-
   EXPECT_TRUE(tracer().decide_flip(i < 3));
-
   EXPECT_EQ(smt::unsat, encoder.check(i == 3, tracer()));
   EXPECT_EQ(smt::sat, encoder.check(i == 2, tracer()));
 
   tracer().reset();
-
-  EXPECT_EQ(smt::sat, encoder.check(true, tracer()));
-
-  tracer().reset();
-  EXPECT_EQ(smt::unsat, encoder.check(false, tracer()));
-
-  tracer().reset();
-  EXPECT_TRUE(tracer().decide_flip(false));
-  EXPECT_EQ(smt::unsat, encoder.check(true, tracer()));
-
-  EXPECT_TRUE(tracer().flip());
-  EXPECT_FALSE(tracer().decide_flip(false));
-  EXPECT_EQ(smt::sat, encoder.check(true, tracer()));
-
-  tracer().reset();
-  EXPECT_TRUE(tracer().decide_flip(true));
-  EXPECT_EQ(smt::sat, encoder.check(true, tracer()));
-
-  EXPECT_TRUE(tracer().flip());
-  EXPECT_FALSE(tracer().decide_flip(true));
-  EXPECT_EQ(smt::unsat, encoder.check(true, tracer()));
-
-  tracer().reset();
   EXPECT_FALSE(tracer().decide_flip(false, false));
   EXPECT_TRUE(tracer().decide_flip(true, true));
-  tracer().add_error(true);
-  EXPECT_EQ(smt::sat, encoder.check(tracer()));
+  tracer().add_error(false);
+  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  EXPECT_FALSE(tracer().flip());
 
   tracer().reset();
-  EXPECT_FALSE(tracer().decide_flip(true, false));
-  tracer().add_error(true);
+  EXPECT_TRUE(tracer().decide_flip(true, false));
+  tracer().add_error(false);
   EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  EXPECT_FALSE(tracer().flip());
 
   External<bool> false_bool;
   External<bool> true_bool;
@@ -577,12 +594,6 @@ TEST(CrvTest, Guard)
   tracer().reset_flips();
   false_bool = false;
   true_bool = true;
-  EXPECT_EQ(smt::unsat, encoder.check(false_bool, tracer()));
-
-  tracer().reset_events();
-  tracer().reset_flips();
-  false_bool = false;
-  true_bool = true;
   EXPECT_TRUE(tracer().decide_flip(false_bool));
   EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer()));
 
@@ -632,16 +643,16 @@ TEST(CrvTest, Guard)
   false_bool = false;
   true_bool = true;
   EXPECT_TRUE(tracer().decide_flip(false_bool));
-  tracer().add_error(true);
+  tracer().add_error(true_bool);
   EXPECT_TRUE(tracer().decide_flip(true_bool));
-  tracer().add_error(true);
+  tracer().add_error(true_bool);
   EXPECT_EQ(smt::unsat, encoder.check(tracer()));
 
   EXPECT_TRUE(tracer().flip());
   false_bool = false;
   true_bool = true;
   EXPECT_TRUE(tracer().decide_flip(false_bool));
-  tracer().add_error(true);
+  tracer().add_error(true_bool);
   EXPECT_FALSE(tracer().decide_flip(true_bool));
   EXPECT_EQ(smt::unsat, encoder.check(tracer()));
 
@@ -650,7 +661,7 @@ TEST(CrvTest, Guard)
   true_bool = true;
   EXPECT_FALSE(tracer().decide_flip(false_bool));
   EXPECT_TRUE(tracer().decide_flip(true_bool));
-  tracer().add_error(true);
+  tracer().add_error(true_bool);
   EXPECT_EQ(smt::sat, encoder.check(tracer()));
 }
 
@@ -1379,7 +1390,7 @@ TEST(CrvTest, SatScopeWithDeterminsticGuardAndArrayInSingleThread)
   Encoder encoder;
 
   External<char[3]> x;
-  Internal<char> p('\0');
+  External<char> p('\0');
   Internal<char> a('\0');
   
   p = '?';
@@ -1431,9 +1442,10 @@ TEST(CrvTest, UnsatScopeErrorConditionDueToFalseGuard)
   tracer().reset();
   Encoder encoder;
 
+  External<bool> true_bool(true);
   External<bool> false_bool(false);
   tracer().scope_then(false_bool);
-  tracer().add_error(true);
+  tracer().add_error(true_bool);
   tracer().scope_end();
 
   EXPECT_EQ(smt::unsat, encoder.check(tracer()));
@@ -1531,7 +1543,7 @@ TEST(CrvTest, SatFlipWithDeterminsticGuardAndArrayInSingleThread)
   do
   {
     External<char[3]> x;
-    Internal<char> p('\0');
+    External<char> p('\0');
     Internal<char> a('\0');
   
     p = '?';
@@ -1631,9 +1643,11 @@ TEST(CrvTest, UnsatFlipErrorConditionDueToFalseGuard)
 
   do
   {
+    External<bool> true_bool(true);
     External<bool> false_bool(false);
+
     if (tracer().decide_flip(false_bool))
-      tracer().add_error(true);
+      tracer().add_error(true_bool);
 
     if (!tracer().errors().empty())
     {
@@ -1728,14 +1742,14 @@ TEST(CrvTest, ThreadApi)
   EXPECT_EQ(1, ThisThread::thread_id());
 }
 
-void thread_false_guard()
+void thread_false_guard(const External<bool>& false_bool)
 {
-  tracer().decide_flip(false);
+  tracer().decide_flip(false_bool);
 }
 
-void thread_true_error()
+void thread_true_error(const External<bool>& true_bool)
 {
-  tracer().add_error(true);
+  tracer().add_error(true_bool);
 }
 
 TEST(CrvTest, ThreadGuard)
@@ -1743,8 +1757,11 @@ TEST(CrvTest, ThreadGuard)
   tracer().reset();
   Encoder encoder;
 
-  Thread f(thread_false_guard);
-  Thread g(thread_true_error);
+  External<bool> true_bool(true);
+  External<bool> false_bool(false);
+
+  Thread f(thread_false_guard, false_bool);
+  Thread g(thread_true_error, true_bool);
 
   EXPECT_FALSE(tracer().errors().empty());
   EXPECT_EQ(smt::sat, encoder.check(tracer()));
@@ -1752,9 +1769,9 @@ TEST(CrvTest, ThreadGuard)
   tracer().reset();
   unsigned n = 0;
 
-  tracer().decide_flip(false);
+  tracer().decide_flip(false_bool);
   Thread h(thread_api_test, &n, 7);
-  tracer().add_error(true);
+  tracer().add_error(true_bool);
 
   EXPECT_EQ(7, n);
   EXPECT_EQ(smt::unsat, encoder.check(tracer()));
@@ -2022,10 +2039,11 @@ TEST(CrvTest, ImmediateDominator)
   EventMap immediate_dominator_map;
 
   External<char> x('\0');
+  External<bool> any_bool;
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_end();
   tracer.append_write_event(x); // 3
@@ -2045,7 +2063,7 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_else();
   tracer.append_write_event(x); // 3
@@ -2068,8 +2086,8 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_end();
   tracer.scope_end();
@@ -2088,8 +2106,8 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.append_write_event(x); // 3
   tracer.scope_end();
@@ -2110,8 +2128,8 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_end();
   tracer.scope_else();
@@ -2133,8 +2151,8 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_else();
   tracer.append_write_event(x); // 3
@@ -2156,10 +2174,10 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_end();
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 3
   tracer.scope_end();
   tracer.append_thread_end_event();
@@ -2176,11 +2194,11 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_end();
   tracer.append_write_event(x); // 3
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 4
   tracer.scope_end();
   tracer.append_thread_end_event();
@@ -2198,13 +2216,13 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_else();
   tracer.append_write_event(x); // 3
   tracer.scope_end();
   tracer.append_write_event(x); // 4
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 5
   tracer.scope_end();
   tracer.append_thread_end_event();
@@ -2223,11 +2241,11 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_end();
   tracer.append_write_event(x); // 3
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 4
   tracer.scope_else();
   tracer.append_write_event(x); // 5
@@ -2248,12 +2266,12 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_else();
   tracer.scope_end();
   tracer.append_write_event(x); // 3
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 4
   tracer.scope_end();
   tracer.append_thread_end_event();
@@ -2271,11 +2289,11 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_end();
   tracer.append_write_event(x); // 3
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 4
   tracer.scope_else();
   tracer.scope_end();
@@ -2294,12 +2312,12 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.scope_else();
   tracer.append_write_event(x); // 2
   tracer.scope_end();
   tracer.append_write_event(x); // 3
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 4
   tracer.scope_end();
   tracer.append_thread_end_event();
@@ -2317,11 +2335,11 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_end();
   tracer.append_write_event(x); // 3
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.scope_else();
   tracer.append_write_event(x); // 4
   tracer.scope_end();
@@ -2340,11 +2358,11 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.scope_else();
   tracer.append_write_event(x); // 2
   tracer.scope_end();
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 3
   tracer.scope_end();
   tracer.append_thread_end_event();
@@ -2361,10 +2379,10 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_end();
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.scope_else();
   tracer.append_write_event(x); // 3
   tracer.scope_end();
@@ -2382,11 +2400,11 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_end();
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 3
   tracer.scope_end();
   tracer.scope_end();
@@ -2404,12 +2422,12 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
-  tracer.scope_then(true);
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
+  tracer.scope_then(any_bool);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_end();
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 3
   tracer.scope_end();
   tracer.scope_end();
@@ -2428,11 +2446,11 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(true);
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.scope_end();
-  tracer.scope_then(true);
+  tracer.scope_then(any_bool);
   tracer.append_write_event(x); // 3
   tracer.scope_end();
   tracer.scope_end();
@@ -2452,9 +2470,9 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  EXPECT_TRUE(tracer.decide_flip(true));
+  EXPECT_TRUE(tracer.decide_flip(any_bool));
   tracer.append_write_event(x); // 2
-  EXPECT_TRUE(tracer.decide_flip(false));
+  EXPECT_TRUE(tracer.decide_flip(any_bool));
   tracer.append_write_event(x); // 3
   tracer.append_thread_end_event();
 
@@ -2471,9 +2489,9 @@ TEST(CrvTest, ImmediateDominator)
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
   tracer.append_write_event(x); // 2
-  EXPECT_TRUE(tracer.decide_flip(true));
+  EXPECT_TRUE(tracer.decide_flip(any_bool));
   tracer.append_write_event(x); // 3
-  EXPECT_TRUE(tracer.decide_flip(false));
+  EXPECT_TRUE(tracer.decide_flip(any_bool));
   tracer.append_write_event(x); // 4
   tracer.append_write_event(x); // 5
   tracer.append_thread_end_event();
@@ -2492,10 +2510,10 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  EXPECT_TRUE(tracer.decide_flip(true));
+  EXPECT_TRUE(tracer.decide_flip(any_bool));
   tracer.append_write_event(x); // 2
   tracer.append_write_event(x); // 3
-  EXPECT_TRUE(tracer.decide_flip(false));
+  EXPECT_TRUE(tracer.decide_flip(any_bool));
   tracer.append_write_event(x); // 4
   tracer.append_write_event(x); // 5
   tracer.append_thread_end_event();
@@ -2989,5 +3007,15 @@ TEST(CrvTest, SimplifyInternalOperations)
   EXPECT_FALSE(b.is_lazy());
   EXPECT_TRUE(b.is_literal());
   EXPECT_EQ(7, b.literal());
+
+  Internal<bool> true_relation(b == 7);
+  EXPECT_FALSE(true_relation.is_lazy());
+  EXPECT_TRUE(true_relation.is_literal());
+  EXPECT_TRUE(true_relation.literal());
+
+  Internal<bool> false_relation(b != 7);
+  EXPECT_FALSE(false_relation.is_lazy());
+  EXPECT_TRUE(false_relation.is_literal());
+  EXPECT_FALSE(false_relation.literal());
 }
 

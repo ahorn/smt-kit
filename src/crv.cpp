@@ -21,11 +21,17 @@ Tracer& tracer() {
 
 void Tracer::add_assertion(Internal<bool>&& assertion)
 {
+  if (assertion.is_literal())
+    assert(assertion.literal());
+
   m_assertions.push_back(Internal<bool>::term(std::move(assertion)));
 }
 
 void Tracer::add_error(Internal<bool>&& error)
 {
+  if (error.is_literal())
+    assert(!error.literal());
+
   m_errors.push_back(guard() and Internal<bool>::term(std::move(error)));
 }
 
@@ -46,6 +52,9 @@ bool Tracer::decide_flip(
   bool direction)
 {
   assert(!m_scope_stack.empty());
+
+  if (g.is_literal())
+    return g.literal();
 
   if (m_flip_iter == m_flips.cend())
   {
@@ -70,6 +79,7 @@ bool Tracer::decide_flip(
 
 void Tracer::scope_then(const Internal<bool>& g)
 {
+  assert(!g.is_literal());
   assert(m_block_id_cnt < std::numeric_limits<BlockIdentifier>::max());
   assert(!m_scope_stack.empty());
   assert(m_scope_stack.top().level < std::numeric_limits<

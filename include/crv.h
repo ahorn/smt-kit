@@ -632,6 +632,10 @@ public:
     return m_next_reserved_address++;
   }
 
+  /// Decide which control flow direction to follow
+
+  /// The second direction argument is only a suggestion that is ignored when
+  /// the first condition argument is_literal()
   bool decide_flip(const Internal<bool>&, bool direction = true);
 
   /// Returns parent thread identifier
