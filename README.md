@@ -67,7 +67,7 @@ For advanced usage information on other configure options refer to the
 [z3]: http://z3.codeplex.com/
 [solvers]: https://github.com/ahorn/smt-kit/tree/master/solvers
 
-## Application
+## CRV Symbolic Execution 
 
 As a research application, SMT Kit is used for CRV, a tool that
 introduces native symbolic execution for concurrent C++11 code.
