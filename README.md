@@ -81,8 +81,7 @@ Furthermore, unlike tools such as [KLEE][klee] or [CBMC][cbmc], CRV
 is designed to be a library that must be first linked with a given
 program under scrutiny. This design allows CRV to leverage advanced C++11
 template and meta-programming features to speed things up including
-constant propagation, a well-known technique for simplifying symbolic
-expressions at runtime. The resulting [performance gains][performance-tests]
+constant propagation. The resulting [performance gains][performance-tests]
 can be of several orders of magnitude (e.g. up to a million times faster).
 
 But currently not all programming constructs are supported. For example,
