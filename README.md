@@ -69,27 +69,37 @@ For advanced usage information on other configure options refer to the
 
 ## CRV Symbolic Execution 
 
-As a practical application, SMT Kit is used for CRV, a research project
-into fast symbolic execution of sequential and concurrent C++11 code.
+As a practical application, SMT Kit is a component in CRV, a research
+tool for symbolic reasoning about sequential and concurrent C++11 code.
 
-In a nutshell, CRV aims to combine lightweight KLEE-style symbolic
-execution with efficient decision procedures for partial orders to
-semi-automatically find concurrency bugs.
+In a nutshell, CRV aims to combine a new lightweight [KLEE][klee]-style
+symbolic execution technique with existing decision procedures for
+partial orders. The partial orders are used to semi-automatically
+find concurrency bugs and this sets CRV apart from say [KLEE][klee].
 
-Unlike tools such as KLEE or CBMC, however, CRV is a reusable library that
-must be first linked with a program under scrutiny. CRV leverages advanced
-C++11 features to symbolically execute code efficiently. This is important
-for things such as constant propagation, a technique to simplify symbolic
-expressions at runtime. CRV's [performance gains][performance-tests] can
-be of several orders of magnitude (as much as a million times faster).
+Furthermore, unlike tools such as [KLEE][klee] or [CBMC][cbmc], CRV
+is designed to be a library that must be first linked with a given
+program under scrutiny. This design allows CRV to leverage advanced C++11
+template and meta-programming features to speed things up including
+constant propagation, a well-known technique for simplifying symbolic
+expressions at runtime. The resulting [performance gains][performance-tests]
+can be of several orders of magnitude (e.g. up to a million times faster).
+
+But currently not all programming constructs are supported. For example,
+pointer arithmetic is still unsupported. If you are nevertheless
+interested in trying out CRV, there is a [Clang front-end][clang-crv]
+to make the required source-to-source transformations easier.
 
 [performance-tests]: https://github.com/ahorn/smt-kit/blob/master/test/crv_performance_test.cpp
+[clang-crv]: https://github.com/ahorn/clang-crv
+[klee]: http://klee.github.io/klee/
+[cbmc]: http://www.cprover.org/cbmc/
 
 ## Troubleshooting
 
 Since SMT Kit uses advanced C++11 language features, older compiler
 versions are likely to be troublesome. To date, we have successfully
-compiled and tested the code on OS X with g++ 4.8.2, g++ 4.9 and clang++ 4.2.
+compiled and tested the code on OS X with g++ 4.8.2 and clang++ 4.2.
 You should also always use the most recent version of the SMT solvers.
 
 If `make test` fails with an error that indicates that `libstdc++.so.6`
