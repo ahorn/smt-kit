@@ -69,11 +69,19 @@ For advanced usage information on other configure options refer to the
 
 ## CRV Symbolic Execution 
 
-As a research application, SMT Kit is used for CRV, a tool that
-introduces native symbolic execution for concurrent C++11 code.
+As a practical application, SMT Kit is used for CRV, a research project
+into fast symbolic execution of sequential and concurrent C++11 code.
+
 In a nutshell, CRV aims to combine lightweight KLEE-style symbolic
 execution with efficient decision procedures for partial orders to
 semi-automatically find concurrency bugs.
+
+Unlike tools such as KLEE or CBMC, however, CRV is a reusable library that
+must be first linked with a program under scrutiny. CRV leverages advanced
+C++11 features to symbolically execute code efficiently. This is important
+for things such as constant propagation, a technique to simplify symbolic
+expressions at runtime. CRV's [performance gains][performance-tests] can
+be of several orders of magnitude (as much as a million times faster).
 
 ## Troubleshooting
 
