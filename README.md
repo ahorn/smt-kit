@@ -83,6 +83,8 @@ for things such as constant propagation, a technique to simplify symbolic
 expressions at runtime. CRV's [performance gains][performance-tests] can
 be of several orders of magnitude (as much as a million times faster).
 
+[performance-tests]: https://github.com/ahorn/smt-kit/blob/master/test/crv_performance_test.cpp
+
 ## Troubleshooting
 
 Since SMT Kit uses advanced C++11 language features, older compiler
