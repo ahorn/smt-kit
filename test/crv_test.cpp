@@ -107,6 +107,9 @@ TEST(CrvTest, ConstexprEvalLss)
 
 TEST(CrvTest, ReturnType)
 {
+  STATIC_EXPECT_TRUE((std::is_same<int, typename internal::Return<smt::ADD,
+    short, short>::Type>::value));
+
   STATIC_EXPECT_TRUE((std::is_same<unsigned long, typename internal::Return<smt::ADD,
     unsigned int, unsigned long>::Type>::value));
 
@@ -3017,5 +3020,27 @@ TEST(CrvTest, SimplifyInternalOperations)
   EXPECT_FALSE(false_relation.is_lazy());
   EXPECT_TRUE(false_relation.is_literal());
   EXPECT_FALSE(false_relation.literal());
+}
+
+TEST(CrvTest, PostIncrement)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Internal<short> a(3);
+  EXPECT_FALSE(a.is_lazy());
+  EXPECT_TRUE(a.is_literal());
+  EXPECT_EQ(3, a.literal());
+
+  post_increment(a);
+  EXPECT_FALSE(a.is_lazy());
+  EXPECT_TRUE(a.is_literal());
+  EXPECT_EQ(4, a.literal());
+
+  External<short> b(7);
+  post_increment(b);
+
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == 8), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer()));
 }
 

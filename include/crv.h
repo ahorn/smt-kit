@@ -1750,6 +1750,23 @@ CRV_BUILTIN_BINARY_OP(^, XOR)
 namespace crv
 {
 
+template<typename T,
+  class Enable = typename std::enable_if<std::is_arithmetic<T>::value>::type>
+inline Internal<T>& post_increment(Internal<T>& arg)
+{
+  arg = simplifier::apply<smt::ADD, T>(arg, 1);
+  return arg;
+}
+
+template<typename T,
+  class Enable = typename std::enable_if<std::is_arithmetic<T>::value>::type>
+inline External<T>& post_increment(External<T>& arg)
+{
+  Internal<T> arg_internal(append_input_event(arg));
+  arg = simplifier::apply<smt::ADD, T>(std::move(arg_internal), 1);
+  return arg;
+}
+
 #ifdef __BV_TIME__
 typedef smt::Bv<unsigned short> TimeSort;
 #else
