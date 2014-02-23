@@ -41,6 +41,53 @@ TEST(CrvFunctionalTest, MultipathSafeIf)
   EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
 }
 
+void unsafe_simple_assign_1(crv::External<int>& i)
+{
+  i = 1;
+  crv::tracer().add_error(i != 1);
+}
+
+void unsafe_simple_assign_2(crv::External<int>& i)
+{
+  i = 2;
+}
+
+TEST(CrvFunctionalTest, UnsafeThreads)
+{
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  crv::External<int> i = 0;
+  crv::Thread t1(unsafe_simple_assign_1, i);
+  crv::Thread t2(unsafe_simple_assign_2, i);
+
+  EXPECT_EQ(smt::sat, encoder.check(crv::tracer()));
+}
+
+void safe_simple_assign_1(crv::External<int>& i)
+{
+  i = 1;
+  crv::Internal<int> r = i;
+  crv::tracer().add_error(r != 0 && r != 1 && r != 2);
+}
+
+void safe_simple_assign_2(crv::External<int>& i)
+{
+  i = 2;
+}
+
+TEST(CrvFunctionalTest, SafeThreads)
+{
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  crv::External<int> i = 0;
+  crv::Thread t1(safe_simple_assign_1, i);
+  crv::Thread t2(safe_simple_assign_2, i);
+
+  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+}
+
 void fib_t0(
   const unsigned N,
   crv::External<int>& i,
