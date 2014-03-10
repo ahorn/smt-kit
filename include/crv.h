@@ -1078,18 +1078,28 @@ public:
   }
 
   /// Propagate constants in commutative monoids
+
+  /// \pre: arg.is_literal() or arg.is_lazy()
   template<smt::Opcode opcode>
   static Internal propagate(const Internal& arg, const T literal)
   {
+    // check that arg.m_v is defined
+    assert(arg.is_literal() || arg.is_lazy());
+
     const simplifier::AbstractOp<T>* const op =
       arg.is_literal() ? nullptr : simplifier::Op<opcode, T>::op_ptr();
     return Internal(arg.m_term, internal::Eval<opcode>::eval(arg.m_v, literal), op);
   }
 
   /// Propagate constants in commutative monoids
+
+  /// \pre: arg.is_literal() or arg.is_lazy()
   template<smt::Opcode opcode>
   static Internal propagate(Internal&& arg, const T literal)
   {
+    // check that arg.m_v is defined
+    assert(arg.is_literal() || arg.is_lazy());
+
     const simplifier::AbstractOp<T>* const op =
       arg.is_literal() ? nullptr : simplifier::Op<opcode, T>::op_ptr();
     return Internal(std::move(arg.m_term),
