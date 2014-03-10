@@ -621,6 +621,9 @@ public:
   }
 
   /// Add Boolean term of argument to assertions()
+
+  /// This is similar to entering "if (condition) { ... }"
+  /// except that no further flips are required.
   void add_assertion(Internal<bool>&&);
 
   /// Add conjunction of guard() and given Boolean term to errors()
