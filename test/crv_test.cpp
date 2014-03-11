@@ -3022,6 +3022,66 @@ TEST(CrvTest, SimplifyInternalOperations)
   EXPECT_FALSE(false_relation.literal());
 }
 
+TEST(CrvTest, CommutativeGroup)
+{
+  // nongroup since signed overflow is undefined
+  static_assert(!simplifier::CommutativeGroupOp<smt::ADD, int>::is_group(), "");
+  static_assert(simplifier::CommutativeGroupOp<smt::ADD, unsigned>::is_group(), "");
+
+  // nongroup due to rounding
+  static_assert(!simplifier::CommutativeGroupOp<smt::MUL, int>::is_group(), "");
+  static_assert(!simplifier::CommutativeGroupOp<smt::MUL, unsigned>::is_group(), "");
+
+  static_assert(!simplifier::CommutativeGroupOp<smt::GTR, bool>::is_group(), "");
+
+  EXPECT_FALSE((simplifier::Op<smt::ADD, int>::op_ptr()->is_group()));
+  EXPECT_TRUE((simplifier::Op<smt::ADD, unsigned>::op_ptr()->is_group()));
+
+  EXPECT_FALSE((simplifier::Op<smt::MUL, int>::op_ptr()->is_group()));
+  EXPECT_FALSE((simplifier::Op<smt::MUL, unsigned>::op_ptr()->is_group()));
+
+  EXPECT_FALSE((simplifier::Op<smt::GTR, bool>::op_ptr()->is_group()));
+
+  EXPECT_EQ(-2U, (simplifier::Op<smt::ADD, unsigned>::op_ptr()->inverse(2U)));
+  EXPECT_EQ(5U, (simplifier::Op<smt::ADD, unsigned>::op_ptr()->right_cancel(5U, 2U)) + 2U);
+  EXPECT_EQ(2U, (simplifier::Op<smt::ADD, unsigned>::op_ptr()->right_cancel(2U, 5U)) + 5U);
+}
+
+TEST(CrvTest, LazyGroup)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<int> x;
+  External<unsigned> y;
+
+  // Since overflow of unsigned ints is undefined,
+  // Internal<int> can never be a lazy group.
+  Internal<int> a(3);
+  Internal<int> a_lazy = x;
+  EXPECT_FALSE(a.is_lazy());
+  EXPECT_FALSE(a.is_lazy_group());
+
+  a_lazy = a_lazy + 2;
+  EXPECT_TRUE(a_lazy.is_lazy());
+  EXPECT_FALSE(a_lazy.is_lazy_group());
+
+  // still not lazy
+  Internal<unsigned> b(3);
+  EXPECT_FALSE(b.is_lazy());
+  EXPECT_FALSE(b.is_lazy_group());
+
+  // finally, lazy group
+  Internal<unsigned> c = y;
+  c = c + 2U;
+  EXPECT_TRUE(c.is_lazy());
+  EXPECT_TRUE(c.is_lazy_group());
+
+  EXPECT_EQ(-5U, c.op().inverse(5U));
+  EXPECT_EQ(2U, c.op().right_cancel(7U, 5U));
+  EXPECT_EQ(-2U, c.op().right_cancel(5U, 7U));
+}
+
 TEST(CrvTest, PostIncrement)
 {
   tracer().reset();

@@ -884,6 +884,50 @@ namespace simplifier
     virtual Term fuse(const Term& u, T&& v) const = 0;
     virtual Term fuse(Term&& u, const T& v) const = 0;
     virtual Term fuse(Term&& u, T&& v) const = 0;
+
+    virtual bool is_group() const = 0;
+    virtual T inverse(const T v) const = 0;
+
+    /// same as Eval<opcode>::eval(u, inverse(v))
+    virtual T right_cancel(const T u, const T v) const = 0;
+  };
+
+  template<typename T>
+  struct IsUnsignedIntegral :
+    std::integral_constant<bool,
+      std::is_integral<T>::value and
+      std::is_unsigned<T>::value>
+  {};
+
+  template<smt::Opcode opcode, class T>
+  struct CommutativeGroupOp
+  {
+    static constexpr bool is_group() { return false; }
+    static T inverse(const T u) { assert(is_group()); }
+
+    /// same as Eval<opcode>::eval(u, inverse(v))
+    static T right_cancel(const T u, const T v) { assert(is_group()); }
+  };
+
+  template<class T>
+  struct CommutativeGroupOp<smt::ADD, T>
+  {
+    static constexpr bool is_group()
+    {
+      return IsUnsignedIntegral<T>::value;
+    }
+
+    static T inverse(const T v)
+    {
+      assert(is_group());
+      return -v;
+    }
+
+    static T right_cancel(const T u, const T v)
+    {
+      assert(is_group());
+      return u - v;
+    }
   };
 
   /// Singleton class, use sole static member function
@@ -891,7 +935,8 @@ namespace simplifier
   class Op : public AbstractOp<T>
   {
   private:
-    Op() : AbstractOp<T>() {}
+    // default base constructors are automatically called
+    Op() {}
 
   public:
     using typename AbstractOp<T>::Term;
@@ -926,6 +971,25 @@ namespace simplifier
     Term fuse(const Term& u, T&& v) const override
     {
       return internal::Eval<_opcode>::eval(u, std::move(v));
+    }
+
+    bool is_group() const override
+    {
+      return CommutativeGroupOp<_opcode, T>::is_group();
+    }
+
+    T inverse(const T v) const override
+    {
+      return CommutativeGroupOp<_opcode, T>::inverse(v);
+    }
+
+    /// same as Eval<opcode>::eval(u, inverse(v))
+    T right_cancel(const T u, const T v) const override
+    {
+      assert(internal::Eval<_opcode>::eval(
+        CommutativeGroupOp<_opcode, T>::right_cancel(u, v), v) == u);
+
+      return CommutativeGroupOp<_opcode, T>::right_cancel(u, v);
     }
   };
 }
@@ -1041,6 +1105,17 @@ public:
   {
     assert(is_lazy());
     return m_op->opcode();
+  }
+
+  bool is_lazy_group() const
+  {
+    return is_lazy() && m_op->is_group();
+  }
+
+  const simplifier::AbstractOp<T>& op() const
+  {
+    assert(is_lazy());
+    return *m_op;
   }
 
   Internal& operator=(Internal&& other)
