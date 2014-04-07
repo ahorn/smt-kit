@@ -412,7 +412,7 @@ private:
   const Sort* const * m_sorts;
   const size_t m_sorts_size;
 
-  constexpr unsigned check_sorts_index(size_t index)
+  constexpr unsigned check_sorts_index(size_t index) const
   {
     return index >= m_sorts_size ?
       throw std::out_of_range("check_sorts_index fails") : index;
