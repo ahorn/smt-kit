@@ -41,6 +41,72 @@ TEST(CrvFunctionalTest, MultipathSafeIf)
   EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
 }
 
+TEST(CrvFunctionalTest, SafeCounter)
+{
+  constexpr unsigned N = 4;
+  unsigned unwind;
+
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  do
+  {
+    crv::External<int> star;
+    crv::Internal<int> n = star;
+    crv::tracer().add_assertion(0 <= n && n < N);
+
+    crv::Internal<int> x = n, y = 0;
+
+    unwind = N;
+    while (crv::tracer().decide_flip(x > 0)) {
+      x = x - 1;
+      y = y + 1;
+
+      unwind--;
+      if (unwind == 0)
+        break;
+    }
+
+    crv::tracer().add_error(0 <= y && y != n);
+    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+  }
+  while (crv::tracer().flip());
+}
+
+TEST(CrvFunctionalTest, UnsafeCounter)
+{
+  constexpr unsigned N = 4;
+  unsigned unwind;
+
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  bool error = false;
+  do
+  {
+    crv::External<int> star;
+    crv::Internal<int> n = star;
+    crv::tracer().add_assertion(0 <= n && n < N);
+
+    crv::Internal<int> x = n, y = 0;
+
+    unwind = N;
+    while (crv::tracer().decide_flip(x > 0)) {
+      x = x - 1;
+      y = y + 1;
+
+      unwind--;
+      if (unwind == 0)
+        break;
+    }
+
+    crv::tracer().add_error(0 <= y && y == n);
+    error |= smt::sat == encoder.check(crv::tracer());
+  }
+  while (crv::tracer().flip());
+  EXPECT_TRUE(error);
+}
+
 // For more explanations, see Section 2.2 (Sums and Recurrences)
 // in "Concrete Mathematics", Second Edition, by Ronald L. Graham,
 // Donald E. Knuth, and Oren Patashnik
