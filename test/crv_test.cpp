@@ -120,6 +120,30 @@ TEST(CrvTest, ReturnType)
     unsigned int>::Type>::value));
 }
 
+TEST(CrvTest, Reflect)
+{
+
+  STATIC_EXPECT_FALSE((reflect<int>().is_int()));
+  STATIC_EXPECT_TRUE((reflect<int>().is_bv()));
+  STATIC_EXPECT_TRUE((reflect<int>().is_signed()));
+
+  STATIC_EXPECT_FALSE((reflect<unsigned int>().is_int()));
+  STATIC_EXPECT_TRUE((reflect<unsigned int>().is_bv()));
+  STATIC_EXPECT_FALSE((reflect<unsigned int>().is_signed()));
+
+  STATIC_EXPECT_FALSE((reflect<int[3]>().is_bv()));
+  STATIC_EXPECT_FALSE((reflect<int[3]>().is_signed()));
+  STATIC_EXPECT_TRUE((reflect<int[3]>().is_array()));
+
+  STATIC_EXPECT_FALSE((reflect<int[3]>().sorts(0).is_int()));
+  STATIC_EXPECT_TRUE((reflect<int[3]>().sorts(0).is_bv()));
+  STATIC_EXPECT_FALSE((reflect<int[3]>().sorts(0).is_signed()));
+
+  STATIC_EXPECT_FALSE((reflect<int[3]>().sorts(1).is_int()));
+  STATIC_EXPECT_TRUE((reflect<int[3]>().sorts(1).is_bv()));
+  STATIC_EXPECT_TRUE((reflect<int[3]>().sorts(1).is_signed()));
+}
+
 template<typename T>
 static Internal<T> make_temporary_internal()
 {
@@ -133,8 +157,8 @@ TEST(CrvTest, Event)
   tracer().reset();
 
   EXPECT_TRUE(tracer().events().empty());
-  Event e(READ_EVENT, 2, 3, 4, 5, 6, smt::literal<smt::Bool>(true),
-    smt::any<smt::Bv<char>>("a"), smt::Bv<size_t>());
+  Event e(READ_EVENT, 2, 3, 4, 5, 6, smt::internal::sort<smt::Bv<int>>(),
+    smt::literal<smt::Bool>(true), smt::any<smt::Bv<char>>("a"), smt::Bv<size_t>());
   EXPECT_EQ(READ_EVENT, e.kind);
   EXPECT_EQ(2, e.event_id);
   EXPECT_EQ(3, e.thread_id);
@@ -3104,3 +3128,37 @@ TEST(CrvTest, PostIncrement)
   EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer()));
 }
 
+#ifndef __BIT_PRECISION__
+// Optional feature (beware it can hide bugs!)
+TEST(CrvTest, BvApproximation)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<unsigned int> star;
+  Internal<unsigned int> n = star;
+  Internal<unsigned int> x = n, y = 0u;
+  tracer().add_assertion(x <= 0u);
+
+  encoder.encode_bv_approximation(tracer());
+  EXPECT_EQ(smt::unsat, encoder.check(y != n, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(y == n, tracer()));
+
+  tracer().reset();
+  External<unsigned int> z = 0u;
+  tracer().add_error(z == 0u);
+  z = z - 1u;
+
+  // error is found as expected
+  EXPECT_EQ(smt::sat, encoder.check(tracer()));
+
+  tracer().reset();
+  External<unsigned int> w = 0u;
+  tracer().add_error(w == 0u);
+  w = w - 1u;
+
+  // error cannot be found any longer!
+  encoder.encode_bv_approximation(tracer());
+  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+}
+#endif

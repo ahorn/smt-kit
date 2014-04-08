@@ -57,6 +57,30 @@ typedef unsigned BlockIdentifier;
 /// Number of thread-local nested if-then-else blocks
 typedef unsigned ScopeLevel;
 
+template<class T>
+struct Reflect
+{
+  typedef smt::Bv<T> Sort;
+};
+
+template<class T>
+struct Reflect<T[]>
+{
+  typedef smt::Array<smt::Bv<size_t>, typename Reflect<T>::Sort> Sort;
+};
+
+template<class T, size_t N>
+struct Reflect<T[N]>
+{
+  typedef smt::Array<smt::Bv<size_t>, typename Reflect<T>::Sort> Sort;
+};
+
+template<class T>
+constexpr const smt::Sort& reflect()
+{
+  return smt::internal::sort<typename Reflect<T>::Sort>();
+}
+
 class Event
 {
 public:
@@ -66,6 +90,7 @@ public:
   const BlockIdentifier block_id;
   const ScopeLevel scope_level;
   const Address address;
+  const smt::Sort& reflect;
   const smt::Bool guard;
   const smt::UnsafeTerm term;
   const smt::UnsafeTerm offset_term;
@@ -79,6 +104,7 @@ public:
     const BlockIdentifier block_id_arg,
     const ScopeLevel scope_level_arg,
     const Address address_arg,
+    const smt::Sort& reflect_arg,
     const smt::Bool guard_arg,
     const smt::UnsafeTerm& term_arg,
     const smt::UnsafeTerm& offset_term_arg)
@@ -88,6 +114,7 @@ public:
     block_id(block_id_arg),
     scope_level(scope_level_arg),
     address(address_arg),
+    reflect(reflect_arg),
     guard(guard_arg),
     term(term_arg),
     offset_term(offset_term_arg)
@@ -95,6 +122,7 @@ public:
     assert(!guard.is_null());
     assert(is_sync() || !term.is_null());
     assert(is_sync() || 0 < address);
+    assert(reflect.is_int() == (0 == address));
   }
 
   bool is_barrier() const { return kind == BARRIER_EVENT; }
@@ -388,6 +416,7 @@ private:
   void append_event(
     const EventIdentifier event_id,
     const Address address,
+    const smt::Sort& reflect,
     const smt::UnsafeTerm& term,
     const smt::UnsafeTerm& offset_term = smt::UnsafeTerm())
   {
@@ -395,7 +424,7 @@ private:
 
     const ThreadIdentifier thread_id(current_thread_id());
     m_events.emplace_back(kind, event_id, thread_id, m_block_id_cnt,
-      m_scope_stack.top().level, address, guard(), term, offset_term);
+      m_scope_stack.top().level, address, reflect, guard(), term, offset_term);
 
     const EventIter e_iter(std::prev(m_events.cend()));
     m_per_address_index[e_iter->address].push_back<kind>(e_iter);
@@ -645,8 +674,8 @@ public:
   ThreadIdentifier append_thread_begin_event()
   {
     const EventIdentifier event_id(m_event_id_cnt++);
-    append_event<THREAD_BEGIN_EVENT>(
-      event_id, 0, smt::UnsafeTerm());
+    append_event<THREAD_BEGIN_EVENT>(event_id, 0,
+      smt::internal::sort<smt::Int>(), smt::UnsafeTerm());
 
     ThreadIdentifier parent_thread_id(current_thread_id());
     push_next_thread_id();
@@ -654,16 +683,16 @@ public:
     m_guard = smt::literal<smt::Bool>(true);
     m_scope_stack.emplace(m_guard);
 
-    append_event<THREAD_BEGIN_EVENT>(
-      event_id, 0, smt::UnsafeTerm());
+    append_event<THREAD_BEGIN_EVENT>(event_id, 0,
+      smt::internal::sort<smt::Int>(), smt::UnsafeTerm());
     return parent_thread_id;
   }
 
   /// Returns child thread identifier
   ThreadIdentifier append_thread_end_event()
   {
-    append_event<THREAD_END_EVENT>(
-      m_event_id_cnt++, 0, smt::UnsafeTerm());
+    append_event<THREAD_END_EVENT>(m_event_id_cnt++, 0,
+      smt::internal::sort<smt::Int>(), smt::UnsafeTerm());
 
     ThreadIdentifier child_thread_id(current_thread_id());
     m_thread_id_stack.pop();
@@ -688,7 +717,8 @@ public:
 
   void append_barrier_event(const EventIdentifier event_id)
   {
-    append_event<BARRIER_EVENT>(event_id, 0, smt::UnsafeTerm());
+    append_event<BARRIER_EVENT>(event_id, 0,
+      smt::internal::sort<smt::Int>(), smt::UnsafeTerm());
   }
 
   void append_join_event(const ThreadIdentifier thread_id)
@@ -696,8 +726,8 @@ public:
     const EventIter e_iter = m_per_thread_map.at(thread_id).back();
     assert(e_iter->thread_id != current_thread_id());
 
-    append_event<THREAD_END_EVENT>(
-      e_iter->event_id, 0, smt::UnsafeTerm());
+    append_event<THREAD_END_EVENT>(e_iter->event_id, 0,
+      smt::internal::sort<smt::Int>(), smt::UnsafeTerm());
   }
 
   /// Creates a new term for the read event
@@ -733,14 +763,14 @@ public:
   typename Smt<T>::Sort append_channel_recv_event(const Address);
 
   /// Outgoing channel communication
-  void append_channel_send_event(const Address, const smt::UnsafeTerm&);
+  void append_channel_send_event(const Address, const smt::Sort&, const smt::UnsafeTerm&);
 
   /// Incoming message
   template<typename T>
   typename Smt<T>::Sort append_message_recv_event(const Address);
 
   /// Outgoing message
-  void append_message_send_event(const Address, const smt::UnsafeTerm&);
+  void append_message_send_event(const Address, const smt::Sort&, const smt::UnsafeTerm&);
 
   // Symbolic multi-path analysis
   void scope_then(const Internal<bool>& guard);
@@ -1524,8 +1554,8 @@ typename Smt<T>::Sort Tracer::append_read_event(const External<T>& external)
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
   // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
-  append_event<READ_EVENT>(
-    event_id, external.address, term);
+  append_event<READ_EVENT>(event_id, external.address,
+    reflect<T>(), term);
 
   return term;
 }
@@ -1538,8 +1568,8 @@ void Tracer::append_nondet_write_event(const External<T>& external)
 
   // since evaluation order of arguments is undefined ...
   const EventIdentifier event_id(m_event_id_cnt);
-  append_event<WRITE_EVENT>(
-    event_id, external.address, make_value_symbol<T>());
+  append_event<WRITE_EVENT>(event_id, external.address,
+    reflect<T>(), make_value_symbol<T>());
 }
 
 template<typename T>
@@ -1548,8 +1578,8 @@ void Tracer::append_write_event(const External<T>& external)
   assert(!external.term.is_null());
   assert(external.offset_term.is_null());
 
-  append_event<WRITE_EVENT>(
-    m_event_id_cnt++, external.address, external.term);
+  append_event<WRITE_EVENT>(m_event_id_cnt++, external.address,
+    reflect<T>(), external.term);
 }
 
 template<typename T>
@@ -1560,7 +1590,8 @@ typename Smt<T>::Sort Tracer::append_pop_event(const External<T>& stack)
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
   // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
-  append_event<POP_EVENT>(event_id, stack.address, term);
+  append_event<POP_EVENT>(event_id, stack.address,
+    reflect<T>(), term);
 
   return term;
 }
@@ -1571,7 +1602,8 @@ void Tracer::append_push_event(const External<T>& stack)
   assert(!stack.term.is_null());
   assert(stack.offset_term.is_null());
 
-  append_event<PUSH_EVENT>(m_event_id_cnt++, stack.address, stack.term);
+  append_event<PUSH_EVENT>(m_event_id_cnt++, stack.address,
+    reflect<T>(), stack.term);
 }
 
 template<typename T>
@@ -1582,8 +1614,8 @@ typename Smt<T>::Sort Tracer::append_load_event(const External<T>& external)
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
   // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
-  append_event<LOAD_EVENT>(
-    event_id, external.address, term, external.offset_term);
+  append_event<LOAD_EVENT>(event_id, external.address,
+    reflect<T>(), term, external.offset_term);
 
   return term;
 }
@@ -1594,8 +1626,8 @@ void Tracer::append_store_event(const External<T>& external)
   assert(!external.term.is_null());
   assert(!external.offset_term.is_null());
 
-  append_event<STORE_EVENT>(
-    m_event_id_cnt++, external.address, external.term, external.offset_term);
+  append_event<STORE_EVENT>(m_event_id_cnt++, external.address,
+    reflect<T>(), external.term, external.offset_term);
 }
 
 template<typename T>
@@ -1604,7 +1636,8 @@ typename Smt<T>::Sort Tracer::append_channel_recv_event(const Address address)
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
   // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
-  append_event<CHANNEL_RECV_EVENT>(event_id, address, term);
+  append_event<CHANNEL_RECV_EVENT>(event_id, address,
+    reflect<T>(), term);
 
   return term;
 }
@@ -1615,7 +1648,8 @@ typename Smt<T>::Sort Tracer::append_message_recv_event(const Address address)
   const EventIdentifier event_id(m_event_id_cnt);
   typename Smt<T>::Sort term(make_value_symbol<T>());
   // TODO: conversion to result type if necessary (e.g. smt::Bv<T>)
-  append_event<MESSAGE_RECV_EVENT>(event_id, address, term);
+  append_event<MESSAGE_RECV_EVENT>(event_id, address,
+    reflect<T>(), term);
 
   return term;
 }
@@ -2816,6 +2850,27 @@ public:
     m_solver.pop();
     return result;
   }
+
+#ifndef __BIT_PRECISION__
+  // Use best effort to enforce some BV constraints such
+  // as 'unsigned int' even though we use Real etc.
+  //
+  // Note: this can hide bugs say when an unsigned int becomes
+  // negative because it would make the formula unsatisfiable!
+  void encode_bv_approximation(const Tracer& tracer)
+  {
+    for (const Event& event : tracer.events())
+    {
+      if (!event.reflect.is_bv())
+        continue;
+
+      if (!event.term.is_null() &&
+          !event.reflect.is_signed() &&
+          (event.term.sort().is_int() || event.term.sort().is_real()))
+        unsafe_add(0 <= event.term);
+    }
+  }
+#endif
 };
 
 template<typename UnaryPredicate>
@@ -2994,13 +3049,15 @@ public:
 
   void send(const Internal<T>& data)
   {
-    tracer().append_channel_send_event(m_address, Internal<T>::term(data));
+    tracer().append_channel_send_event(
+      m_address, reflect<T>(), Internal<T>::term(data));
   }
 
   void send(const External<T>& data)
   {
     smt::UnsafeTerm term = append_input_event(data);
-    tracer().append_channel_send_event(m_address, std::move(term));
+    tracer().append_channel_send_event(
+      m_address, reflect<T>(), std::move(term));
   }
 
   Internal<T> recv()
@@ -3040,7 +3097,8 @@ public:
   static void send(const ThreadIdentifier thread_id,
     const Internal<T>& data)
   {
-    tracer().append_message_send_event(to_address(thread_id), Internal<T>::term(data));
+    tracer().append_message_send_event(to_address(thread_id),
+      reflect<T>(), Internal<T>::term(data));
   }
 
   template<typename T>
@@ -3048,8 +3106,8 @@ public:
     const External<T>& data)
   {
     smt::UnsafeTerm term = append_input_event(data);
-    tracer().append_message_send_event(
-      to_address(thread_id), std::move(term));
+    tracer().append_message_send_event(to_address(thread_id),
+      reflect<T>(), std::move(term));
   }
 
   template<typename T>
