@@ -41,6 +41,56 @@ TEST(CrvFunctionalTest, MultipathSafeIf)
   EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
 }
 
+// For more explanations, see Section 2.2 (Sums and Recurrences)
+// in "Concrete Mathematics", Second Edition, by Ronald L. Graham,
+// Donald E. Knuth, and Oren Patashnik
+crv::Internal<int> sumR(
+  crv::Internal<int> a,
+  crv::Internal<int> b,
+  crv::Internal<int> k)
+{
+  crv::Internal<int> sum = a + b*k;
+  if (crv::tracer().decide_flip(k > 0))
+    return sum + sumR(a, b, k-1);
+  else
+    return sum;
+}
+
+// uses reals, so no overflow detection
+TEST(CrvFunctionalTest, SafeRecurrenceSum)
+{
+  // N must be even
+  constexpr unsigned N = 4;
+
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  crv::External<int> x;
+  crv::External<int> y;
+  crv::Internal<int> a = x;
+  crv::Internal<int> b = y;
+  crv::Internal<int> result = sumR(a, b, N);
+  crv::tracer().add_error(result != ((a*(N+1)) + (b*(N+1)*(N/2))));
+  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+}
+
+TEST(CrvFunctionalTest, UnsafeRecurrenceSum)
+{
+  // N must be even
+  constexpr unsigned N = 4;
+
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  crv::External<int> x;
+  crv::External<int> y;
+  crv::Internal<int> a = x;
+  crv::Internal<int> b = y;
+  crv::Internal<int> result = sumR(a, b, N);
+  crv::tracer().add_error(result == ((a*(N+1)) + (b*(N+1)*(N/2))));
+  EXPECT_EQ(smt::sat, encoder.check(crv::tracer()));
+}
+
 void unsafe_simple_assign_1(crv::External<int>& i)
 {
   i = 1;
