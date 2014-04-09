@@ -118,16 +118,23 @@ typedef int Item;
 #define exch(A, B) { crv::Internal<Item> t = A; A = B; B = t; }
 #define compexch(A, B) if (crv::tracer().decide_flip(less(B, A))) exch(A, B)
 
-void safe_insertion_sort(crv::External<Item[]>& a, int l, int r)
+void safe_insertion_sort(
+  crv::External<Item[]>& a,
+  crv::Internal<size_t> l,
+  crv::Internal<size_t> r)
 {
-  int i;
-  for (i = l+1; i <= r; i++) compexch(a[l], a[i]);
-  for (i = l+2; i <= r; i++)
+  crv::Internal<size_t> i = 0;
+  for (i = l+1; crv::tracer().decide_flip(i <= r); i = i+1)
+    compexch(a[l], a[i]);
+
+  for (i = l+2; crv::tracer().decide_flip(i <= r); i = i+1)
   {
-    int j = i; crv::Internal<Item> v = a[i];
-    while (0 < j && crv::tracer().decide_flip(less(v, a[j-1])))
+    crv::Internal<size_t> j = i;
+    crv::Internal<Item> v = a[i];
+    while (crv::tracer().decide_flip(0<j && less(v, a[j-1])))
     {
-      a[j] = a[j-1]; j--;
+      a[j] = a[j-1];
+      j = j-1;
     }
     a[j] = v;
   }
@@ -136,7 +143,6 @@ void safe_insertion_sort(crv::External<Item[]>& a, int l, int r)
 TEST(CrvFunctionalTest, SafeInsertionSort)
 {
   constexpr unsigned N = 4;
-  unsigned unwind;
 
   crv::tracer().reset();
   crv::Encoder encoder;
@@ -161,17 +167,24 @@ TEST(CrvFunctionalTest, SafeInsertionSort)
   while (crv::tracer().flip());
 }
 
-void unsafe_insertion_sort(crv::External<Item[]>& a, int l, int r)
+void unsafe_insertion_sort(
+  crv::External<Item[]>& a,
+  crv::Internal<size_t> l,
+  crv::Internal<size_t> r)
 {
-  int i;
-  for (i = l+1; i <= r; i++) compexch(a[l], a[i]);
-  for (i = l+2; i <= r; i++)
+  crv::Internal<size_t> i = 0;
+  for (i = l+1; crv::tracer().decide_flip(i <= r); i = i+1)
+    compexch(a[l], a[i]);
+
+  for (i = l+2; crv::tracer().decide_flip(i <= r); i = i+1)
   {
-    int j = i; crv::Internal<Item> v = a[i];
-    while (0 < j && crv::tracer().decide_flip(less(v, a[j-1])))
+    crv::Internal<size_t> j = i;
+    crv::Internal<Item> v = a[i];
+    while (crv::tracer().decide_flip(0<j && less(v, a[j-1])))
     {
-      a[j] = a[j]; j--;
+      a[j] = a[j];
       //       ^ bug due to wrong index (it should be j-1)
+      j = j-1;
     }
     a[j] = v;
   }
@@ -180,7 +193,6 @@ void unsafe_insertion_sort(crv::External<Item[]>& a, int l, int r)
 TEST(CrvFunctionalTest, UnsafeInsertionSort)
 {
   constexpr unsigned N = 4;
-  unsigned unwind;
 
   crv::tracer().reset();
   crv::Encoder encoder;
