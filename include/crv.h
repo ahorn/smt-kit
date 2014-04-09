@@ -1251,6 +1251,24 @@ namespace simplifier
       smt::ADD <= opcode and opcode <= smt::LOR>
   {};
 
+  template<smt::Opcode opcode, typename T>
+  struct AlgebraicProperty
+  {
+    static bool is_annihilator(T literal) { return false; }
+  };
+
+  template<>
+  struct AlgebraicProperty<smt::LAND, bool>
+  {
+    static bool is_annihilator(bool literal) { return !literal; }
+  };
+
+  template<>
+  struct AlgebraicProperty<smt::LOR, bool>
+  {
+    static bool is_annihilator(bool literal) { return literal; }
+  };
+
   /// Constant propagation in commutative monoids
   struct Lazy
   {
@@ -1258,7 +1276,9 @@ namespace simplifier
       typename std::enable_if<IsCommutativeMonoid<opcode, T>::value>::type>
     static Internal<T> apply(const Internal<T>& arg, const T literal)
     {
-      if ((!arg.is_lazy() || arg.opcode() != opcode) && !arg.is_literal())
+      if (AlgebraicProperty<opcode, T>::is_annihilator(literal))
+        return Internal<T>(literal);
+      else if ((!arg.is_lazy() || arg.opcode() != opcode) && !arg.is_literal())
         return Internal<T>::template make_lazy<opcode>(arg, literal);
       else
         return Internal<T>::template propagate<opcode>(arg, literal);
@@ -1268,7 +1288,9 @@ namespace simplifier
       typename std::enable_if<IsCommutativeMonoid<opcode, T>::value>::type>
     static Internal<T> apply(Internal<T>&& arg, const T literal)
     {
-      if ((!arg.is_lazy() || arg.opcode() != opcode) && !arg.is_literal())
+      if (AlgebraicProperty<opcode, T>::is_annihilator(literal))
+        return Internal<T>(literal);
+      else if ((!arg.is_lazy() || arg.opcode() != opcode) && !arg.is_literal())
         return Internal<T>::template make_lazy<opcode>(std::move(arg), literal);
       else
         return Internal<T>::template propagate<opcode>(std::move(arg), literal);
@@ -1336,34 +1358,6 @@ namespace simplifier
   };
 
   template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(const Internal<U>& u, const Internal<V>& v)
-  {
-    return Internal<T>(internal::Eval<opcode>::eval(
-      Internal<U>::term(u), Internal<V>::term(v)));
-  }
-
-  template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(const Internal<U>& u, Internal<V>&& v)
-  {
-    return Internal<T>(internal::Eval<opcode>::eval(
-      Internal<U>::term(u), Internal<V>::term(std::move(v))));
-  }
-
-  template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(Internal<U>&& u, const Internal<V>& v)
-  {
-    return Internal<T>(internal::Eval<opcode>::eval(
-      Internal<U>::term(std::move(u)), Internal<V>::term(v)));
-  }
-
-  template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(Internal<U>&& u, Internal<V>&& v)
-  {
-    return Internal<T>(internal::Eval<opcode>::eval(
-      Internal<U>::term(std::move(u)), Internal<V>::term(std::move(v))));
-  }
-
-  template<smt::Opcode opcode, typename T, typename U, typename V>
   static Internal<T> apply(const Internal<U>& u, const V literal)
   {
     return std::conditional<
@@ -1405,6 +1399,54 @@ namespace simplifier
                IsCommutativeMonoid<opcode, T>::value,
       /* then */ Lazy,
       /* else */ Eager>::type::template apply<opcode, T>(literal, std::move(v));
+  }
+
+  template<smt::Opcode opcode, typename T, typename U, typename V>
+  static Internal<T> apply(const Internal<U>& u, const Internal<V>& v)
+  {
+    if (u.is_literal())
+      return apply<opcode, T, U, V>(u.literal(), v);
+    else if (v.is_literal())
+      return apply<opcode, T, U, V>(u, v.literal());
+    else
+      return Internal<T>(internal::Eval<opcode>::eval(
+        Internal<U>::term(u), Internal<V>::term(v)));
+  }
+
+  template<smt::Opcode opcode, typename T, typename U, typename V>
+  static Internal<T> apply(const Internal<U>& u, Internal<V>&& v)
+  {
+    if (u.is_literal())
+      return apply<opcode, T, U, V>(u.literal(), std::move(v));
+    else if (v.is_literal())
+      return apply<opcode, T, U, V>(u, v.literal());
+    else
+      return Internal<T>(internal::Eval<opcode>::eval(
+        Internal<U>::term(u), Internal<V>::term(std::move(v))));
+  }
+
+  template<smt::Opcode opcode, typename T, typename U, typename V>
+  static Internal<T> apply(Internal<U>&& u, const Internal<V>& v)
+  {
+    if (u.is_literal())
+      return apply<opcode, T, U, V>(u.literal(), v);
+    else if (v.is_literal())
+      return apply<opcode, T, U, V>(std::move(u), v.literal());
+    else
+      return Internal<T>(internal::Eval<opcode>::eval(
+        Internal<U>::term(std::move(u)), Internal<V>::term(v)));
+  }
+
+  template<smt::Opcode opcode, typename T, typename U, typename V>
+  static Internal<T> apply(Internal<U>&& u, Internal<V>&& v)
+  {
+    if (u.is_literal())
+      return apply<opcode, T, U, V>(u.literal(), std::move(v));
+    else if (v.is_literal())
+      return apply<opcode, T, U, V>(std::move(u), v.literal());
+    else
+      return Internal<T>(internal::Eval<opcode>::eval(
+        Internal<U>::term(std::move(u)), Internal<V>::term(std::move(v))));
   }
 }
 

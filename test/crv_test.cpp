@@ -2979,8 +2979,9 @@ TEST(CrvTest, SimplifierMakeLazyAndConstantPropagation)
   tracer().reset();
   Encoder encoder;
 
-  External<int> a = 0;
-  Internal<int> b = a;
+  External<int> x = 0;
+  Internal<int> a = 1;
+  Internal<int> b = x;
   EXPECT_FALSE(b.is_lazy());
   EXPECT_FALSE(b.is_literal());
 
@@ -2996,8 +2997,20 @@ TEST(CrvTest, SimplifierMakeLazyAndConstantPropagation)
   EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer()));
   EXPECT_EQ(8, roperand<smt::ADD>(b));
 
+  EXPECT_TRUE((a < 2).is_literal());
+  EXPECT_TRUE((a < 2).literal());
+
+  EXPECT_TRUE((2 < a).is_literal());
+  EXPECT_FALSE((2 < a).literal());
+
+  EXPECT_FALSE((b < 3).is_literal());
+  EXPECT_TRUE((2 < a && b < 3).is_literal());
+  EXPECT_FALSE((2 < a && b < 3).literal());
+  EXPECT_TRUE((a < 2 || b < 3).is_literal());
+  EXPECT_TRUE((a < 2 || b < 3).literal());
+
   // rvalue reference arguments
-  Internal<int> c = a;
+  Internal<int> c = x;
   EXPECT_FALSE(c.is_lazy());
   EXPECT_FALSE(c.is_literal());
 
