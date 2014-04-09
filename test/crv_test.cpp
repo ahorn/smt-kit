@@ -1167,6 +1167,76 @@ TEST(CrvTest, Array)
   EXPECT_EQ(4, tracer().per_address_index().at(xs.address).stores().size());
 }
 
+TEST(CrvTest, CompareArrayElements)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<int[2]> a;
+
+  make_any(a[0]);
+  make_any(a[1]);
+
+  EXPECT_EQ(smt::sat, encoder.check(a[0] < a[1], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] <= a[1], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] > a[1], tracer()));
+
+  tracer().add_assertion(a[0] < a[1]);
+  EXPECT_EQ(smt::sat, encoder.check(a[0] < a[1], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] <= a[1], tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] > a[1], tracer()));
+}
+
+TEST(CrvTest, SwapArrayElements)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<int[2]> a;
+  make_any(a[0]);
+  make_any(a[1]);
+
+  tracer().add_assertion(a[1] < a[0]);
+
+  // swap
+  Internal<int> t = a[0];
+  a[0] = a[1];
+  a[1] = t;
+
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] < a[0], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] <= a[1], tracer()));
+}
+
+// Future extension note: if another initialization value is
+// sought (e.g. a nondeterministic value), then is is _not_
+// enough to remove "ld.term == std::move(ld_zero)" inside
+// Encoder::encode_load_from(const PerAddressIndex&) because
+// it would give the wrong results for sequential code such
+// as "a[0]; a[0]". Instead, the ld_zero term would have to
+// be replaced by a function application "f(ld.offset_term)".
+TEST(CrvTest, InitialArray)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  External<int[1]> a;
+
+  // array elements are initialized to zero (see load_from)
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != 0, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 0, tracer()));
+
+  Internal<int> s = 42;
+  tracer().add_assertion(a[0] == s);
+  Internal<int> t = a[0];
+
+  // (incorrectly) SAT when "ld.term == std::move(ld_zero)"
+  // in Encoder::encode_load_from() function is removed
+  EXPECT_EQ(smt::unsat, encoder.check(t != s, tracer()));
+
+  // unsat due to zero initialization (see above)
+  EXPECT_EQ(smt::unsat, encoder.check(t == s, tracer()));
+}
+
 TEST(CrvTest, ExternalArrayWithLiteralOffset) {
   tracer().reset();
   Encoder encoder;

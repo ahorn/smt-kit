@@ -404,6 +404,10 @@ private:
   std::unordered_map<ThreadIdentifier,
     std::list<EventIdentifier>::const_iterator> m_barrier_map;
 
+  // calls make_value_symbol()
+  template<typename T>
+  friend Internal<T> any();
+
   template<typename T>
   typename Smt<T>::Sort make_value_symbol()
   {
@@ -1872,6 +1876,17 @@ CRV_BUILTIN_BINARY_OP(^, XOR)
 namespace crv
 {
 
+// \internal relies on External<T>(Internal<T>&&) constructor
+template<typename T>
+Internal<T> any()
+{
+  return Internal<T>(tracer().make_value_symbol<T>());
+}
+
+template<typename T> void make_any(Internal<T>& arg) { arg = any<T>(); }
+template<typename T> void make_any(External<T>& arg) { arg = any<T>(); }
+template<typename T> void make_any(__External<T>&& arg) { arg = any<T>(); }
+
 template<typename T,
   class Enable = typename std::enable_if<std::is_arithmetic<T>::value>::type>
 inline Internal<T>& post_increment(Internal<T>& arg)
@@ -2324,7 +2339,7 @@ private:
                          sld_equality and s.offset_term == ld.offset_term);
         }
 
-        /* initial array elements are zero */
+        /* initial array elements are zero, cf. CrvTest::InitialArray */
         smt::UnsafeTerm ld_zero(smt::literal(ld.term.sort(), 0));
         and_ldf = and_ldf and smt::implies(
           /* if */ not or_ldf,

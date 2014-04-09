@@ -107,6 +107,106 @@ TEST(CrvFunctionalTest, UnsafeCounter)
   EXPECT_TRUE(error);
 }
 
+// These macros and the algorithms that use them are taken from
+// "Algorithms in C, Third Edition, Parts 1-4" by Robert Sedgewick.
+//
+// For the full and correct code, see
+//   https://www.cs.princeton.edu/~rs/Algs3.c1-4/code.txt
+typedef int Item;
+#define key(A) (A)
+#define less(A, B) (key(A) < key(B))
+#define exch(A, B) { crv::Internal<Item> t = A; A = B; B = t; }
+#define compexch(A, B) if (crv::tracer().decide_flip(less(B, A))) exch(A, B)
+
+void safe_insertion_sort(crv::External<Item[]>& a, int l, int r)
+{
+  int i;
+  for (i = l+1; i <= r; i++) compexch(a[l], a[i]);
+  for (i = l+2; i <= r; i++)
+  {
+    int j = i; crv::Internal<Item> v = a[i];
+    while (0 < j && crv::tracer().decide_flip(less(v, a[j-1])))
+    {
+      a[j] = a[j-1]; j--;
+    }
+    a[j] = v;
+  }
+}
+
+TEST(CrvFunctionalTest, SafeInsertionSort)
+{
+  constexpr unsigned N = 4;
+  unsigned unwind;
+
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  do
+  {
+    crv::External<Item[]> a;
+
+    // initialize every array element to be nondeterministic
+    // because they are initially zero (otherwise, we would
+    // need to introduce function applications in load_from)
+    for (unsigned i = 0; i < N; i++)
+      make_any(a[i]);
+
+    safe_insertion_sort(a, 0, N-1);
+
+    for (unsigned i = 0; i < N - 1; i++)
+      crv::tracer().add_error(!(a[i] <= a[i+1]));
+
+    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+  }
+  while (crv::tracer().flip());
+}
+
+void unsafe_insertion_sort(crv::External<Item[]>& a, int l, int r)
+{
+  int i;
+  for (i = l+1; i <= r; i++) compexch(a[l], a[i]);
+  for (i = l+2; i <= r; i++)
+  {
+    int j = i; crv::Internal<Item> v = a[i];
+    while (0 < j && crv::tracer().decide_flip(less(v, a[j-1])))
+    {
+      a[j] = a[j]; j--;
+      //       ^ bug due to wrong index (it should be j-1)
+    }
+    a[j] = v;
+  }
+}
+
+TEST(CrvFunctionalTest, UnsafeInsertionSort)
+{
+  constexpr unsigned N = 4;
+  unsigned unwind;
+
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  bool error = false;
+  do
+  {
+    crv::External<Item[]> a;
+
+    // initialize every array element to be nondeterministic
+    // because they are initially zero (otherwise, we would
+    // need to introduce function applications in load_from)
+    for (unsigned i = 0; i < N; i++)
+      make_any(a[i]);
+
+    unsafe_insertion_sort(a, 0, N-1);
+
+    for (unsigned i = 0; i < N - 1; i++)
+      crv::tracer().add_error(!(a[i] <= a[i+1]));
+
+    error |= smt::sat == encoder.check(crv::tracer());
+  }
+  while (crv::tracer().flip() && !error);
+  EXPECT_TRUE(error);
+}
+
 // For more explanations, see Section 2.2 (Sums and Recurrences)
 // in "Concrete Mathematics", Second Edition, by Ronald L. Graham,
 // Donald E. Knuth, and Oren Patashnik
