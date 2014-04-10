@@ -461,6 +461,18 @@ void STunsafe_insert(crv::Internal<Item> item) {
   bst_head = unsafe_bst_insertR(bst_head, item);
 }
 
+// Note that this bug is not trivial. For example,
+// let N = 4 and insert the following:
+//
+//  STinsert(2);
+//  STinsert(1);
+//  STinsert(4);
+//  STinsert(3);
+//
+// Then the array bst_a is sorted (i.e. the bug
+// goes unnoticed). And there are other permutations
+// for which the output is as expected, e.g. call
+// STinsert with "1", "2", "4", "3" in that order.
 TEST(CrvFunctionalTest, UnsafeBst)
 {
   constexpr unsigned N = 4;
