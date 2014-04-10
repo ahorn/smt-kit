@@ -112,11 +112,15 @@ TEST(CrvFunctionalTest, UnsafeCounter)
 //
 // For the full and correct code, see
 //   https://www.cs.princeton.edu/~rs/Algs3.c1-4/code.txt
+
+typedef int Key;
 typedef int Item;
 #define key(A) (A)
 #define less(A, B) (key(A) < key(B))
+#define eq(A, B) (!less(A, B) && !less(B, A))
 #define exch(A, B) { crv::Internal<Item> t = A; A = B; B = t; }
 #define compexch(A, B) if (crv::tracer().decide_flip(less(B, A))) exch(A, B)
+#define NULLitem 0
 
 void safe_insertion_sort(
   crv::External<Item[]>& a,
@@ -347,6 +351,137 @@ TEST(CrvFunctionalTest, UnsafeMergeSort)
 
     for (unsigned i = 0; i < N - 1; i++)
       crv::tracer().add_error(!(a[i] <= a[i+1]));
+
+    error |= smt::sat == encoder.check(crv::tracer());
+  }
+  while (crv::tracer().flip() && !error);
+  EXPECT_TRUE(error);
+}
+
+struct STnode;
+
+// Binary search tree (BST)
+typedef struct STnode* bst_link;
+
+struct STnode {
+  crv::Internal<Item> item;
+  bst_link l, r;
+  int n;
+
+  STnode(const crv::Internal<Item>& _item,
+    bst_link _l, bst_link _r, int _n)
+  : item(_item), l(_l), r(_r), n(_n) {}
+};
+
+static bst_link bst_head, bst_z;
+
+static bst_link NEW(crv::Internal<Item> item, bst_link l, bst_link r, int n) {
+  bst_link x = new STnode(item, l, r, n);
+  return x;
+}
+
+void STinit() {
+  bst_head = (bst_z = NEW(NULLitem, 0, 0, 0));
+}
+
+int STcount() { return bst_head->n; }
+
+static void sortR(bst_link h, void (*visit)(crv::Internal<Item>)) {
+  if (h == bst_z) return;
+  sortR(h->l, visit);
+  visit(h->item);
+  sortR(h->r, visit);
+}
+
+void STsort(void (*visit)(crv::Internal<Item>)) {
+  sortR(bst_head, visit);
+}
+
+static crv::External<Item[]> bst_a;
+static crv::Internal<size_t> bst_a_size = 0;
+void bst_sorter(crv::Internal<Item> item) {
+  bst_a[bst_a_size] = item;
+  bst_a_size = bst_a_size + 1;
+}
+
+static bst_link safe_bst_insertR(bst_link h, crv::Internal<Item> item) {
+  crv::Internal<Key> v = key(item), t = key(h->item);
+  if (h == bst_z) return NEW(item, bst_z, bst_z, 1);
+
+  if (crv::tracer().decide_flip(less(v, t)))
+    h->l = safe_bst_insertR(h->l, item);
+  else
+    h->r = safe_bst_insertR(h->r, item);
+
+  (h->n)++; return h;
+}
+
+void STsafe_insert(crv::Internal<Item> item) { bst_head = safe_bst_insertR(bst_head, item); }
+
+TEST(CrvFunctionalTest, SafeBst)
+{
+  constexpr unsigned N = 4;
+
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  do
+  {
+    STinit();
+
+    for (unsigned i = 0; i < N; i++)
+      STsafe_insert(crv::any<Item>());
+
+    bst_a_size = 0;
+    STsort(bst_sorter);
+
+    crv::tracer().add_error(!(bst_a_size == N));
+    for (unsigned i = 0; i < N - 1; i++)
+      crv::tracer().add_error(!(bst_a[i] <= bst_a[i+1]));
+
+    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+  }
+  while (crv::tracer().flip());
+}
+
+static bst_link unsafe_bst_insertR(bst_link h, crv::Internal<Item> item) {
+  crv::Internal<Key> v = key(item), t = key(h->item);
+  if (h == bst_z) return NEW(item, bst_z, bst_z, 1);
+
+  if (crv::tracer().decide_flip(less(v, t)))
+    h->l = unsafe_bst_insertR(h->r, item);
+    //                           ^ bug due to wrong variable (it should be l)
+  else
+    h->r = unsafe_bst_insertR(h->r, item);
+
+  (h->n)++; return h;
+}
+
+void STunsafe_insert(crv::Internal<Item> item) {
+  bst_head = unsafe_bst_insertR(bst_head, item);
+}
+
+TEST(CrvFunctionalTest, UnsafeBst)
+{
+  constexpr unsigned N = 4;
+
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  bool error = false;
+  do
+  {
+    STinit();
+
+    for (unsigned i = 0; i < N; i++)
+      STunsafe_insert(crv::any<Item>());
+
+    bst_a_size = 0;
+    STsort(bst_sorter);
+
+    crv::tracer().add_error(!(bst_a_size == N));
+    for (unsigned i = 0; i < N - 1; i++)
+      crv::tracer().add_error(!(bst_a[i] <= bst_a[i+1]));
 
     error |= smt::sat == encoder.check(crv::tracer());
   }
