@@ -219,6 +219,141 @@ TEST(CrvFunctionalTest, UnsafeInsertionSort)
   EXPECT_TRUE(error);
 }
 
+void safe_merge(
+  crv::External<Item[]>& aux,
+  crv::External<Item[]>& a,
+  crv::Internal<size_t> l,
+  crv::Internal<size_t> m,
+  crv::Internal<size_t> r)
+{
+  crv::Internal<size_t> i = 0, j = 0, k = 0;
+  for (i = m+1; crv::tracer().decide_flip(i > l); i = i-1)
+    aux[i-1] = a[i-1];
+
+  for (j = m; crv::tracer().decide_flip(j < r); j = j+1)
+    aux[r+m-j] = a[j+1];
+
+  for (k = l; crv::tracer().decide_flip(k <= r); k = k+1)
+  {
+    if (crv::tracer().decide_flip(less(aux[i], aux[j])))
+    {
+      a[k] = aux[i];
+      i = i+1;
+    }
+    else
+    {
+      a[k] = aux[j];
+      j = j-1;
+    }
+  }
+}
+
+void safe_merge_sort(
+  crv::External<Item[]>& aux,
+  crv::External<Item[]>& a,
+  crv::Internal<size_t> l,
+  crv::Internal<size_t> r)
+{
+  crv::Internal<size_t> m = (r+l)/2;
+  if (crv::tracer().decide_flip(r <= l)) return;
+  safe_merge_sort(aux, a, l, m);
+  safe_merge_sort(aux, a, m+1, r);
+  safe_merge(aux, a, l, m, r);
+}
+
+TEST(CrvFunctionalTest, SafeMergeSort)
+{
+  constexpr unsigned N = 4;
+
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  do
+  {
+    crv::External<Item[]> a;
+    crv::External<Item[]> aux;
+
+    for (unsigned i = 0; i < N; i++)
+      make_any(a[i]);
+
+    safe_merge_sort(aux, a, 0, N-1);
+
+    for (unsigned i = 0; i < N - 1; i++)
+      crv::tracer().add_error(!(a[i] <= a[i+1]));
+
+    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+  }
+  while (crv::tracer().flip());
+}
+
+void unsafe_merge(
+  crv::External<Item[]>& aux,
+  crv::External<Item[]>& a,
+  crv::Internal<size_t> l,
+  crv::Internal<size_t> m,
+  crv::Internal<size_t> r)
+{
+  crv::Internal<size_t> i = 0, j = 0, k = 0;
+  for (i = m+1; crv::tracer().decide_flip(i > l); i = i-1)
+    aux[i-1] = a[i-1];
+
+  for (j = m; crv::tracer().decide_flip(j < r); j = j+1)
+    aux[r+m-j] = a[j];
+    //             ^ bug due to wrong offset (it should be j+1)
+
+  for (k = l; crv::tracer().decide_flip(k <= r); k = k+1)
+    if (crv::tracer().decide_flip(less(aux[i], aux[j])))
+    {
+      a[k] = aux[i];
+      i = i+1;
+    }
+    else
+    {
+      a[k] = aux[j];
+      j = j-1;
+    }
+}
+
+void unsafe_merge_sort(
+  crv::External<Item[]>& aux,
+  crv::External<Item[]>& a,
+  crv::Internal<size_t> l,
+  crv::Internal<size_t> r)
+{
+  crv::Internal<size_t> m = (r+l)/2;
+  if (crv::tracer().decide_flip(r <= l)) return;
+  unsafe_merge_sort(aux, a, l, m);
+  unsafe_merge_sort(aux, a, m+1, r);
+  unsafe_merge(aux, a, l, m, r);
+}
+
+TEST(CrvFunctionalTest, UnsafeMergeSort)
+{
+  constexpr unsigned N = 4;
+
+  crv::tracer().reset();
+  crv::Encoder encoder;
+
+  bool error = false;
+  do
+  {
+    crv::External<Item[]> a;
+    crv::External<Item[]> aux;
+
+    for (unsigned i = 0; i < N; i++)
+      make_any(a[i]);
+
+    unsafe_merge_sort(aux, a, 0, N-1);
+
+    for (unsigned i = 0; i < N - 1; i++)
+      crv::tracer().add_error(!(a[i] <= a[i+1]));
+
+    error |= smt::sat == encoder.check(crv::tracer());
+  }
+  while (crv::tracer().flip() && !error);
+  EXPECT_TRUE(error);
+}
+
 // For more explanations, see Section 2.2 (Sums and Recurrences)
 // in "Concrete Mathematics", Second Edition, by Ronald L. Graham,
 // Donald E. Knuth, and Oren Patashnik
