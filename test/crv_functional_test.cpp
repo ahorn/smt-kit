@@ -123,7 +123,7 @@ typedef int Item;
 #define NULLitem 0
 
 void safe_insertion_sort(
-  crv::External<Item[]>& a,
+  crv::Internal<Item[]>& a,
   crv::Internal<size_t> l,
   crv::Internal<size_t> r)
 {
@@ -135,7 +135,8 @@ void safe_insertion_sort(
   {
     crv::Internal<size_t> j = i;
     crv::Internal<Item> v = a[i];
-    while (crv::tracer().decide_flip(0<j && less(v, a[j-1])))
+    while (crv::tracer().decide_flip(0<j) &&
+      crv::tracer().decide_flip(less(v, a[j-1])))
     {
       a[j] = a[j-1];
       j = j-1;
@@ -153,14 +154,7 @@ TEST(CrvFunctionalTest, SafeInsertionSort)
 
   do
   {
-    crv::External<Item[]> a;
-
-    // initialize every array element to be nondeterministic
-    // because they are initially zero (otherwise, we would
-    // need to introduce function applications in load_from)
-    for (unsigned i = 0; i < N; i++)
-      make_any(a[i]);
-
+    crv::Internal<Item[]> a;
     safe_insertion_sort(a, 0, N-1);
 
     for (unsigned i = 0; i < N - 1; i++)
@@ -172,7 +166,7 @@ TEST(CrvFunctionalTest, SafeInsertionSort)
 }
 
 void unsafe_insertion_sort(
-  crv::External<Item[]>& a,
+  crv::Internal<Item[]>& a,
   crv::Internal<size_t> l,
   crv::Internal<size_t> r)
 {
@@ -184,7 +178,8 @@ void unsafe_insertion_sort(
   {
     crv::Internal<size_t> j = i;
     crv::Internal<Item> v = a[i];
-    while (crv::tracer().decide_flip(0<j && less(v, a[j-1])))
+    while (crv::tracer().decide_flip(0<j) &&
+      crv::tracer().decide_flip(less(v, a[j-1])))
     {
       a[j] = a[j];
       //       ^ bug due to wrong index (it should be j-1)
@@ -204,14 +199,7 @@ TEST(CrvFunctionalTest, UnsafeInsertionSort)
   bool error = false;
   do
   {
-    crv::External<Item[]> a;
-
-    // initialize every array element to be nondeterministic
-    // because they are initially zero (otherwise, we would
-    // need to introduce function applications in load_from)
-    for (unsigned i = 0; i < N; i++)
-      make_any(a[i]);
-
+    crv::Internal<Item[]> a;
     unsafe_insertion_sort(a, 0, N-1);
 
     for (unsigned i = 0; i < N - 1; i++)
@@ -224,8 +212,8 @@ TEST(CrvFunctionalTest, UnsafeInsertionSort)
 }
 
 void safe_merge(
-  crv::External<Item[]>& aux,
-  crv::External<Item[]>& a,
+  crv::Internal<Item[]>& aux,
+  crv::Internal<Item[]>& a,
   crv::Internal<size_t> l,
   crv::Internal<size_t> m,
   crv::Internal<size_t> r)
@@ -253,8 +241,8 @@ void safe_merge(
 }
 
 void safe_merge_sort(
-  crv::External<Item[]>& aux,
-  crv::External<Item[]>& a,
+  crv::Internal<Item[]>& aux,
+  crv::Internal<Item[]>& a,
   crv::Internal<size_t> l,
   crv::Internal<size_t> r)
 {
@@ -274,12 +262,8 @@ TEST(CrvFunctionalTest, SafeMergeSort)
 
   do
   {
-    crv::External<Item[]> a;
-    crv::External<Item[]> aux;
-
-    for (unsigned i = 0; i < N; i++)
-      make_any(a[i]);
-
+    crv::Internal<Item[]> a;
+    crv::Internal<Item[]> aux;
     safe_merge_sort(aux, a, 0, N-1);
 
     for (unsigned i = 0; i < N - 1; i++)
@@ -291,8 +275,8 @@ TEST(CrvFunctionalTest, SafeMergeSort)
 }
 
 void unsafe_merge(
-  crv::External<Item[]>& aux,
-  crv::External<Item[]>& a,
+  crv::Internal<Item[]>& aux,
+  crv::Internal<Item[]>& a,
   crv::Internal<size_t> l,
   crv::Internal<size_t> m,
   crv::Internal<size_t> r)
@@ -319,8 +303,8 @@ void unsafe_merge(
 }
 
 void unsafe_merge_sort(
-  crv::External<Item[]>& aux,
-  crv::External<Item[]>& a,
+  crv::Internal<Item[]>& aux,
+  crv::Internal<Item[]>& a,
   crv::Internal<size_t> l,
   crv::Internal<size_t> r)
 {
@@ -341,12 +325,8 @@ TEST(CrvFunctionalTest, UnsafeMergeSort)
   bool error = false;
   do
   {
-    crv::External<Item[]> a;
-    crv::External<Item[]> aux;
-
-    for (unsigned i = 0; i < N; i++)
-      make_any(a[i]);
-
+    crv::Internal<Item[]> a;
+    crv::Internal<Item[]> aux;
     unsafe_merge_sort(aux, a, 0, N-1);
 
     for (unsigned i = 0; i < N - 1; i++)
@@ -397,7 +377,7 @@ void STsort(void (*visit)(crv::Internal<Item>)) {
   sortR(bst_head, visit);
 }
 
-static crv::External<Item[]> bst_a;
+static crv::Internal<Item[]> bst_a;
 static crv::Internal<size_t> bst_a_size = 0;
 void bst_sorter(crv::Internal<Item> item) {
   bst_a[bst_a_size] = item;
@@ -432,6 +412,7 @@ TEST(CrvFunctionalTest, SafeBst)
     for (unsigned i = 0; i < N; i++)
       STsafe_insert(crv::any<Item>());
 
+    bst_a.clear();
     bst_a_size = 0;
     STsort(bst_sorter);
 
@@ -488,6 +469,7 @@ TEST(CrvFunctionalTest, UnsafeBst)
     for (unsigned i = 0; i < N; i++)
       STunsafe_insert(crv::any<Item>());
 
+    bst_a.clear();
     bst_a_size = 0;
     STsort(bst_sorter);
 

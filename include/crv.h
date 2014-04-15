@@ -316,7 +316,19 @@ struct Smt
   typedef typename std::conditional<
     /* if */ std::is_same<bool, T>::value,
     /* then */ smt::Bool,
-    /* else */ smt::Real>::type Sort;
+    /* else */ smt::Int>::type Sort;
+};
+
+template<class T>
+struct Smt<T[]>
+{
+  typedef smt::Array<smt::Int, typename Smt<T>::Sort> Sort;
+};
+
+template<class T, size_t N>
+struct Smt<T[N]>
+{
+  typedef smt::Array<smt::Int, typename Smt<T>::Sort> Sort;
 };
 
 /// Nesting of branches within a single thread
@@ -407,6 +419,9 @@ private:
   // calls make_value_symbol()
   template<typename T>
   friend Internal<T> any();
+
+  template<typename T>
+  friend class Internal;
 
   template<typename T>
   typename Smt<T>::Sort make_value_symbol()
@@ -1076,7 +1091,22 @@ private:
     assert(!m_term.is_null() || m_op == nullptr);
   }
 
+protected:
+  const typename Smt<T>::Sort& term() const
+  {
+    return m_term;
+  }
+
 public:
+  // nondeterministic value
+  Internal()
+  : m_term(tracer().make_value_symbol<T>()),
+    m_v(),
+    m_op(nullptr)
+  {
+    assert(!m_term.is_null());
+  }
+
   Internal(const Internal& other)
   : m_term(other.m_term),
     m_v(other.m_v),
@@ -1241,6 +1271,234 @@ public:
     return arg.m_op->fuse(std::move(arg.m_term), std::move(arg.m_v));
   }
 };
+
+template<typename T, typename U> class _Internal;
+
+// McCarthy array with constant propagation
+template<typename T>
+class Internal<T[]>
+{
+public:
+  typedef smt::Int DomainSort;
+  typedef typename Smt<T>::Sort RangeSort;
+  typedef smt::Array<DomainSort, RangeSort> Sort;
+
+  // Used for simplifications
+  typedef std::vector<Internal<T>> Vector;
+
+private:
+  typedef typename Vector::size_type VectorSize;
+
+  // we want to detect overflows
+  static_assert(std::is_unsigned<VectorSize>::value, "VectorSize must be unsigned");
+
+  // if m_vector is nonempty, then m_term.is_null()
+  // Once !m_term.is_null(), it stays this way.
+  Sort m_term;
+  Vector m_vector;
+
+public:
+  Internal() : m_term(), m_vector() {}
+
+  void clear()
+  {
+    m_term = Sort();
+  }
+
+  template<typename U>
+  _Internal<T, U> operator[](const Internal<U>& offset);
+
+  _Internal<T, size_t> operator[](size_t offset)
+  {
+    return operator[](Internal<size_t>(offset));
+  }
+};
+
+// McCarthy array with constant propagation and explicit size
+template<typename T, size_t N>
+class Internal<T[N]>
+{
+private:
+  typedef Internal<T[]> Forward;
+  Forward m_forward;
+
+public:
+  Internal() : m_forward() {}
+
+  void clear()
+  {
+    m_forward.clear();
+  }
+
+  template<typename U>
+  _Internal<T, U> operator[](const Internal<U>& offset)
+  {
+    if (offset.is_literal())
+      assert(offset.literal() < N);
+
+    return m_forward[offset];
+  }
+
+  _Internal<T, size_t> operator[](size_t offset)
+  {
+    return m_forward[offset];
+  }
+};
+
+// Temporary returned by Internal<T[]>::operator[](const Internal<U>&)
+template<typename T, typename U>
+class _Internal : public Internal<T>
+{
+public:
+  typedef Internal<T[]> InternalArray;
+
+private:
+  // !m_term_ref.is_null() if and only if s_empty is referenced by m_vector_ref
+  static typename InternalArray::Vector s_empty;
+
+  typename InternalArray::Sort& m_term_ref;
+  typename InternalArray::Vector& m_vector_ref;
+  const Internal<U> m_offset;
+
+  template<typename _U>
+  friend _Internal<T, _U> Internal<T[]>::operator[](const Internal<_U>&);
+
+  // McCarthy array without simplifications
+  _Internal(
+    typename InternalArray::Sort& term_ref,
+    const Internal<U>& offset)
+  : Internal<T>(smt::select(term_ref, Internal<U>::term(offset))),
+    m_term_ref(term_ref),
+    m_vector_ref(s_empty),
+    m_offset(offset)
+  {
+    assert(!term_ref.is_null());
+    assert(!Internal<T>::term().is_null());
+
+    // we don't simplify any longer
+    assert(m_vector_ref.empty());
+  }
+
+  // Constant propagation
+
+  // \pre: offset_literal < vector_ref.size()
+  _Internal(
+    typename InternalArray::Sort& term_ref,
+    typename InternalArray::Vector& vector_ref,
+    const U literal_offset)
+  : Internal<T>(vector_ref.at(literal_offset)),
+    m_term_ref(term_ref),
+    m_vector_ref(vector_ref),
+    m_offset(literal_offset)
+  {
+    assert(term_ref.is_null());
+    assert(!m_vector_ref.empty());
+    assert(m_offset.is_literal());
+    assert(m_offset.literal() == literal_offset);
+  }
+
+  void store(typename InternalArray::RangeSort&& term)
+  {
+    m_term_ref = smt::store(m_term_ref, Internal<U>::term(m_offset), term);
+  }
+
+  bool is_simplified() const
+  {
+    return &m_vector_ref != &s_empty;
+  }
+
+public:
+  _Internal(_Internal&& other)
+  : m_term_ref(other.m_term_ref),
+    m_vector_ref(other.m_vector_ref),
+    m_offset(std::move(other.m_offset))
+  {}
+
+  Internal<T>& operator=(T v)
+  {
+    if (is_simplified())
+      m_vector_ref.at(m_offset.literal()) = v;
+    else
+      store(smt::literal<typename InternalArray::RangeSort>(v));
+
+    return *this;
+  }
+
+  Internal<T>& operator=(const Internal<T>& other)
+  {
+    if (is_simplified())
+      m_vector_ref.at(m_offset.literal()) = other;
+    else
+      store(Internal<T>::term(other));
+
+    return *this;
+  }
+
+  Internal<T>& operator=(Internal<T>&& other)
+  {
+    if (is_simplified())
+      m_vector_ref.at(m_offset.literal()) = std::move(other);
+    else
+      store(Internal<T>::term(std::move(other)));
+
+    return *this;
+  }
+
+  Internal<T>& operator=(_Internal<T, U>&& other)
+  {
+    return operator=(std::move(static_cast<Internal<T>>(other)));
+  }
+};
+
+template<typename T, typename U>
+typename Internal<T[]>::Vector _Internal<T, U>::s_empty;
+
+template<typename T>
+template<typename U>
+_Internal<T, U> Internal<T[]>::operator[](const Internal<U>& offset)
+{
+  if (m_term.is_null())
+  {
+    if (offset.is_literal())
+    {
+      const U offset_literal = offset.literal();
+
+      if (offset_literal >= m_vector.size())
+      {
+        VectorSize new_size = static_cast<VectorSize>(offset_literal) + 1;
+
+        // overflow?
+        assert(new_size != 0);
+
+        // fill in nondeterministic array elements by
+        // using Internal<T> default constructor
+        m_vector.resize(new_size);
+      }
+
+      assert(offset_literal < m_vector.size());
+      return _Internal<T, U>(m_term, m_vector, offset_literal);
+    }
+    else
+    {
+      // initialize nondeterministic array
+      m_term = tracer().make_value_symbol<T[]>();
+
+      // before freeing m_vector, we symbolically represent it in m_term
+      for (typename Vector::size_type i = 0; i < m_vector.size(); ++i)
+        m_term = smt::store(m_term, smt::literal<DomainSort>(i),
+          Internal<T>::term(m_vector[i]));
+
+      // free memory
+      m_vector.clear();
+      m_vector.shrink_to_fit();
+    }
+  }
+
+  assert(!m_term.is_null());
+  assert(m_vector.empty());
+
+  return _Internal<T, U>(m_term, offset);
+}
 
 namespace simplifier
 {
@@ -1918,7 +2176,7 @@ CRV_BUILTIN_BINARY_OP(^, XOR)
 namespace crv
 {
 
-// \internal relies on External<T>(Internal<T>&&) constructor
+// \internal works also with External<T>(Internal<T>&&) constructor
 template<typename T>
 Internal<T> any()
 {
@@ -2848,7 +3106,7 @@ public:
 #ifdef __BV_TIME__
   : m_solver(smt::QF_AUFBV_LOGIC),
 #else
-  : m_solver(smt::QF_LRA_LOGIC),
+  : m_solver(smt::QF_AUFLIRA_LOGIC),
 #endif
     m_time_map(),
 #ifdef _SUP_READ_FROM_

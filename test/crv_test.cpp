@@ -3245,3 +3245,175 @@ TEST(CrvTest, BvApproximation)
   EXPECT_EQ(smt::unsat, encoder.check(tracer()));
 }
 #endif
+
+TEST(CrvTest, InternalArray)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Internal<char[]> a;
+  a[1] = 'A';
+
+  Internal<char> b = a[1];
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'A', tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+
+  Internal<size_t> i;
+  Internal<char> c = a[i];
+
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'A', tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer()));
+
+  a[i] = 'B';
+
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
+
+  // satisfied by i equals 1
+  EXPECT_EQ(smt::sat, encoder.check(a[1] != 'A', tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[i] == 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[i] != 'B', tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer()));
+
+  a[1] = a[i];
+
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'B', tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[i] == 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[i] != 'B', tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer()));
+}
+
+TEST(CrvTest, InternalArrayWithExplicitSize)
+{
+  tracer().reset();
+  Encoder encoder;
+
+  Internal<char[5]> a;
+  a[1] = 'A';
+
+  Internal<char> b = a[1];
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'A', tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+
+  Internal<size_t> i;
+  Internal<char> c = a[i];
+
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'A', tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer()));
+
+  a[i] = 'B';
+
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
+
+  // satisfied by i equals 1
+  EXPECT_EQ(smt::sat, encoder.check(a[1] != 'A', tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[i] == 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[i] != 'B', tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer()));
+
+  a[1] = a[i];
+
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'B', tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(a[i] == 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[i] != 'B', tracer()));
+
+  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer()));
+}
