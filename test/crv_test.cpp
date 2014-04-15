@@ -602,14 +602,14 @@ TEST(CrvTest, Guard)
   tracer().reset();
   EXPECT_FALSE(tracer().decide_flip(false, false));
   EXPECT_TRUE(tracer().decide_flip(true, true));
-  tracer().add_error(false);
-  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  tracer().add_error(true);
+  EXPECT_EQ(smt::sat, encoder.check(tracer()));
   EXPECT_FALSE(tracer().flip());
 
   tracer().reset();
   EXPECT_TRUE(tracer().decide_flip(true, false));
-  tracer().add_error(false);
-  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  tracer().add_error(true);
+  EXPECT_EQ(smt::sat, encoder.check(tracer()));
   EXPECT_FALSE(tracer().flip());
 
   External<bool> false_bool;

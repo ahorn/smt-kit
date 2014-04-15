@@ -30,9 +30,16 @@ void Tracer::add_assertion(Internal<bool>&& assertion)
 void Tracer::add_error(Internal<bool>&& error)
 {
   if (error.is_literal())
-    assert(!error.literal());
-
-  m_errors.push_back(guard() and Internal<bool>::term(std::move(error)));
+  {
+    if (error.literal())
+      m_errors.push_back(guard());
+    else
+      m_errors.push_back(smt::literal<smt::Bool>(false));
+  }
+  else
+  {
+    m_errors.push_back(guard() and Internal<bool>::term(std::move(error)));
+  }
 }
 
 void Tracer::append_channel_send_event(
