@@ -99,6 +99,11 @@ enum Logic : unsigned
   /// the Fixed_Size_BitVectors signature with free sort and function symbols.
   QF_UFBV_LOGIC,
 
+  /// Linear Integer and Real Arithmetic with Uninterpreted Functions and Arrays
+
+  /// Not official (yet) but supported by at least CVC4 and Z3
+  QF_AUFLIRA_LOGIC,
+
   /// Linear Integer Arithmetic with Uninterpreted Functions and Arrays
 
   /// Summary: quantifier-free formulas to be tested for satisfiability modulo
@@ -306,6 +311,7 @@ struct Logics
     "QF_ABV",
     "QF_AUFBV",
     "QF_UFBV",
+    "QF_AUFLIRA",
     "QF_AUFLIA",
     "QF_AX",
     "QF_BV",
