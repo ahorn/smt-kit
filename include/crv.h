@@ -1297,13 +1297,18 @@ private:
   Sort m_term;
   Vector m_vector;
 
-public:
-  Internal() : m_term(), m_vector() {}
+  template<typename _T>
+  friend void make_any(Internal<_T[]>& arg);
 
+  // reset variable to be nondeterministic
   void clear()
   {
     m_term = Sort();
+    m_vector.clear();
   }
+
+public:
+  Internal() : m_term(), m_vector() {}
 
   template<typename U>
   _Internal<T, U> operator[](const Internal<U>& offset);
@@ -1322,13 +1327,11 @@ private:
   typedef Internal<T[]> Forward;
   Forward m_forward;
 
+  template<typename _T, size_t _N>
+  friend void make_any(Internal<_T[_N]>& arg);
+
 public:
   Internal() : m_forward() {}
-
-  void clear()
-  {
-    m_forward.clear();
-  }
 
   template<typename U>
   _Internal<T, U> operator[](const Internal<U>& offset)
@@ -2186,6 +2189,15 @@ Internal<T> any()
 template<typename T> void make_any(Internal<T>& arg) { arg = any<T>(); }
 template<typename T> void make_any(External<T>& arg) { arg = any<T>(); }
 template<typename T> void make_any(__External<T>&& arg) { arg = any<T>(); }
+
+/// Make an array nondeterministic (i.e. symbolic)
+template<typename T> void make_any(Internal<T[]>& arg) { arg.clear(); }
+
+/// Make a fixed-size array nondeterministic (i.e. symbolic)
+template<typename T, size_t N> void make_any(Internal<T[N]>& arg)
+{
+  make_any(arg.m_forward);
+}
 
 template<typename T,
   class Enable = typename std::enable_if<std::is_arithmetic<T>::value>::type>

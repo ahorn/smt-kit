@@ -3252,6 +3252,8 @@ TEST(CrvTest, InternalArray)
   Encoder encoder;
 
   Internal<char[]> a;
+  make_any(a);
+
   a[1] = 'A';
 
   Internal<char> b = a[1];
@@ -3338,6 +3340,8 @@ TEST(CrvTest, InternalArrayWithExplicitSize)
   Encoder encoder;
 
   Internal<char[5]> a;
+  make_any(a);
+
   a[1] = 'A';
 
   Internal<char> b = a[1];

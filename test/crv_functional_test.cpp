@@ -412,7 +412,7 @@ TEST(CrvFunctionalTest, SafeBst)
     for (unsigned i = 0; i < N; i++)
       STsafe_insert(crv::any<Item>());
 
-    bst_a.clear();
+    crv::make_any(bst_a);
     bst_a_size = 0;
     STsort(bst_sorter);
 
@@ -469,7 +469,7 @@ TEST(CrvFunctionalTest, UnsafeBst)
     for (unsigned i = 0; i < N; i++)
       STunsafe_insert(crv::any<Item>());
 
-    bst_a.clear();
+    crv::make_any(bst_a);
     bst_a_size = 0;
     STsort(bst_sorter);
 
