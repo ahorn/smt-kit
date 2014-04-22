@@ -14,32 +14,10 @@ const std::string Encoder::s_rf_prefix = "rf!";
 const std::string Encoder::s_pf_prefix = "pf!";
 const std::string Encoder::s_ldf_prefix = "ldf!";
 
-Tracer& tracer() {
+Tracer& tracer()
+{
   static Tracer s_tracer;
   return s_tracer;
-}
-
-void Tracer::add_assertion(Internal<bool>&& assertion)
-{
-  if (assertion.is_literal())
-    assert(assertion.literal());
-
-  m_assertions.push_back(Internal<bool>::term(std::move(assertion)));
-}
-
-void Tracer::add_error(Internal<bool>&& error)
-{
-  if (error.is_literal())
-  {
-    if (error.literal())
-      m_errors.push_back(guard());
-    else
-      m_errors.push_back(smt::literal<smt::Bool>(false));
-  }
-  else
-  {
-    m_errors.push_back(guard() and Internal<bool>::term(std::move(error)));
-  }
 }
 
 void Tracer::append_channel_send_event(
@@ -58,36 +36,6 @@ void Tracer::append_message_send_event(
 {
   assert(!term.is_null());
   append_event<MESSAGE_SEND_EVENT>(m_event_id_cnt++, address, sort, term);
-}
-
-bool Tracer::decide_flip(
-  const Internal<bool>& g,
-  bool direction)
-{
-  assert(!m_scope_stack.empty());
-
-  if (g.is_literal())
-    return g.literal();
-
-  if (m_flip_iter == m_flips.cend())
-  {
-    m_flips.emplace_back(direction);
-    assert(m_flips.back().direction == direction);
-  }
-  else
-  {
-    direction = m_flip_iter->direction;
-    m_flip_iter++;
-  }
-
-  if (direction)
-    m_guard = m_guard and Internal<bool>::term(g);
-  else
-    m_guard = m_guard and not Internal<bool>::term(g);
-
-  m_scope_stack.top().guard = m_guard;
-
-  return direction;
 }
 
 void Tracer::scope_then(const Internal<bool>& g)
@@ -121,6 +69,67 @@ void Tracer::scope_end()
 
   m_guard = m_scope_stack.top().guard;
   m_scope_stack.pop();
+}
+
+void Tracer::branch_then(const Internal<bool>& g)
+{
+  assert(!m_scope_stack.empty());
+  assert(!g.is_literal());
+
+  m_guard = m_guard and Internal<bool>::term(g);
+  m_scope_stack.top().guard = m_guard;
+}
+
+void Tracer::branch_else(const Internal<bool>& g)
+{
+  assert(!m_scope_stack.empty());
+  assert(!g.is_literal());
+
+  m_guard = m_guard and not Internal<bool>::term(g);
+  m_scope_stack.top().guard = m_guard;
+}
+
+DfsChecker& dfs_checker()
+{
+  static DfsChecker s_dfs_checker;
+  return s_dfs_checker;
+}
+
+void Checker::add_assertion(Internal<bool>&& assertion)
+{
+  if (assertion.is_literal())
+    assert(assertion.literal());
+
+  m_assertions.push_back(Internal<bool>::term(std::move(assertion)));
+}
+
+void Checker::add_error(Internal<bool>&& error)
+{
+  if (error.is_literal())
+  {
+    if (error.literal())
+      m_errors.push_back(tracer().guard());
+    else
+      m_errors.push_back(smt::literal<smt::Bool>(false));
+  }
+  else
+  {
+    m_errors.push_back(tracer().guard() and Internal<bool>::term(std::move(error)));
+  }
+}
+
+bool DfsChecker::branch(const Internal<bool>& g, const bool direction_hint)
+{
+  if (g.is_literal())
+    return g.literal();
+
+  const bool direction = m_dfs.branch(direction_hint);
+  if (direction)
+    tracer().branch_then(g);
+  else
+    tracer().branch_else(g);
+
+  return direction;
 }
 
 namespace ThisThread

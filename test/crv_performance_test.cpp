@@ -12,6 +12,7 @@ TEST(CrvPerformanceTest, ConstantPropagationInCommutativeMonoid)
   auto start = std::chrono::system_clock::now();
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder; 
 
   crv::Internal<unsigned> k = 0;
@@ -21,8 +22,8 @@ TEST(CrvPerformanceTest, ConstantPropagationInCommutativeMonoid)
   EXPECT_TRUE(k.is_literal());
   EXPECT_EQ(2147516416U, k.literal());
 
-  EXPECT_EQ(smt::unsat, encoder.check(!(k == 2147516416U), crv::tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(k == 2147516416U, crv::tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(k == 2147516416U), crv::tracer(), crv::dfs_checker()));
+  EXPECT_EQ(smt::sat, encoder.check(k == 2147516416U, crv::tracer(), crv::dfs_checker()));
 
   auto end = std::chrono::system_clock::now();
   std::chrono::seconds sec = std::chrono::duration_cast<std::chrono::seconds>(end - start);
@@ -36,18 +37,19 @@ TEST(CrvPerformanceTest, PruneBranchesWithConstantPropagation)
   auto start = std::chrono::system_clock::now();
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder; 
 
   crv::Internal<unsigned> k = 0;
   crv::Internal<unsigned> i = 0;
-  for (; crv::tracer().decide_flip(i < N); i = i + 1)
+  for (; crv::dfs_checker().branch(i < N); i = i + 1)
   {
-    if(crv::tracer().decide_flip(k == 7))
+    if(crv::dfs_checker().branch(k == 7))
       k = 0;
 
     k = k + 1;
   }
-  EXPECT_FALSE(crv::tracer().flip());
+  EXPECT_FALSE(crv::dfs_checker().find_next_path());
   EXPECT_TRUE(i.is_literal());
   EXPECT_TRUE(k.is_literal());
 
@@ -59,11 +61,11 @@ TEST(CrvPerformanceTest, PruneBranchesWithConstantPropagation)
   EXPECT_TRUE(rem.is_literal());
   EXPECT_TRUE(rem.literal());
 
-  EXPECT_EQ(smt::sat, encoder.check(k < 8, crv::tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(!(k < 8), crv::tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(k < 8, crv::tracer(), crv::dfs_checker()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(k < 8), crv::tracer(), crv::dfs_checker()));
 
-  EXPECT_EQ(smt::sat, encoder.check(k == (N % 7), crv::tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(k != (N % 7), crv::tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(k == (N % 7), crv::tracer(), crv::dfs_checker()));
+  EXPECT_EQ(smt::unsat, encoder.check(k != (N % 7), crv::tracer(), crv::dfs_checker()));
 
   auto end = std::chrono::system_clock::now();
   std::chrono::seconds sec = std::chrono::duration_cast<std::chrono::seconds>(end - start);
@@ -77,6 +79,7 @@ TEST(CrvPerformanceTest, SafeSequentialSymbolicModulus)
   auto start = std::chrono::system_clock::now();
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder; 
 
   do
@@ -84,20 +87,20 @@ TEST(CrvPerformanceTest, SafeSequentialSymbolicModulus)
     crv::External<unsigned> any_int;
     crv::Internal<unsigned> k = any_int;
 
-    crv::tracer().add_assertion(0 <= k && k < K);
-    for (crv::Internal<unsigned> n = 0; crv::tracer().decide_flip(n < N); n = n + 1)
+    crv::dfs_checker().add_assertion(0 <= k && k < K);
+    for (crv::Internal<unsigned> n = 0; crv::dfs_checker().branch(n < N); n = n + 1)
     {
       k = k + 1;
-      if (crv::tracer().decide_flip(k == K))
+      if (crv::dfs_checker().branch(k == K))
       {
         k = 0;
       }
     }
 
     // expect k to be always strictly less than K
-    EXPECT_EQ(smt::unsat, encoder.check(!(k < K), crv::tracer()));
+    EXPECT_EQ(smt::unsat, encoder.check(!(k < K), crv::tracer(), crv::dfs_checker()));
   }
-  while (crv::tracer().flip());
+  while (crv::dfs_checker().find_next_path());
 
   auto end = std::chrono::system_clock::now();
   std::chrono::seconds sec = std::chrono::duration_cast<std::chrono::seconds>(end - start);
@@ -112,6 +115,7 @@ TEST(CrvPerformanceTest, UnsafeSequentialSymbolicModulus)
   auto start = std::chrono::system_clock::now();
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder; 
 
   bool found_bug = false;
@@ -120,10 +124,10 @@ TEST(CrvPerformanceTest, UnsafeSequentialSymbolicModulus)
     crv::External<unsigned> any_int;
     crv::Internal<unsigned> k = any_int;
 
-    crv::tracer().add_assertion(0 <= k && k < K);
-    for (crv::Internal<unsigned> n = 0; crv::tracer().decide_flip(n < N); n = n + 1)
+    crv::dfs_checker().add_assertion(0 <= k && k < K);
+    for (crv::Internal<unsigned> n = 0; crv::dfs_checker().branch(n < N); n = n + 1)
     {
-      if (crv::tracer().decide_flip(k == K))
+      if (crv::dfs_checker().branch(k == K))
       {
         k = 0;
       }
@@ -132,9 +136,9 @@ TEST(CrvPerformanceTest, UnsafeSequentialSymbolicModulus)
 
     // there exists at least one path such that
     // k fails to be strictly less than K
-    found_bug |= smt::unsat == encoder.check(!(k < K), crv::tracer());
+    found_bug |= smt::unsat == encoder.check(!(k < K), crv::tracer(), crv::dfs_checker());
   }
-  while (!found_bug && crv::tracer().flip());
+  while (!found_bug && crv::dfs_checker().find_next_path());
   EXPECT_TRUE(found_bug);
 
   auto end = std::chrono::system_clock::now();

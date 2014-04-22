@@ -289,25 +289,56 @@ typedef std::unordered_map<ThreadIdentifier, EventKinds> PerThreadIndex;
 typedef std::unordered_map<ThreadIdentifier, EventIters> PerThreadMap;
 typedef std::unordered_map<EventIter, EventIter> EventMap;
 
-/// Control flow decision along symbolic path
-struct Flip
-{
-  bool direction;
-  bool is_flip;
-
-  Flip(const Flip&) = delete;
-
-  Flip(bool direction)
-  : direction(direction),
-    is_flip(false) {}
-};
-
-typedef std::list<Flip> Flips;
-typedef std::list<Flip>::const_iterator FlipIter;
 typedef std::list<smt::Bool> Bools;
-
 template<typename T> class External;
 template<typename T> class Internal;
+
+class Checker
+{
+private:
+  Bools m_assertions;
+  Bools m_errors;
+
+protected:
+  // no polymorphic deletes
+  ~Checker() {}
+
+public:
+  Checker()
+  : m_assertions(),
+    m_errors() {}
+
+  void reset_assertions()
+  {
+    m_assertions.clear();
+  }
+
+  void reset_errors()
+  {
+    m_errors.clear();
+  }
+
+  /// Add Boolean term of argument to assertions()
+
+  /// This is similar to evaluating the condition in an
+  /// if-statement except that no further flips are required.
+  void add_assertion(Internal<bool>&&);
+
+  /// Add conjunction of guard() and given Boolean term to errors()
+  void add_error(Internal<bool>&&);
+
+  /// Encoded as conjunction
+  const Bools& assertions() const
+  {
+    return m_assertions;
+  }
+
+  /// Encoded as disjunction
+  const Bools& errors() const
+  {
+    return m_errors;
+  }
+};
 
 // Use smt::Bv<T> for bit-precision
 template<typename T>
@@ -374,6 +405,9 @@ struct ThreadLocalScope
   }
 };
 
+/// Generates events
+
+/// A tracer manages all the fields of every Event including guards.
 class Tracer
 {
 public:
@@ -400,12 +434,6 @@ private:
 
   // never null
   smt::Bool m_guard;
-
-  unsigned long long m_flip_cnt;
-  Flips m_flips;
-  FlipIter m_flip_iter;
-  Bools m_assertions;
-  Bools m_errors;
 
   Address m_next_reserved_address;
 
@@ -470,11 +498,6 @@ public:
     m_thread_id_stack(),
     m_scope_stack(),
     m_guard(smt::literal<smt::Bool>(true)),
-    m_flip_cnt(0),
-    m_flips(),
-    m_flip_iter(m_flips.cbegin()),
-    m_assertions(),
-    m_errors(),
     m_next_reserved_address(1),
     m_barrier_list(),
     m_barrier_map()
@@ -543,23 +566,6 @@ public:
     m_scope_stack.emplace(m_guard);
   }
 
-  void reset_flips()
-  {
-    m_flip_cnt = 0;
-    m_flips.clear();
-    m_flip_iter = m_flips.cbegin();
-  }
-
-  void reset_assertions()
-  {
-    m_assertions.clear();
-  }
-
-  void reset_errors()
-  {
-    m_errors.clear();
-  }
-
   void reset_address()
   {
     m_next_reserved_address = 1;
@@ -575,9 +581,6 @@ public:
   {
     reset_event_identifiers();
     reset_events();
-    reset_flips();
-    reset_assertions();
-    reset_errors();
     reset_address();
     reset_barrier();
   }
@@ -615,79 +618,11 @@ public:
     }
   }
 
-  /// Depth-first search strategy
-
-  /// \return is there more to explore?
-  bool flip()
-  {
-    m_flip_iter = m_flips.cbegin();
-
-    while (!m_flips.empty() && m_flips.back().is_flip)
-    {
-      m_flips.pop_back();
-    }
-
-    if (m_flips.empty())
-      return false;
-
-    Flip& flip = m_flips.back();
-    flip.direction = !flip.direction;
-    flip.is_flip = true;
-    m_flip_cnt++;
-
-    reset_events();
-    reset_assertions();
-    reset_errors();
-    reset_address();
-    reset_barrier();
-    assert(0 < m_flip_cnt);
-    assert(!m_flips.empty());
-
-    return true;
-  }
-
-  unsigned long long flip_cnt() const
-  {
-    return m_flip_cnt;
-  }
-
-  Flips& flips()
-  {
-    return m_flips;
-  }
-
-  /// Encoded as conjunction
-  const Bools& assertions() const
-  {
-    return m_assertions;
-  }
-
-  /// Encoded as disjunction 
-  const Bools& errors() const
-  {
-    return m_errors;
-  }
-
-  /// Add Boolean term of argument to assertions()
-
-  /// This is similar to entering "if (condition) { ... }"
-  /// except that no further flips are required.
-  void add_assertion(Internal<bool>&&);
-
-  /// Add conjunction of guard() and given Boolean term to errors()
-  void add_error(Internal<bool>&&);
-
   Address next_reserved_address()
   {
     assert(m_next_reserved_address < s_max_reserved_address);
     return m_next_reserved_address++;
   }
-
-  /// Decide which control flow direction to follow
-
-  /// The second direction argument is only a suggestion that is ignored when
-  /// the first condition argument is_literal()
-  bool decide_flip(const Internal<bool>&, bool direction = true);
 
   /// Returns parent thread identifier
   ThreadIdentifier append_thread_begin_event()
@@ -795,6 +730,9 @@ public:
   void scope_then(const Internal<bool>& guard);
   void scope_else();
   void scope_end();
+
+  void branch_then(const Internal<bool>&);
+  void branch_else(const Internal<bool>&);
 };
 
 // Global for symbolic execution
@@ -3098,13 +3036,17 @@ private:
     unsafe_add(or_error);
   }
 
-  void encode(const Tracer& tracer, bool check_deadlock)
+  void encode_assertions(const Bools& assertions)
   {
-    unsafe_add(tracer.guard());
-    for (const smt::Bool& assertion : tracer.assertions())
+    for (const smt::Bool& assertion : assertions)
     {
       unsafe_add(assertion);
     }
+  }
+
+  void encode(const Tracer& tracer, bool check_deadlock)
+  {
+    unsafe_add(tracer.guard());
 
     encode_thread_order(tracer.per_thread_map());
     encode_memory_concurrency(tracer);
@@ -3129,10 +3071,11 @@ public:
   /// Checks only whether there is a communication deadlock
 
   /// No errors are encoded
-  smt::CheckResult check_deadlock(const Tracer& tracer)
+  smt::CheckResult check_deadlock(const Tracer& tracer, const Checker& checker)
   {
     m_solver.push();
     encode(tracer, true);
+    encode_assertions(checker.assertions());
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
     return result;
@@ -3147,14 +3090,15 @@ public:
   /// permitted to take on nondeterministic values possibly
   /// leading to false alarms.
   ///
-  /// pre: not errors().empty()
-  smt::CheckResult check(const Tracer& tracer)
+  /// pre: not Checker::errors().empty()
+  smt::CheckResult check(const Tracer& tracer, const Checker& checker)
   {
-    assert(!tracer.errors().empty());
+    assert(!checker.errors().empty());
 
     m_solver.push();
     encode(tracer, false);
-    encode_errors(tracer.errors());
+    encode_assertions(checker.assertions());
+    encode_errors(checker.errors());
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
     return result;
@@ -3168,11 +3112,13 @@ public:
   // leading to false alarms.
   smt::CheckResult check(
     Internal<bool>&& condition,
-    const Tracer& tracer)
+    const Tracer& tracer,
+    const Checker& checker)
   {
     m_solver.push();
     unsafe_add(tracer.guard() and Internal<bool>::term(std::move(condition)));
     encode(tracer, false);
+    encode_assertions(checker.assertions());
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
     return result;
@@ -3279,6 +3225,181 @@ EventMap Encoder::immediate_dominator_map(const Tracer& tracer,
   return map;
 }
 
+/// Control flow decision along symbolic path
+struct Flip
+{
+  bool direction;
+  bool is_flip;
+
+  Flip(const Flip&) = delete;
+
+  Flip(bool direction)
+  : direction(direction),
+    is_flip(false) {}
+};
+
+typedef std::list<Flip> Flips;
+typedef std::list<Flip>::const_iterator FlipIter;
+
+// Explore execution paths in a program using depth-first search
+class Dfs
+{
+private:
+  unsigned long long m_path_cnt;
+  Flips m_flips;
+  FlipIter m_flip_iter;
+
+public:
+  Dfs()
+  : m_path_cnt(0),
+    m_flips(),
+    m_flip_iter(m_flips.cbegin()) {}
+
+  void reset()
+  {
+    m_path_cnt = 0;
+    m_flips.clear();
+    m_flip_iter = m_flips.cbegin();
+  }
+
+  unsigned long long path_cnt() const
+  {
+    return m_path_cnt;
+  }
+
+  const Flips& flips() const
+  {
+    return m_flips;
+  }
+
+  Flips& flips()
+  {
+    return m_flips;
+  }
+
+  /// Depth-first search strategy
+
+  /// \return is there more to explore?
+  bool find_next_path()
+  {
+    m_flip_iter = m_flips.cbegin();
+
+    while (!m_flips.empty() && m_flips.back().is_flip)
+    {
+      m_flips.pop_back();
+    }
+
+    if (m_flips.empty())
+      return false;
+
+    Flip& flip = m_flips.back();
+    flip.direction = !flip.direction;
+    flip.is_flip = true;
+    m_path_cnt++;
+
+    assert(0 < m_path_cnt);
+    assert(!m_flips.empty());
+
+    return true;
+  }
+
+  bool branch(const bool direction_hint)
+  {
+    bool direction = direction_hint;
+    if (is_frontier())
+    {
+      m_flips.emplace_back(direction);
+      assert(m_flips.back().direction == direction_hint);
+    }
+    else
+    {
+      direction = m_flip_iter->direction;
+      m_flip_iter++;
+    }
+    return direction;
+  }
+
+  bool is_frontier() const
+  {
+    return m_flip_iter == m_flips.cend();
+  }
+
+  // \pre: !is_frontier()
+  const Flip& current_flip() const
+  {
+    assert(!is_frontier());
+    return *m_flip_iter;
+  }
+
+  //TODO: update_current_flip(...)
+};
+
+class DfsChecker : public Checker
+{
+private:
+  Dfs m_dfs;
+
+public:
+  DfsChecker()
+  : Checker(),
+    m_dfs() {}
+
+  void reset_dfs()
+  {
+    m_dfs.reset();
+  }
+
+  void reset()
+  {
+    reset_dfs();
+
+    Checker::reset_assertions();
+    Checker::reset_errors();
+  }
+
+  /// Use DFS to find an unexplored path, if any
+
+  /// \return is there another path to explore?
+  bool find_next_path()
+  {
+    const bool found_path = m_dfs.find_next_path();
+    if (found_path)
+    {
+      Checker::reset_assertions();
+      Checker::reset_errors();
+
+      tracer().reset_events();
+      tracer().reset_address();
+      tracer().reset_barrier();
+    }
+
+    return found_path;
+  }
+
+  /// Decide which control flow direction to follow
+
+  /// The second direction argument is only a suggestion that may be ignored.
+  bool branch(const Internal<bool>&, const bool direction_hint = true);
+
+  const Dfs& dfs() const
+  {
+    return m_dfs;
+  }
+
+  Dfs& dfs()
+  {
+    return m_dfs;
+  }
+
+  unsigned long long path_cnt() const
+  {
+    return m_dfs.path_cnt();
+  }
+};
+
+/// Symbolic execution in a depth-first search manner
+extern DfsChecker& dfs_checker();
+
 /// Symbolic thread using partial order encoding
 class Thread
 {
@@ -3348,7 +3469,9 @@ public:
   {
     // TODO: ensure that lock() and unlock() are in preserved program order
     assert(m_lock_thread_id == ThisThread::thread_id());
-    tracer().add_assertion(m_thread_id == m_lock_thread_id);
+
+    // TODO: use polymorphism?
+    dfs_checker().add_assertion(m_thread_id == m_lock_thread_id);
   }
 };
 

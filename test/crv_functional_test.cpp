@@ -7,29 +7,31 @@
 TEST(CrvFunctionalTest, SafeIf)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   bool error = false;
   do
   {
     crv::External<char> x('A');
-    if (crv::tracer().decide_flip(x == '?'))
+    if (crv::dfs_checker().branch(x == '?'))
       x = 'B';
     crv::Internal<char> a(x);
 
-    crv::tracer().add_error(!(a == 'B' || a == 'A'));
+    crv::dfs_checker().add_error(!(a == 'B' || a == 'A'));
 
-    if (!crv::tracer().errors().empty() &&
-        smt::sat == encoder.check(crv::tracer()))
+    if (!crv::dfs_checker().errors().empty() &&
+        smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()))
       error = true;
   }
-  while (crv::tracer().flip());
+  while (crv::dfs_checker().find_next_path());
   EXPECT_FALSE(error);
 }
 
 TEST(CrvFunctionalTest, MultipathSafeIf)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::External<char> x('A');
@@ -37,8 +39,8 @@ TEST(CrvFunctionalTest, MultipathSafeIf)
   x = 'B';
   crv::tracer().scope_end();
   crv::Internal<char> a(x);
-  crv::tracer().add_error(!(a == 'B' || a == 'A'));
-  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+  crv::dfs_checker().add_error(!(a == 'B' || a == 'A'));
+  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_checker()));
 }
 
 TEST(CrvFunctionalTest, SafeCounter)
@@ -47,18 +49,19 @@ TEST(CrvFunctionalTest, SafeCounter)
   unsigned unwind;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   do
   {
     crv::External<int> star;
     crv::Internal<int> n = star;
-    crv::tracer().add_assertion(0 <= n && n < N);
+    crv::dfs_checker().add_assertion(0 <= n && n < N);
 
     crv::Internal<int> x = n, y = 0;
 
     unwind = N;
-    while (crv::tracer().decide_flip(x > 0)) {
+    while (crv::dfs_checker().branch(x > 0)) {
       x = x - 1;
       y = y + 1;
 
@@ -67,10 +70,10 @@ TEST(CrvFunctionalTest, SafeCounter)
         break;
     }
 
-    crv::tracer().add_error(0 <= y && y != n);
-    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+    crv::dfs_checker().add_error(0 <= y && y != n);
+    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_checker()));
   }
-  while (crv::tracer().flip());
+  while (crv::dfs_checker().find_next_path());
 }
 
 TEST(CrvFunctionalTest, UnsafeCounter)
@@ -79,6 +82,7 @@ TEST(CrvFunctionalTest, UnsafeCounter)
   unsigned unwind;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   bool error = false;
@@ -86,12 +90,12 @@ TEST(CrvFunctionalTest, UnsafeCounter)
   {
     crv::External<int> star;
     crv::Internal<int> n = star;
-    crv::tracer().add_assertion(0 <= n && n < N);
+    crv::dfs_checker().add_assertion(0 <= n && n < N);
 
     crv::Internal<int> x = n, y = 0;
 
     unwind = N;
-    while (crv::tracer().decide_flip(x > 0)) {
+    while (crv::dfs_checker().branch(x > 0)) {
       x = x - 1;
       y = y + 1;
 
@@ -100,10 +104,10 @@ TEST(CrvFunctionalTest, UnsafeCounter)
         break;
     }
 
-    crv::tracer().add_error(0 <= y && y == n);
-    error |= smt::sat == encoder.check(crv::tracer());
+    crv::dfs_checker().add_error(0 <= y && y == n);
+    error |= smt::sat == encoder.check(crv::tracer(), crv::dfs_checker());
   }
-  while (crv::tracer().flip());
+  while (crv::dfs_checker().find_next_path());
   EXPECT_TRUE(error);
 }
 
@@ -119,7 +123,7 @@ typedef int Item;
 #define less(A, B) (key(A) < key(B))
 #define eq(A, B) (!less(A, B) && !less(B, A))
 #define exch(A, B) { crv::Internal<Item> t = A; A = B; B = t; }
-#define compexch(A, B) if (crv::tracer().decide_flip(less(B, A))) exch(A, B)
+#define compexch(A, B) if (crv::dfs_checker().branch(less(B, A))) exch(A, B)
 #define NULLitem 0
 
 void safe_insertion_sort(
@@ -128,15 +132,15 @@ void safe_insertion_sort(
   crv::Internal<size_t> r)
 {
   crv::Internal<size_t> i = 0;
-  for (i = l+1; crv::tracer().decide_flip(i <= r); i = i+1)
+  for (i = l+1; crv::dfs_checker().branch(i <= r); i = i+1)
     compexch(a[l], a[i]);
 
-  for (i = l+2; crv::tracer().decide_flip(i <= r); i = i+1)
+  for (i = l+2; crv::dfs_checker().branch(i <= r); i = i+1)
   {
     crv::Internal<size_t> j = i;
     crv::Internal<Item> v = a[i];
-    while (crv::tracer().decide_flip(0<j) &&
-      crv::tracer().decide_flip(less(v, a[j-1])))
+    while (crv::dfs_checker().branch(0<j) &&
+      crv::dfs_checker().branch(less(v, a[j-1])))
     {
       a[j] = a[j-1];
       j = j-1;
@@ -150,6 +154,7 @@ TEST(CrvFunctionalTest, SafeInsertionSort)
   constexpr unsigned N = 4;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   do
@@ -158,11 +163,11 @@ TEST(CrvFunctionalTest, SafeInsertionSort)
     safe_insertion_sort(a, 0, N-1);
 
     for (unsigned i = 0; i < N - 1; i++)
-      crv::tracer().add_error(!(a[i] <= a[i+1]));
+      crv::dfs_checker().add_error(!(a[i] <= a[i+1]));
 
-    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_checker()));
   }
-  while (crv::tracer().flip());
+  while (crv::dfs_checker().find_next_path());
 }
 
 void unsafe_insertion_sort(
@@ -171,15 +176,15 @@ void unsafe_insertion_sort(
   crv::Internal<size_t> r)
 {
   crv::Internal<size_t> i = 0;
-  for (i = l+1; crv::tracer().decide_flip(i <= r); i = i+1)
+  for (i = l+1; crv::dfs_checker().branch(i <= r); i = i+1)
     compexch(a[l], a[i]);
 
-  for (i = l+2; crv::tracer().decide_flip(i <= r); i = i+1)
+  for (i = l+2; crv::dfs_checker().branch(i <= r); i = i+1)
   {
     crv::Internal<size_t> j = i;
     crv::Internal<Item> v = a[i];
-    while (crv::tracer().decide_flip(0<j) &&
-      crv::tracer().decide_flip(less(v, a[j-1])))
+    while (crv::dfs_checker().branch(0<j) &&
+      crv::dfs_checker().branch(less(v, a[j-1])))
     {
       a[j] = a[j];
       //       ^ bug due to wrong index (it should be j-1)
@@ -194,6 +199,7 @@ TEST(CrvFunctionalTest, UnsafeInsertionSort)
   constexpr unsigned N = 4;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   bool error = false;
@@ -203,11 +209,11 @@ TEST(CrvFunctionalTest, UnsafeInsertionSort)
     unsafe_insertion_sort(a, 0, N-1);
 
     for (unsigned i = 0; i < N - 1; i++)
-      crv::tracer().add_error(!(a[i] <= a[i+1]));
+      crv::dfs_checker().add_error(!(a[i] <= a[i+1]));
 
-    error |= smt::sat == encoder.check(crv::tracer());
+    error |= smt::sat == encoder.check(crv::tracer(), crv::dfs_checker());
   }
-  while (crv::tracer().flip() && !error);
+  while (crv::dfs_checker().find_next_path() && !error);
   EXPECT_TRUE(error);
 }
 
@@ -219,15 +225,15 @@ void safe_merge(
   crv::Internal<size_t> r)
 {
   crv::Internal<size_t> i = 0, j = 0, k = 0;
-  for (i = m+1; crv::tracer().decide_flip(i > l); i = i-1)
+  for (i = m+1; crv::dfs_checker().branch(i > l); i = i-1)
     aux[i-1] = a[i-1];
 
-  for (j = m; crv::tracer().decide_flip(j < r); j = j+1)
+  for (j = m; crv::dfs_checker().branch(j < r); j = j+1)
     aux[r+m-j] = a[j+1];
 
-  for (k = l; crv::tracer().decide_flip(k <= r); k = k+1)
+  for (k = l; crv::dfs_checker().branch(k <= r); k = k+1)
   {
-    if (crv::tracer().decide_flip(less(aux[i], aux[j])))
+    if (crv::dfs_checker().branch(less(aux[i], aux[j])))
     {
       a[k] = aux[i];
       i = i+1;
@@ -247,7 +253,7 @@ void safe_merge_sort(
   crv::Internal<size_t> r)
 {
   crv::Internal<size_t> m = (r+l)/2;
-  if (crv::tracer().decide_flip(r <= l)) return;
+  if (crv::dfs_checker().branch(r <= l)) return;
   safe_merge_sort(aux, a, l, m);
   safe_merge_sort(aux, a, m+1, r);
   safe_merge(aux, a, l, m, r);
@@ -258,6 +264,7 @@ TEST(CrvFunctionalTest, SafeMergeSort)
   constexpr unsigned N = 4;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   do
@@ -267,11 +274,11 @@ TEST(CrvFunctionalTest, SafeMergeSort)
     safe_merge_sort(aux, a, 0, N-1);
 
     for (unsigned i = 0; i < N - 1; i++)
-      crv::tracer().add_error(!(a[i] <= a[i+1]));
+      crv::dfs_checker().add_error(!(a[i] <= a[i+1]));
 
-    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_checker()));
   }
-  while (crv::tracer().flip());
+  while (crv::dfs_checker().find_next_path());
 }
 
 void unsafe_merge(
@@ -282,15 +289,15 @@ void unsafe_merge(
   crv::Internal<size_t> r)
 {
   crv::Internal<size_t> i = 0, j = 0, k = 0;
-  for (i = m+1; crv::tracer().decide_flip(i > l); i = i-1)
+  for (i = m+1; crv::dfs_checker().branch(i > l); i = i-1)
     aux[i-1] = a[i-1];
 
-  for (j = m; crv::tracer().decide_flip(j < r); j = j+1)
+  for (j = m; crv::dfs_checker().branch(j < r); j = j+1)
     aux[r+m-j] = a[j];
     //             ^ bug due to wrong offset (it should be j+1)
 
-  for (k = l; crv::tracer().decide_flip(k <= r); k = k+1)
-    if (crv::tracer().decide_flip(less(aux[i], aux[j])))
+  for (k = l; crv::dfs_checker().branch(k <= r); k = k+1)
+    if (crv::dfs_checker().branch(less(aux[i], aux[j])))
     {
       a[k] = aux[i];
       i = i+1;
@@ -309,7 +316,7 @@ void unsafe_merge_sort(
   crv::Internal<size_t> r)
 {
   crv::Internal<size_t> m = (r+l)/2;
-  if (crv::tracer().decide_flip(r <= l)) return;
+  if (crv::dfs_checker().branch(r <= l)) return;
   unsafe_merge_sort(aux, a, l, m);
   unsafe_merge_sort(aux, a, m+1, r);
   unsafe_merge(aux, a, l, m, r);
@@ -320,6 +327,7 @@ TEST(CrvFunctionalTest, UnsafeMergeSort)
   constexpr unsigned N = 4;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   bool error = false;
@@ -330,11 +338,11 @@ TEST(CrvFunctionalTest, UnsafeMergeSort)
     unsafe_merge_sort(aux, a, 0, N-1);
 
     for (unsigned i = 0; i < N - 1; i++)
-      crv::tracer().add_error(!(a[i] <= a[i+1]));
+      crv::dfs_checker().add_error(!(a[i] <= a[i+1]));
 
-    error |= smt::sat == encoder.check(crv::tracer());
+    error |= smt::sat == encoder.check(crv::tracer(), crv::dfs_checker());
   }
-  while (crv::tracer().flip() && !error);
+  while (crv::dfs_checker().find_next_path() && !error);
   EXPECT_TRUE(error);
 }
 
@@ -388,7 +396,7 @@ static bst_link safe_bst_insertR(bst_link h, crv::Internal<Item> item) {
   crv::Internal<Key> v = key(item), t = key(h->item);
   if (h == bst_z) return NEW(item, bst_z, bst_z, 1);
 
-  if (crv::tracer().decide_flip(less(v, t)))
+  if (crv::dfs_checker().branch(less(v, t)))
     h->l = safe_bst_insertR(h->l, item);
   else
     h->r = safe_bst_insertR(h->r, item);
@@ -403,6 +411,7 @@ TEST(CrvFunctionalTest, SafeBst)
   constexpr unsigned N = 4;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   do
@@ -416,20 +425,20 @@ TEST(CrvFunctionalTest, SafeBst)
     bst_a_size = 0;
     STsort(bst_sorter);
 
-    crv::tracer().add_error(!(bst_a_size == N));
+    crv::dfs_checker().add_error(!(bst_a_size == N));
     for (unsigned i = 0; i < N - 1; i++)
-      crv::tracer().add_error(!(bst_a[i] <= bst_a[i+1]));
+      crv::dfs_checker().add_error(!(bst_a[i] <= bst_a[i+1]));
 
-    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_checker()));
   }
-  while (crv::tracer().flip());
+  while (crv::dfs_checker().find_next_path());
 }
 
 static bst_link unsafe_bst_insertR(bst_link h, crv::Internal<Item> item) {
   crv::Internal<Key> v = key(item), t = key(h->item);
   if (h == bst_z) return NEW(item, bst_z, bst_z, 1);
 
-  if (crv::tracer().decide_flip(less(v, t)))
+  if (crv::dfs_checker().branch(less(v, t)))
     h->l = unsafe_bst_insertR(h->r, item);
     //                           ^ bug due to wrong variable (it should be l)
   else
@@ -459,6 +468,7 @@ TEST(CrvFunctionalTest, UnsafeBst)
   constexpr unsigned N = 4;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   bool error = false;
@@ -473,13 +483,13 @@ TEST(CrvFunctionalTest, UnsafeBst)
     bst_a_size = 0;
     STsort(bst_sorter);
 
-    crv::tracer().add_error(!(bst_a_size == N));
+    crv::dfs_checker().add_error(!(bst_a_size == N));
     for (unsigned i = 0; i < N - 1; i++)
-      crv::tracer().add_error(!(bst_a[i] <= bst_a[i+1]));
+      crv::dfs_checker().add_error(!(bst_a[i] <= bst_a[i+1]));
 
-    error |= smt::sat == encoder.check(crv::tracer());
+    error |= smt::sat == encoder.check(crv::tracer(), crv::dfs_checker());
   }
-  while (crv::tracer().flip() && !error);
+  while (crv::dfs_checker().find_next_path() && !error);
   EXPECT_TRUE(error);
 }
 
@@ -492,7 +502,7 @@ crv::Internal<int> sumR(
   crv::Internal<int> k)
 {
   crv::Internal<int> sum = a + b*k;
-  if (crv::tracer().decide_flip(k > 0))
+  if (crv::dfs_checker().branch(k > 0))
     return sum + sumR(a, b, k-1);
   else
     return sum;
@@ -505,6 +515,7 @@ TEST(CrvFunctionalTest, SafeRecurrenceSum)
   constexpr unsigned N = 4;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::External<int> x;
@@ -512,8 +523,8 @@ TEST(CrvFunctionalTest, SafeRecurrenceSum)
   crv::Internal<int> a = x;
   crv::Internal<int> b = y;
   crv::Internal<int> result = sumR(a, b, N);
-  crv::tracer().add_error(result != ((a*(N+1)) + (b*(N+1)*(N/2))));
-  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+  crv::dfs_checker().add_error(result != ((a*(N+1)) + (b*(N+1)*(N/2))));
+  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_checker()));
 }
 
 TEST(CrvFunctionalTest, UnsafeRecurrenceSum)
@@ -522,6 +533,7 @@ TEST(CrvFunctionalTest, UnsafeRecurrenceSum)
   constexpr unsigned N = 4;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::External<int> x;
@@ -529,14 +541,14 @@ TEST(CrvFunctionalTest, UnsafeRecurrenceSum)
   crv::Internal<int> a = x;
   crv::Internal<int> b = y;
   crv::Internal<int> result = sumR(a, b, N);
-  crv::tracer().add_error(result == ((a*(N+1)) + (b*(N+1)*(N/2))));
-  EXPECT_EQ(smt::sat, encoder.check(crv::tracer()));
+  crv::dfs_checker().add_error(result == ((a*(N+1)) + (b*(N+1)*(N/2))));
+  EXPECT_EQ(smt::sat, encoder.check(crv::tracer(), crv::dfs_checker()));
 }
 
 void unsafe_simple_assign_1(crv::External<int>& i)
 {
   i = 1;
-  crv::tracer().add_error(i != 1);
+  crv::dfs_checker().add_error(i != 1);
 }
 
 void unsafe_simple_assign_2(crv::External<int>& i)
@@ -547,20 +559,21 @@ void unsafe_simple_assign_2(crv::External<int>& i)
 TEST(CrvFunctionalTest, UnsafeThreads)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::External<int> i = 0;
   crv::Thread t1(unsafe_simple_assign_1, i);
   crv::Thread t2(unsafe_simple_assign_2, i);
 
-  EXPECT_EQ(smt::sat, encoder.check(crv::tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(crv::tracer(), crv::dfs_checker()));
 }
 
 void safe_simple_assign_1(crv::External<int>& i)
 {
   i = 1;
   crv::Internal<int> r = i;
-  crv::tracer().add_error(r != 0 && r != 1 && r != 2);
+  crv::dfs_checker().add_error(r != 0 && r != 1 && r != 2);
 }
 
 void safe_simple_assign_2(crv::External<int>& i)
@@ -571,13 +584,14 @@ void safe_simple_assign_2(crv::External<int>& i)
 TEST(CrvFunctionalTest, SafeThreads)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::External<int> i = 0;
   crv::Thread t1(safe_simple_assign_1, i);
   crv::Thread t2(safe_simple_assign_2, i);
 
-  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_checker()));
 }
 
 void fib_t0(
@@ -611,21 +625,22 @@ TEST(CrvFunctionalTest, UnsatFib6)
   constexpr unsigned N = 6;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::External<int> i = 1, j = 1;
   crv::Thread t0(fib_t0, N, i, j);
   crv::Thread t1(fib_t1, N, i, j);
 
-  crv::tracer().add_error(377 < i || 377 < j);
+  crv::dfs_checker().add_error(377 < i || 377 < j);
 
   t0.join();
   t1.join();
 
-  EXPECT_TRUE(crv::tracer().assertions().empty());
-  EXPECT_FALSE(crv::tracer().errors().empty());
-  EXPECT_TRUE(smt::unsat == encoder.check(crv::tracer()));
-  EXPECT_FALSE(crv::tracer().flip());
+  EXPECT_TRUE(crv::dfs_checker().assertions().empty());
+  EXPECT_FALSE(crv::dfs_checker().errors().empty());
+  EXPECT_TRUE(smt::unsat == encoder.check(crv::tracer(), crv::dfs_checker()));
+  EXPECT_FALSE(crv::dfs_checker().find_next_path());
 }
 
 // Adapted from SV-COMP'13 benchmark:
@@ -635,21 +650,22 @@ TEST(CrvFunctionalTest, SatFib6)
   constexpr unsigned N = 6;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::External<int> i = 1, j = 1;
   crv::Thread t0(fib_t0, N, i, j);
   crv::Thread t1(fib_t1, N, i, j);
 
-  crv::tracer().add_error(377 <= i || 377 <= j);
+  crv::dfs_checker().add_error(377 <= i || 377 <= j);
 
   t0.join();
   t1.join();
 
-  EXPECT_TRUE(crv::tracer().assertions().empty());
-  EXPECT_FALSE(crv::tracer().errors().empty());
-  EXPECT_TRUE(smt::sat == encoder.check(crv::tracer()));
-  EXPECT_FALSE(crv::tracer().flip());
+  EXPECT_TRUE(crv::dfs_checker().assertions().empty());
+  EXPECT_FALSE(crv::dfs_checker().errors().empty());
+  EXPECT_TRUE(smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()));
+  EXPECT_FALSE(crv::dfs_checker().find_next_path());
 }
 
 void stateful_t0(
@@ -685,6 +701,7 @@ void stateful_t1(
 TEST(CrvFunctionalTest, UnsatStateful)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::Mutex mutex;
@@ -699,13 +716,13 @@ TEST(CrvFunctionalTest, UnsatStateful)
     t0.join();
     t1.join();
 
-    crv::tracer().add_error(i != 16 || j != 5);
+    crv::dfs_checker().add_error(i != 16 || j != 5);
 
-    if (!crv::tracer().errors().empty() &&
-        smt::sat == encoder.check(crv::tracer()))
+    if (!crv::dfs_checker().errors().empty() &&
+        smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()))
       error = true;
   }
-  while (crv::tracer().flip());
+  while (crv::dfs_checker().find_next_path());
   EXPECT_FALSE(error);
 }
 
@@ -714,6 +731,7 @@ TEST(CrvFunctionalTest, UnsatStateful)
 TEST(CrvFunctionalTest, SatStateful)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::Mutex mutex;
@@ -728,13 +746,13 @@ TEST(CrvFunctionalTest, SatStateful)
     t0.join();
     t1.join();
 
-    crv::tracer().add_error(i == 16 && j == 5);
+    crv::dfs_checker().add_error(i == 16 && j == 5);
 
-    if (!crv::tracer().errors().empty() &&
-        smt::sat == encoder.check(crv::tracer()))
+    if (!crv::dfs_checker().errors().empty() &&
+        smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()))
       error = true;
   }
-  while (crv::tracer().flip());
+  while (crv::dfs_checker().find_next_path());
   EXPECT_TRUE(error);
 }
 
@@ -764,9 +782,9 @@ const unsigned N,
   for (i = 0; i < N; i++)
   {
     mutex.lock();
-    if (crv::tracer().decide_flip(flag == 1))
+    if (crv::dfs_checker().branch(flag == 1))
     {
-      crv::tracer().add_error(top == 0U);
+      crv::dfs_checker().add_error(top == 0U);
       top = top - 1U;
     }
     mutex.unlock();
@@ -778,6 +796,7 @@ TEST(CrvFunctionalTest, SatStack)
   constexpr unsigned N = 5;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::Mutex mutex;
@@ -790,11 +809,11 @@ TEST(CrvFunctionalTest, SatStack)
     crv::Thread t0(sat_stack_t0, N, mutex, top, flag);
     crv::Thread t1(sat_stack_t1, N, mutex, top, flag);
 
-    if (!crv::tracer().errors().empty() &&
-        smt::sat == encoder.check(crv::tracer()))
+    if (!crv::dfs_checker().errors().empty() &&
+        smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()))
       error = true;
   }
-  while (crv::tracer().flip());
+  while (crv::dfs_checker().find_next_path());
   EXPECT_TRUE(error);
 }
 
@@ -821,9 +840,9 @@ void unsat_stack_t1(
   for (i = 0; i < N; i++)
   {
     mutex.lock();
-    if (crv::tracer().decide_flip(0U < top))
+    if (crv::dfs_checker().branch(0U < top))
     {
-      crv::tracer().add_error(top == 0U);
+      crv::dfs_checker().add_error(top == 0U);
       top = top - 1U;
     }
     mutex.unlock();
@@ -835,6 +854,7 @@ TEST(CrvFunctionalTest, UnsatStack)
   constexpr unsigned N = 5;
 
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::Mutex mutex;
@@ -846,11 +866,11 @@ TEST(CrvFunctionalTest, UnsatStack)
     crv::Thread t0(unsat_stack_t0, N, mutex, top);
     crv::Thread t1(unsat_stack_t1, N, mutex, top);
 
-    if (!crv::tracer().errors().empty() &&
-        smt::sat == encoder.check(crv::tracer()))
+    if (!crv::dfs_checker().errors().empty() &&
+        smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()))
       error = true;
   }
-  while (crv::tracer().flip());
+  while (crv::dfs_checker().find_next_path());
   EXPECT_FALSE(error);
 }
 
@@ -875,6 +895,7 @@ void sat_communication_h(crv::Channel<int>& s)
 TEST(CrvFunctionalTest, SatCommunication)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::Channel<int> s, t;
@@ -882,8 +903,8 @@ TEST(CrvFunctionalTest, SatCommunication)
   crv::Thread g(sat_communication_g, s, t);
   crv::Thread h(sat_communication_h, s);
 
-  EXPECT_TRUE(crv::tracer().errors().empty());
-  EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer()));
+  EXPECT_TRUE(crv::dfs_checker().errors().empty());
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer(), crv::dfs_checker()));
 }
 
 void sat_communication_g_prime(crv::Channel<int>& s, crv::Channel<int>& t)
@@ -896,19 +917,20 @@ void sat_communication_g_prime(crv::Channel<int>& s, crv::Channel<int>& t)
 TEST(CrvFunctionalTest, UnsatCommunication)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::Channel<int> s, t;
   crv::Thread f(sat_communication_f, s, t);
   crv::Thread g_prime(sat_communication_g_prime, s, t);
 
-  EXPECT_TRUE(crv::tracer().errors().empty());
-  EXPECT_EQ(smt::unsat, encoder.check_deadlock(crv::tracer()));
+  EXPECT_TRUE(crv::dfs_checker().errors().empty());
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(crv::tracer(), crv::dfs_checker()));
 }
 
 void unsat_communication_deadlock_with_guard_f(crv::Channel<int>& c)
 {
-  EXPECT_TRUE(crv::tracer().decide_flip(6 == c.recv()));
+  EXPECT_TRUE(crv::dfs_checker().branch(6 == c.recv()));
   c.send(7);
 }
 
@@ -921,18 +943,19 @@ void unsat_communication_deadlock_with_guard_g(crv::Channel<int>& c)
 TEST(CrvFunctionalTest, UnsatCommunicationDeadlockWithGuard)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::Channel<int> c;
   crv::Thread f(unsat_communication_deadlock_with_guard_f, c);
   crv::Thread g(unsat_communication_deadlock_with_guard_g, c);
 
-  EXPECT_EQ(smt::unsat, encoder.check_deadlock(crv::tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(crv::tracer(), crv::dfs_checker()));
 }
 
 void sat_communication_deadlock_with_guard_f(crv::Channel<int>& c)
 {
-  EXPECT_TRUE(crv::tracer().decide_flip(6 != c.recv()));
+  EXPECT_TRUE(crv::dfs_checker().branch(6 != c.recv()));
   c.send(7);
 }
 
@@ -945,13 +968,14 @@ void sat_communication_deadlock_with_guard_g(crv::Channel<int>& c)
 TEST(CrvFunctionalTest, SatCommunicationDeadlockWithGuard)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::Channel<int> c;
   crv::Thread f(sat_communication_deadlock_with_guard_f, c);
   crv::Thread g(sat_communication_deadlock_with_guard_g, c);
 
-  EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer()));
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer(), crv::dfs_checker()));
 }
 
 // N is the number of philosophers
@@ -1027,6 +1051,7 @@ void phil_different_person(size_t i, DiningTable<N>& t)
 TEST(CrvFunctionalTest, UnsatDiningPhilosophersDeadlock)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   constexpr size_t N = 5;
@@ -1042,12 +1067,13 @@ TEST(CrvFunctionalTest, UnsatDiningPhilosophersDeadlock)
       crv::Thread person(phil_person<N>, i, t);
   }
 
-  EXPECT_EQ(smt::unsat, encoder.check_deadlock(crv::tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(crv::tracer(), crv::dfs_checker()));
 }
 
 TEST(CrvFunctionalTest, SatDiningPhilosophersDeadlock)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   constexpr size_t N = 2;
@@ -1059,7 +1085,7 @@ TEST(CrvFunctionalTest, SatDiningPhilosophersDeadlock)
     crv::Thread person(phil_person<N>, i, t);
   }
 
-  EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer()));
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer(), crv::dfs_checker()));
 }
 
 void barrier_test_f(crv::External<int>& i)
@@ -1072,51 +1098,54 @@ void barrier_test_f(crv::External<int>& i)
 void barrier_test_g(const crv::External<int>& i)
 {
   crv::tracer().barrier();
-  crv::tracer().add_error(i == 1);
+  crv::dfs_checker().add_error(i == 1);
 }
 
 void barrier_test_h(const crv::External<int>& i)
 {
-  crv::tracer().add_error(i == 2);
+  crv::dfs_checker().add_error(i == 2);
 }
 
 TEST(CrvFunctionalTest, UnsatBarrier)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::External<int> i(0);
   crv::Thread f(barrier_test_f, i);
   crv::Thread g(barrier_test_g, i);
 
-  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_checker()));
 
   crv::tracer().barrier();
-  EXPECT_EQ(smt::unsat, encoder.check(i == 0, crv::tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(i == 1, crv::tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(i == 2, crv::tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(i == 0, crv::tracer(), crv::dfs_checker()));
+  EXPECT_EQ(smt::unsat, encoder.check(i == 1, crv::tracer(), crv::dfs_checker()));
+  EXPECT_EQ(smt::sat, encoder.check(i == 2, crv::tracer(), crv::dfs_checker()));
 }
 
 TEST(CrvFunctionalTest, SatBarrier)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::External<int> i(0);
   crv::Thread f(barrier_test_f, i);
   crv::Thread h(barrier_test_h, i);
 
-  EXPECT_EQ(smt::sat, encoder.check(crv::tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(crv::tracer(), crv::dfs_checker()));
 
   // no barrier in main thread
-  EXPECT_EQ(smt::sat, encoder.check(i == 0, crv::tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(i == 1, crv::tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(i == 2, crv::tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(i == 0, crv::tracer(), crv::dfs_checker()));
+  EXPECT_EQ(smt::sat, encoder.check(i == 1, crv::tracer(), crv::dfs_checker()));
+  EXPECT_EQ(smt::sat, encoder.check(i == 2, crv::tracer(), crv::dfs_checker()));
 }
 
 TEST(CrvFunctionalTest, MpiDeadlockFree)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   const char some_data = 'A';
@@ -1131,13 +1160,14 @@ TEST(CrvFunctionalTest, MpiDeadlockFree)
   crv::Message::recv_any<char>();
   crv::tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::unsat, encoder.check_deadlock(crv::tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(crv::tracer(), crv::dfs_checker()));
 }
 
 // See dtg.c benchmark for MOPPER, http://www.cprover.org/mpi/
 TEST(CrvFunctionalTest, DtgMpiDeadlock)
 {
   crv::tracer().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   const char some_data = 'A';
@@ -1172,6 +1202,6 @@ TEST(CrvFunctionalTest, DtgMpiDeadlock)
   crv::Message::send(4, some_data);
   crv::tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer()));
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer(), crv::dfs_checker()));
 }
 

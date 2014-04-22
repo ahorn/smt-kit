@@ -173,9 +173,6 @@ TEST(CrvTest, Event)
 
 TEST(CrvTest, Tracer)
 {
-  // counter for event identifiers is static
-  tracer().reset();
-
   Tracer tracer;
   EXPECT_TRUE(tracer.events().empty());
 
@@ -297,77 +294,78 @@ TEST(CrvTest, Barrier)
   EXPECT_TRUE(tracer.per_thread_map().at(tid2).at(4)->is_barrier());
 }
 
-TEST(CrvTest, Flip)
+TEST(CrvTest, DfsChecker)
 {
-  Tracer tracer;
+  DfsChecker checker;
   External<long> v;
 
   // if (v < 0) { if (v < 1)  { skip } }
-  EXPECT_TRUE(tracer.decide_flip(v < 0));
-  EXPECT_TRUE(tracer.decide_flip(v < 1));
+  EXPECT_TRUE(checker.branch(v < 0));
+  EXPECT_TRUE(checker.branch(v < 1));
 
-  EXPECT_TRUE(tracer.flip());
-  EXPECT_TRUE(tracer.decide_flip(v < 0));
-  EXPECT_FALSE(tracer.decide_flip(v < 1));
+  EXPECT_TRUE(checker.find_next_path());
+  EXPECT_TRUE(checker.branch(v < 0));
+  EXPECT_FALSE(checker.branch(v < 1));
 
-  EXPECT_TRUE(tracer.flip());
-  EXPECT_FALSE(tracer.decide_flip(v < 0));
+  EXPECT_TRUE(checker.find_next_path());
+  EXPECT_FALSE(checker.branch(v < 0));
 
-  EXPECT_FALSE(tracer.flip());
-  EXPECT_EQ(2, tracer.flip_cnt());
+  EXPECT_FALSE(checker.find_next_path());
+  EXPECT_EQ(2, checker.path_cnt());
 
-  tracer.reset();
+  checker.reset();
 
   // if (v < 0) { skip } ; if (v < 1)  { skip }
-  EXPECT_TRUE(tracer.decide_flip(v < 0));
-  EXPECT_TRUE(tracer.decide_flip(v < 1));
+  EXPECT_TRUE(checker.branch(v < 0));
+  EXPECT_TRUE(checker.branch(v < 1));
 
-  EXPECT_TRUE(tracer.flip());
-  EXPECT_TRUE(tracer.decide_flip(v < 0));
-  EXPECT_FALSE(tracer.decide_flip(v < 1));
+  EXPECT_TRUE(checker.find_next_path());
+  EXPECT_TRUE(checker.branch(v < 0));
+  EXPECT_FALSE(checker.branch(v < 1));
 
-  EXPECT_TRUE(tracer.flip());
-  EXPECT_FALSE(tracer.decide_flip(v < 0));
-  EXPECT_TRUE(tracer.decide_flip(v < 1));
+  EXPECT_TRUE(checker.find_next_path());
+  EXPECT_FALSE(checker.branch(v < 0));
+  EXPECT_TRUE(checker.branch(v < 1));
 
-  EXPECT_TRUE(tracer.flip());
-  EXPECT_FALSE(tracer.decide_flip(v < 0));
-  EXPECT_FALSE(tracer.decide_flip(v < 1));
+  EXPECT_TRUE(checker.find_next_path());
+  EXPECT_FALSE(checker.branch(v < 0));
+  EXPECT_FALSE(checker.branch(v < 1));
 
-  EXPECT_FALSE(tracer.flip());
-  EXPECT_EQ(3, tracer.flip_cnt());
+  EXPECT_FALSE(checker.find_next_path());
+  EXPECT_EQ(3, checker.path_cnt());
 
-  tracer.reset();
+  checker.reset();
+  tracer().reset();
 
-  EXPECT_TRUE(tracer.decide_flip(v < 0));
-  tracer.append_thread_begin_event();
-  EXPECT_EQ(2, tracer.current_thread_id());
-  tracer.append_thread_end_event();
+  EXPECT_TRUE(checker.branch(v < 0));
+  tracer().append_thread_begin_event();
+  EXPECT_EQ(2, tracer().current_thread_id());
+  tracer().append_thread_end_event();
 
-  EXPECT_TRUE(tracer.flip());
+  EXPECT_TRUE(checker.find_next_path());
 
   // thread identifiers are reset
-  tracer.append_thread_begin_event();
-  EXPECT_EQ(2, tracer.current_thread_id());
-  tracer.append_thread_end_event();
+  tracer().append_thread_begin_event();
+  EXPECT_EQ(2, tracer().current_thread_id());
+  tracer().append_thread_end_event();
 
   // with literal condition
-  tracer.reset();
-  EXPECT_TRUE(tracer.decide_flip(true));
-  EXPECT_FALSE(tracer.flip());
+  checker.reset();
+  EXPECT_TRUE(checker.branch(true));
+  EXPECT_FALSE(checker.find_next_path());
 
-  tracer.reset();
-  EXPECT_FALSE(tracer.decide_flip(false));
-  EXPECT_FALSE(tracer.flip());
+  checker.reset();
+  EXPECT_FALSE(checker.branch(false));
+  EXPECT_FALSE(checker.find_next_path());
 
   // ignore direction suggestion when condition is a literal
-  tracer.reset();
-  EXPECT_TRUE(tracer.decide_flip(true, false));
-  EXPECT_FALSE(tracer.flip());
+  checker.reset();
+  EXPECT_TRUE(checker.branch(true, false));
+  EXPECT_FALSE(checker.find_next_path());
 
-  tracer.reset();
-  EXPECT_FALSE(tracer.decide_flip(false, true));
-  EXPECT_FALSE(tracer.flip());
+  checker.reset();
+  EXPECT_FALSE(checker.branch(false, true));
+  EXPECT_FALSE(checker.find_next_path());
 }
 
 TEST(CrvTest, Value)
@@ -497,224 +495,242 @@ TEST(CrvTest, Value)
 TEST(CrvTest, SatInsideThread)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<int> i = 1;
   i = 2;
   tracer().append_thread_begin_event();
-  tracer().add_error(i == 2);
+  checker.add_error(i == 2);
   tracer().append_thread_end_event();
 
-  EXPECT_TRUE(tracer().assertions().empty());
-  EXPECT_EQ(smt::sat, encoder.check(tracer()));
+  EXPECT_TRUE(checker.assertions().empty());
+  EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
 }
 
 TEST(CrvTest, UnsatInsideThread)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<int> i = 1;
   i = 2;
   tracer().append_thread_begin_event();
-  tracer().add_error(i == 3);
+  checker.add_error(i == 3);
   tracer().append_thread_end_event();
 
-  EXPECT_TRUE(tracer().assertions().empty());
-  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  EXPECT_TRUE(checker.assertions().empty());
+  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
 }
 
 TEST(CrvTest, Assertions)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<bool> true_bool(true);
 
   // satisfy precondition of Encoder::check(const Tracer&)
-  tracer().add_error(true_bool);
+  checker.add_error(true_bool);
 
-  EXPECT_TRUE(tracer().assertions().empty());
+  EXPECT_TRUE(checker.assertions().empty());
   External<int> i = 1;
-  tracer().add_assertion(i == 1);
-  EXPECT_FALSE(tracer().assertions().empty());
-  EXPECT_EQ(smt::sat, encoder.check(tracer()));
-  tracer().add_assertion(i == 3);
-  EXPECT_FALSE(tracer().assertions().empty());
+  checker.add_assertion(i == 1);
+  EXPECT_FALSE(checker.assertions().empty());
+  EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
+  checker.add_assertion(i == 3);
+  EXPECT_FALSE(checker.assertions().empty());
 
   // conjunction
-  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
 
   // idempotent
-  EXPECT_FALSE(tracer().assertions().empty());
+  EXPECT_FALSE(checker.assertions().empty());
 }
 
 TEST(CrvTest, Errors)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
-  EXPECT_TRUE(tracer().errors().empty());
+  EXPECT_TRUE(checker.errors().empty());
   External<int> i = 1;
-  tracer().add_error(i == 1);
-  EXPECT_FALSE(tracer().errors().empty());
-  EXPECT_EQ(smt::sat, encoder.check(tracer()));
-  tracer().add_error(i == 3);
-  EXPECT_FALSE(tracer().errors().empty());
+  checker.add_error(i == 1);
+  EXPECT_FALSE(checker.errors().empty());
+  EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
+  checker.add_error(i == 3);
+  EXPECT_FALSE(checker.errors().empty());
 
   // disjunction
-  EXPECT_EQ(smt::sat, encoder.check(tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
 
   // idempotent
-  EXPECT_FALSE(tracer().errors().empty());
+  EXPECT_FALSE(checker.errors().empty());
 }
 
 TEST(CrvTest, EncoderCheck)
 {
+  DfsChecker checker;
   Encoder encoder;
 
   tracer().reset();
   External<bool> true_bool(true);
-  EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
 
   tracer().reset();
   External<bool> false_bool(false);
-  EXPECT_EQ(smt::unsat, encoder.check(false_bool, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(false_bool, tracer(), checker));
 
   // with literal
   tracer().reset();
-  EXPECT_EQ(smt::sat, encoder.check(true, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(true, tracer(), checker));
 
   tracer().reset();
-  EXPECT_EQ(smt::unsat, encoder.check(false, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(false, tracer(), checker));
 }
 
 TEST(CrvTest, Guard)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<int> i;
-  EXPECT_TRUE(tracer().decide_flip(i < 3));
-  EXPECT_EQ(smt::unsat, encoder.check(i == 3, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(i == 2, tracer()));
+  EXPECT_TRUE(checker.branch(i < 3));
+  EXPECT_EQ(smt::unsat, encoder.check(i == 3, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(i == 2, tracer(), checker));
 
   tracer().reset();
-  EXPECT_FALSE(tracer().decide_flip(false, false));
-  EXPECT_TRUE(tracer().decide_flip(true, true));
-  tracer().add_error(true);
-  EXPECT_EQ(smt::sat, encoder.check(tracer()));
-  EXPECT_FALSE(tracer().flip());
+  checker.reset();
+
+  EXPECT_FALSE(checker.branch(false, false));
+  EXPECT_TRUE(checker.branch(true, true));
+  checker.add_error(true);
+  EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
+  EXPECT_FALSE(checker.find_next_path());
 
   tracer().reset();
-  EXPECT_TRUE(tracer().decide_flip(true, false));
-  tracer().add_error(true);
-  EXPECT_EQ(smt::sat, encoder.check(tracer()));
-  EXPECT_FALSE(tracer().flip());
+  checker.reset();
+
+  EXPECT_TRUE(checker.branch(true, false));
+  checker.add_error(true);
+  EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
+  EXPECT_FALSE(checker.find_next_path());
 
   External<bool> false_bool;
   External<bool> true_bool;
 
-  // Do not call reset_address(); otherwise,
-  // we get that false_bool == true_bool.
   tracer().reset_events();
-  tracer().reset_flips();
+  tracer().reset_address();
+  tracer().reset_barrier();
+  checker.reset_dfs();
   false_bool = false;
   true_bool = true;
-  EXPECT_TRUE(tracer().decide_flip(false_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer()));
+  EXPECT_TRUE(checker.branch(false_bool));
+  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
 
-  EXPECT_TRUE(tracer().flip());
+  EXPECT_TRUE(checker.find_next_path());
   false_bool = false;
   true_bool = true;
-  EXPECT_FALSE(tracer().decide_flip(false_bool));
-  EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer()));
-
-  tracer().reset_events();
-  tracer().reset_flips();
-  false_bool = false;
-  true_bool = true;
-  EXPECT_TRUE(tracer().decide_flip(true_bool));
-  EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer()));
-
-  EXPECT_TRUE(tracer().flip());
-  false_bool = false;
-  true_bool = true;
-  EXPECT_FALSE(tracer().decide_flip(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer()));
+  EXPECT_FALSE(checker.branch(false_bool));
+  EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
 
   tracer().reset_events();
-  tracer().reset_flips();
+  tracer().reset_address();
+  tracer().reset_barrier();
+  checker.reset_dfs();
   false_bool = false;
   true_bool = true;
-  EXPECT_TRUE(tracer().decide_flip(false_bool));
-  EXPECT_TRUE(tracer().decide_flip(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer()));
+  EXPECT_TRUE(checker.branch(true_bool));
+  EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
 
-  EXPECT_TRUE(tracer().flip());
+  EXPECT_TRUE(checker.find_next_path());
   false_bool = false;
   true_bool = true;
-  EXPECT_TRUE(tracer().decide_flip(false_bool));
-  EXPECT_FALSE(tracer().decide_flip(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer()));
-
-  EXPECT_TRUE(tracer().flip());
-  false_bool = false;
-  true_bool = true;
-  EXPECT_FALSE(tracer().decide_flip(false_bool));
-  EXPECT_TRUE(tracer().decide_flip(true_bool));
-  EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer()));
+  EXPECT_FALSE(checker.branch(true_bool));
+  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
 
   tracer().reset_events();
-  tracer().reset_flips();
+  tracer().reset_address();
+  tracer().reset_barrier();
+  checker.reset_dfs();
   false_bool = false;
   true_bool = true;
-  EXPECT_TRUE(tracer().decide_flip(false_bool));
-  tracer().add_error(true_bool);
-  EXPECT_TRUE(tracer().decide_flip(true_bool));
-  tracer().add_error(true_bool);
-  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  EXPECT_TRUE(checker.branch(false_bool));
+  EXPECT_TRUE(checker.branch(true_bool));
+  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
 
-  EXPECT_TRUE(tracer().flip());
+  EXPECT_TRUE(checker.find_next_path());
   false_bool = false;
   true_bool = true;
-  EXPECT_TRUE(tracer().decide_flip(false_bool));
-  tracer().add_error(true_bool);
-  EXPECT_FALSE(tracer().decide_flip(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  EXPECT_TRUE(checker.branch(false_bool));
+  EXPECT_FALSE(checker.branch(true_bool));
+  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
 
-  EXPECT_TRUE(tracer().flip());
+  EXPECT_TRUE(checker.find_next_path());
   false_bool = false;
   true_bool = true;
-  EXPECT_FALSE(tracer().decide_flip(false_bool));
-  EXPECT_TRUE(tracer().decide_flip(true_bool));
-  tracer().add_error(true_bool);
-  EXPECT_EQ(smt::sat, encoder.check(tracer()));
+  EXPECT_FALSE(checker.branch(false_bool));
+  EXPECT_TRUE(checker.branch(true_bool));
+  EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
+
+  tracer().reset_events();
+  tracer().reset_address();
+  tracer().reset_barrier();
+  checker.reset_dfs();
+  false_bool = false;
+  true_bool = true;
+  EXPECT_TRUE(checker.branch(false_bool));
+  checker.add_error(true_bool);
+  EXPECT_TRUE(checker.branch(true_bool));
+  checker.add_error(true_bool);
+  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
+
+  EXPECT_TRUE(checker.find_next_path());
+  false_bool = false;
+  true_bool = true;
+  EXPECT_TRUE(checker.branch(false_bool));
+  checker.add_error(true_bool);
+  EXPECT_FALSE(checker.branch(true_bool));
+  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
+
+  EXPECT_TRUE(checker.find_next_path());
+  false_bool = false;
+  true_bool = true;
+  EXPECT_FALSE(checker.branch(false_bool));
+  EXPECT_TRUE(checker.branch(true_bool));
+  checker.add_error(true_bool);
+  EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
 }
 
 TEST(CrvTest, ThinAir) {
-  Encoder encoder;
   tracer().reset();
+  DfsChecker checker;
+  Encoder encoder;
 
   External<int> x(3);
 
-  EXPECT_EQ(smt::unsat, encoder.check(x == 42, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(x == 3, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(x == 42, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(x == 3, tracer(), checker));
   EXPECT_EQ(3, tracer().events().size());
 }
 
 TEST(CrvTest, ThinAirWithThread) {
-  Encoder encoder;
   tracer().reset();
+  DfsChecker checker;
+  Encoder encoder;
 
   External<int> x(3);
   tracer().append_thread_begin_event();
   x = 7;
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::unsat, encoder.check(x == 42, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(x == 7, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(x == 3, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(x == 42, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(x == 7, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(x == 3, tracer(), checker));
   EXPECT_EQ(8, tracer().events().size());
 }
 
@@ -723,6 +739,7 @@ TEST(CrvTest, Fib5)
   constexpr unsigned N = 5;
 
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
   int k;
 
@@ -739,14 +756,15 @@ TEST(CrvTest, Fib5)
   }
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::unsat, encoder.check(144 < i || 144 < j, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(144 < i || 144 < j, tracer(), checker));
   EXPECT_EQ(smt::sat, encoder.check(
-    144 < i || 144 == i || 144 < j || 144 == j, tracer()));
+    144 < i || 144 == i || 144 < j || 144 == j, tracer(), checker));
 }
 
 TEST(CrvTest, Stack)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<int> v;
@@ -754,13 +772,14 @@ TEST(CrvTest, Stack)
   tracer().append_push_event(v);
 
   const Internal<int> internal(tracer().append_pop_event(v));
-  EXPECT_EQ(smt::unsat, encoder.check(3 != internal, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(3 == internal, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(3 != internal, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(3 == internal, tracer(), checker));
 }
 
 TEST(CrvTest, StackApi)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Stack<int> stack;
@@ -772,21 +791,22 @@ TEST(CrvTest, StackApi)
   stack.push(internal);
 
   internal = stack.pop();
-  EXPECT_EQ(smt::unsat, encoder.check(7 != internal, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(7 == internal, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(7 != internal, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(7 == internal, tracer(), checker));
 
   internal = stack.pop();
-  EXPECT_EQ(smt::unsat, encoder.check(5 != internal, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(5 == internal, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(5 != internal, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(5 == internal, tracer(), checker));
 
   internal = stack.pop();
-  EXPECT_EQ(smt::unsat, encoder.check(3 != internal, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(3 == internal, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(3 != internal, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(3 == internal, tracer(), checker));
 }
 
 TEST(CrvTest, StackApiWithSingleThread)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Stack<int> stack;
@@ -797,28 +817,29 @@ TEST(CrvTest, StackApiWithSingleThread)
   tracer().append_thread_end_event();
 
   Internal<int> p0(stack.pop());
-  EXPECT_EQ(smt::sat, encoder.check(5 == p0, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(7 == p0, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(5 == p0, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(7 == p0, tracer(), checker));
 
   Internal<int> p1(stack.pop());
 
-  EXPECT_EQ(smt::sat, encoder.check(5 == p0, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(7 == p0, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(5 == p1, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(7 == p1, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(7 == p0 && 5 == p1, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(5 == p0 && 7 == p1, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(5 == p0, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(7 == p0, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(5 == p1, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(7 == p1, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(7 == p0 && 5 == p1, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(5 == p0 && 7 == p1, tracer(), checker));
 
-  EXPECT_EQ(smt::unsat, encoder.check(!(5 != p0 || 7 == p1), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(5 != p0 || 7 == p1, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(5 != p0 || 7 == p1), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(5 != p0 || 7 == p1, tracer(), checker));
 
-  EXPECT_EQ(smt::unsat, encoder.check(!(7 != p0 || 5 == p1), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(7 != p0 || 5 == p1, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(7 != p0 || 5 == p1), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(7 != p0 || 5 == p1, tracer(), checker));
 }
 
 TEST(CrvTest, StackLifo1)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<int> v;
@@ -828,13 +849,14 @@ TEST(CrvTest, StackLifo1)
   tracer().append_push_event(v);
 
   const Internal<int> internal(tracer().append_pop_event(v));
-  EXPECT_EQ(smt::unsat, encoder.check(3 == internal, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(5 == internal, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(3 == internal, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(5 == internal, tracer(), checker));
 }
 
 TEST(CrvTest, StackLifo2)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<int> v;
@@ -845,13 +867,14 @@ TEST(CrvTest, StackLifo2)
   tracer().append_pop_event(v);
 
   const Internal<int> internal(tracer().append_pop_event(v));
-  EXPECT_EQ(smt::unsat, encoder.check(3 != internal, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(3 == internal, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(3 != internal, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(3 == internal, tracer(), checker));
 }
 
 TEST(CrvTest, ThreeThreadsReadWriteExternal)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   // Declare shared variable initialized by the main thread
@@ -872,18 +895,19 @@ TEST(CrvTest, ThreeThreadsReadWriteExternal)
   tracer().append_thread_end_event();
 
   Internal<char> a(x);
-  EXPECT_EQ(smt::unsat, encoder.check(!(a == '\0' || a == 'P' || a == 'Q'), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(!(a == '\0'), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(!(a == 'P'), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(!(a == 'Q'), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(!(a == 'P' || a == 'Q'), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(!(a == '\0' || a == 'P'), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(!(a == '\0' || a == 'Q'), tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(a == '\0' || a == 'P' || a == 'Q'), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(!(a == '\0'), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(!(a == 'P'), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(!(a == 'Q'), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(!(a == 'P' || a == 'Q'), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(!(a == '\0' || a == 'P'), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(!(a == '\0' || a == 'Q'), tracer(), checker));
 }
 
 TEST(CrvTest, SingleThreadWithExternal1)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<char> x;
@@ -892,13 +916,14 @@ TEST(CrvTest, SingleThreadWithExternal1)
   x = 'A';
   a = x;
 
-  EXPECT_EQ(smt::unsat, encoder.check(a != 'A', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a == 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a != 'A', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'A', tracer(), checker));
 }
 
 TEST(CrvTest, SingleThreadWithExternal2)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<char> x;
@@ -908,39 +933,41 @@ TEST(CrvTest, SingleThreadWithExternal2)
   x = 'B';
   a = x;
 
-  EXPECT_EQ(smt::unsat, encoder.check(a == 'A', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a == 'A', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer(), checker));
 }
 
 TEST(CrvTest, CopyInternaltoInternal)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Internal<char> a = 'A';
   Internal<char> b = a;
 
-  EXPECT_EQ(smt::unsat, encoder.check(!(b == 'A'), tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(!(b == a), tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == 'A'), tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == a), tracer(), checker));
 
   a = 'B';
-  EXPECT_EQ(smt::sat, encoder.check(!(b == a), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(!(b == a), tracer(), checker));
 }
 
 TEST(CrvTest, CopyExternaltoInternal)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<char> a = 'A';
   Internal<char> b = a;
 
-  EXPECT_EQ(smt::unsat, encoder.check(!(b == 'A'), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == 'A'), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer(), checker));
 
   a = 'B';
-  EXPECT_EQ(smt::unsat, encoder.check(!(b == 'A'), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == 'A'), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer(), checker));
 }
 
 TEST(CrvTest, Array)
@@ -1170,6 +1197,7 @@ TEST(CrvTest, Array)
 TEST(CrvTest, CompareArrayElements)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<int[2]> a;
@@ -1177,34 +1205,35 @@ TEST(CrvTest, CompareArrayElements)
   make_any(a[0]);
   make_any(a[1]);
 
-  EXPECT_EQ(smt::sat, encoder.check(a[0] < a[1], tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[0] <= a[1], tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[0] > a[1], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] < a[1], tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] <= a[1], tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] > a[1], tracer(), checker));
 
-  tracer().add_assertion(a[0] < a[1]);
-  EXPECT_EQ(smt::sat, encoder.check(a[0] < a[1], tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[0] <= a[1], tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[0] > a[1], tracer()));
+  checker.add_assertion(a[0] < a[1]);
+  EXPECT_EQ(smt::sat, encoder.check(a[0] < a[1], tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] <= a[1], tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] > a[1], tracer(), checker));
 }
 
 TEST(CrvTest, SwapArrayElements)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<int[2]> a;
   make_any(a[0]);
   make_any(a[1]);
 
-  tracer().add_assertion(a[1] < a[0]);
+  checker.add_assertion(a[1] < a[0]);
 
   // swap
   Internal<int> t = a[0];
   a[0] = a[1];
   a[1] = t;
 
-  EXPECT_EQ(smt::unsat, encoder.check(a[1] < a[0], tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[0] <= a[1], tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] < a[0], tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] <= a[1], tracer(), checker));
 }
 
 // Future extension note: if another initialization value is
@@ -1217,49 +1246,52 @@ TEST(CrvTest, SwapArrayElements)
 TEST(CrvTest, InitialArray)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<int[1]> a;
 
   // array elements are initialized to zero (see load_from)
-  EXPECT_EQ(smt::unsat, encoder.check(a[0] != 0, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[0] == 0, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != 0, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 0, tracer(), checker));
 
   Internal<int> s = 42;
-  tracer().add_assertion(a[0] == s);
+  checker.add_assertion(a[0] == s);
   Internal<int> t = a[0];
 
   // (incorrectly) SAT when "ld.term == std::move(ld_zero)"
   // in Encoder::encode_load_from() function is removed
-  EXPECT_EQ(smt::unsat, encoder.check(t != s, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(t != s, tracer(), checker));
 
   // unsat due to zero initialization (see above)
-  EXPECT_EQ(smt::unsat, encoder.check(t == s, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(t == s, tracer(), checker));
 }
 
 TEST(CrvTest, ExternalArrayWithLiteralOffset) {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<char[5]> x;
 
   x[2] = 'Z';
   Internal<char> a(x[2]);
-  EXPECT_EQ(smt::unsat, encoder.check(a != 'Z', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a == 'Z', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a != 'Z', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'Z', tracer(), checker));
 
   // initial array elements are zero
   Internal<char> b(x[3]);
   Internal<char> c(x[4]);
-  EXPECT_EQ(smt::unsat, encoder.check(b != '\0', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(b == '\0', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(c != '\0', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(c == '\0', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(b != '\0', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(b == '\0', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(c != '\0', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(c == '\0', tracer(), checker));
 }
 
 TEST(CrvTest, ExternalArrayWithExternalOffset)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<char[3]> xs;
@@ -1272,31 +1304,32 @@ TEST(CrvTest, ExternalArrayWithExternalOffset)
   xs[index] = 'Z';
 
   a = xs[0];
-  EXPECT_EQ(smt::unsat, encoder.check(a == 'Z', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a != 'Z', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a == 'Z', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'Z', tracer(), checker));
 
   a = xs[1];
-  EXPECT_EQ(smt::unsat, encoder.check(a == 'Z', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a != 'Z', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a == 'Z', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'Z', tracer(), checker));
 
   a = xs[2];
-  EXPECT_EQ(smt::unsat, encoder.check(a != 'Z', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a == 'Z', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a != 'Z', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'Z', tracer(), checker));
 
   a = xs[index];
-  EXPECT_EQ(smt::unsat, encoder.check(a != 'Z', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a == 'Z', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a != 'Z', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'Z', tracer(), checker));
 
   // Out of bound array access does not cause an error.
   index = index + static_cast<size_t>(1);
   a = xs[index];
-  EXPECT_EQ(smt::unsat, encoder.check(a == 'Z', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a != 'Z', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a == 'Z', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'Z', tracer(), checker));
 }
 
 TEST(CrvTest, MultipleExternalArrayStoresWithLiteralOffset)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<char[3]> xs;
@@ -1307,13 +1340,14 @@ TEST(CrvTest, MultipleExternalArrayStoresWithLiteralOffset)
 
   a = xs[1];
 
-  EXPECT_EQ(smt::unsat, encoder.check(a != 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a != 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer(), checker));
 }
 
 TEST(CrvTest, MultipleExternalArrayStoresWithExternalOffset)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<char[3]> xs;
@@ -1328,13 +1362,14 @@ TEST(CrvTest, MultipleExternalArrayStoresWithExternalOffset)
 
   a = xs[index];
 
-  EXPECT_EQ(smt::unsat, encoder.check(a != 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a != 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer(), checker));
 }
 
 TEST(CrvTest, JoinThreads)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<char> x('\0');
@@ -1349,13 +1384,13 @@ TEST(CrvTest, JoinThreads)
   EXPECT_EQ(2, child_thread_id);
   EXPECT_EQ(parent_thread_id, tracer().current_thread_id());
 
-  EXPECT_EQ(smt::sat, encoder.check(x == '\0', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(x == 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(x == '\0', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(x == 'A', tracer(), checker));
 
   tracer().append_join_event(child_thread_id);
 
-  EXPECT_EQ(smt::unsat, encoder.check(x == '\0', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(x == 'A', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(x == '\0', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(x == 'A', tracer(), checker));
 }
 
 void array_t0(External<char[]>& array)
@@ -1371,6 +1406,7 @@ void array_t1(External<char[]>& array)
 TEST(CrvTest, ArrayWithJoinThreads)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<char[]> array;
@@ -1380,14 +1416,14 @@ TEST(CrvTest, ArrayWithJoinThreads)
   t1.join();
   t2.join();
  
-  EXPECT_TRUE(tracer().assertions().empty());
-  EXPECT_TRUE(tracer().errors().empty());
-  EXPECT_EQ(smt::unsat, encoder.check(array[0] != 'X' && array[0] != 'Y', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(array[0] != 'X', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(array[0] != 'Y', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(array[0] == 'X', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(array[0] == 'Y', tracer()));
-  EXPECT_FALSE(tracer().flip());
+  EXPECT_TRUE(checker.assertions().empty());
+  EXPECT_TRUE(checker.errors().empty());
+  EXPECT_EQ(smt::unsat, encoder.check(array[0] != 'X' && array[0] != 'Y', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(array[0] != 'X', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(array[0] != 'Y', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(array[0] == 'X', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(array[0] == 'Y', tracer(), checker));
+  EXPECT_FALSE(checker.find_next_path());
 }
 
 void array_index(
@@ -1400,6 +1436,7 @@ void array_index(
 TEST(CrvTest, ArrayIndex)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<unsigned[]> array;
@@ -1419,23 +1456,24 @@ TEST(CrvTest, ArrayIndex)
 
   Internal<unsigned> sum(array[0] + array[1] + array[2]);
  
-  EXPECT_TRUE(tracer().assertions().empty());
-  EXPECT_TRUE(tracer().errors().empty());
-  EXPECT_EQ(smt::unsat, encoder.check(sum == 4, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(sum == 3, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(sum != 3, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(sum == 2, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(sum != 2, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(sum == 1, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(sum != 1, tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(sum == 0, tracer()));
+  EXPECT_TRUE(checker.assertions().empty());
+  EXPECT_TRUE(checker.errors().empty());
+  EXPECT_EQ(smt::unsat, encoder.check(sum == 4, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(sum == 3, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(sum != 3, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(sum == 2, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(sum != 2, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(sum == 1, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(sum != 1, tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(sum == 0, tracer(), checker));
 
-  EXPECT_FALSE(tracer().flip());
+  EXPECT_FALSE(checker.find_next_path());
 }
 
 TEST(CrvTest, SatScopeWithNondeterminsticGuardInSingleThread)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<bool> nondet_bool;
@@ -1450,16 +1488,17 @@ TEST(CrvTest, SatScopeWithNondeterminsticGuardInSingleThread)
   tracer().scope_end();
   a = x;
 
-  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a != 'C', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a == 'B' && a != 'C', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a == 'C', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a != 'B' && a == 'C', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'C', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B' && a != 'C', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'C', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'B' && a == 'C', tracer(), checker));
 }
 
 TEST(CrvTest, SatScopeWithNondeterminsticGuardAndArrayInSingleThread)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<bool> nondet_bool;
@@ -1474,16 +1513,17 @@ TEST(CrvTest, SatScopeWithNondeterminsticGuardAndArrayInSingleThread)
   tracer().scope_end();
   a = xs[2];
 
-  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a != 'C', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a == 'B' && a != 'C', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a == 'C', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a != 'B' && a == 'C', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'C', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B' && a != 'C', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'C', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'B' && a == 'C', tracer(), checker));
 }
 
 TEST(CrvTest, SatScopeWithDeterminsticGuardAndArrayInSingleThread)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<char[3]> x;
@@ -1499,58 +1539,62 @@ TEST(CrvTest, SatScopeWithDeterminsticGuardAndArrayInSingleThread)
   tracer().scope_end();
   a = x[2];
 
-  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a != 'C', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a == 'C', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a != 'C', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a == 'C', tracer(), checker));
 }
 
 TEST(CrvTest, UnsatScopeInSingleThread)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<int> var;
 
   tracer().scope_then(0 < var);
-  tracer().add_error(var == 0);
+  checker.add_error(var == 0);
   tracer().scope_end();
 
-  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
 }
 
 TEST(CrvTest, UnsatScopeInMultipleThread)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<int> var;
 
   tracer().append_thread_begin_event();
   tracer().scope_then(0 < var);
-  tracer().add_error(var == 0);
+  checker.add_error(var == 0);
   tracer().scope_end();
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
 }
 
 TEST(CrvTest, UnsatScopeErrorConditionDueToFalseGuard)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<bool> true_bool(true);
   External<bool> false_bool(false);
   tracer().scope_then(false_bool);
-  tracer().add_error(true_bool);
+  checker.add_error(true_bool);
   tracer().scope_end();
 
-  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
 }
 
 TEST(CrvTest, SatFlipWithNondeterminsticGuardInSingleThread)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   bool r0 = false;
@@ -1566,21 +1610,21 @@ TEST(CrvTest, SatFlipWithNondeterminsticGuardInSingleThread)
     Internal<char> a('\0');
 
     x = 'A';
-    if (tracer().decide_flip(nondet_bool))
+    if (checker.branch(nondet_bool))
       x = 'B';
     else
       x = 'C';
     a = x;
 
-    r0 |= smt::sat == encoder.check(a == 'B', tracer());
-    r1 |= smt::sat == encoder.check(a != 'C', tracer());
-    r2 |= smt::sat == encoder.check(a == 'B' && a != 'C', tracer());
-    r3 |= smt::sat == encoder.check(a == 'C', tracer());
-    r4 |= smt::sat == encoder.check(a != 'B' && a == 'C', tracer());
+    r0 |= smt::sat == encoder.check(a == 'B', tracer(), checker);
+    r1 |= smt::sat == encoder.check(a != 'C', tracer(), checker);
+    r2 |= smt::sat == encoder.check(a == 'B' && a != 'C', tracer(), checker);
+    r3 |= smt::sat == encoder.check(a == 'C', tracer(), checker);
+    r4 |= smt::sat == encoder.check(a != 'B' && a == 'C', tracer(), checker);
   }
-  while (tracer().flip());
+  while (checker.find_next_path());
 
-  EXPECT_EQ(1, tracer().flip_cnt());
+  EXPECT_EQ(1, checker.path_cnt());
   EXPECT_TRUE(r0);
   EXPECT_TRUE(r1);
   EXPECT_TRUE(r2);
@@ -1591,6 +1635,7 @@ TEST(CrvTest, SatFlipWithNondeterminsticGuardInSingleThread)
 TEST(CrvTest, SatFlipWithNondeterminsticGuardAndArrayInSingleThread)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   bool r0 = false;
@@ -1606,21 +1651,21 @@ TEST(CrvTest, SatFlipWithNondeterminsticGuardAndArrayInSingleThread)
     Internal<char> a('\0');
   
     xs[2] = 'A';
-    if (tracer().decide_flip(nondet_bool))
+    if (checker.branch(nondet_bool))
       xs[2] = 'B';
     else
       xs[2] = 'C';
     a = xs[2];
   
-    r0 |= smt::sat == encoder.check(a == 'B', tracer());
-    r1 |= smt::sat == encoder.check(a != 'C', tracer());
-    r2 |= smt::sat == encoder.check(a == 'B' && a != 'C', tracer());
-    r3 |= smt::sat == encoder.check(a == 'C', tracer());
-    r4 |= smt::sat == encoder.check(a != 'B' && a == 'C', tracer());
+    r0 |= smt::sat == encoder.check(a == 'B', tracer(), checker);
+    r1 |= smt::sat == encoder.check(a != 'C', tracer(), checker);
+    r2 |= smt::sat == encoder.check(a == 'B' && a != 'C', tracer(), checker);
+    r3 |= smt::sat == encoder.check(a == 'C', tracer(), checker);
+    r4 |= smt::sat == encoder.check(a != 'B' && a == 'C', tracer(), checker);
   }
-  while (tracer().flip());
+  while (checker.find_next_path());
 
-  EXPECT_EQ(1, tracer().flip_cnt());
+  EXPECT_EQ(1, checker.path_cnt());
   EXPECT_TRUE(r0);
   EXPECT_TRUE(r1);
   EXPECT_TRUE(r2);
@@ -1631,6 +1676,7 @@ TEST(CrvTest, SatFlipWithNondeterminsticGuardAndArrayInSingleThread)
 TEST(CrvTest, SatFlipWithDeterminsticGuardAndArrayInSingleThread)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   bool r0 = false;
@@ -1645,20 +1691,20 @@ TEST(CrvTest, SatFlipWithDeterminsticGuardAndArrayInSingleThread)
   
     p = '?';
     x[2] = 'A';
-    if (tracer().decide_flip(p == '?'))
+    if (checker.branch(p == '?'))
       x[2] = 'B';
     else
       x[2] = 'C'; // unreachable
     a = x[2];
   
 
-    r0 |= smt::sat == encoder.check(a == 'B', tracer());
-    r1 |= smt::sat == encoder.check(a != 'C', tracer());
-    r1 &= smt::unsat == encoder.check(a == 'C', tracer());
+    r0 |= smt::sat == encoder.check(a == 'B', tracer(), checker);
+    r1 |= smt::sat == encoder.check(a != 'C', tracer(), checker);
+    r1 &= smt::unsat == encoder.check(a == 'C', tracer(), checker);
   }
-  while (tracer().flip());
+  while (checker.find_next_path());
 
-  EXPECT_EQ(1, tracer().flip_cnt());
+  EXPECT_EQ(1, checker.path_cnt());
   EXPECT_TRUE(r0);
   EXPECT_TRUE(r1);
   EXPECT_TRUE(r2);
@@ -1667,6 +1713,7 @@ TEST(CrvTest, SatFlipWithDeterminsticGuardAndArrayInSingleThread)
 TEST(CrvTest, UnsatFlipInSingleThread)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   unsigned checks = 0;
@@ -1676,22 +1723,22 @@ TEST(CrvTest, UnsatFlipInSingleThread)
   {
     External<int> var;
 
-    if (tracer().decide_flip(0 < var))
-      tracer().add_error(var == 0);
+    if (checker.branch(0 < var))
+      checker.add_error(var == 0);
 
-    if (!tracer().errors().empty())
+    if (!checker.errors().empty())
     {
       checks++;
-      EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+      EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
     }
     else
     {
       unchecks++;
     }
   }
-  while (tracer().flip());
+  while (checker.find_next_path());
 
-  EXPECT_EQ(1, tracer().flip_cnt());
+  EXPECT_EQ(1, checker.path_cnt());
   EXPECT_EQ(1, checks);
   EXPECT_EQ(1, unchecks);
 }
@@ -1699,6 +1746,7 @@ TEST(CrvTest, UnsatFlipInSingleThread)
 TEST(CrvTest, UnsatFlipInMultipleThread)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   unsigned checks = 0;
@@ -1709,23 +1757,23 @@ TEST(CrvTest, UnsatFlipInMultipleThread)
     External<int> var;
 
     tracer().append_thread_begin_event();
-    if (tracer().decide_flip(0 < var))
-      tracer().add_error(var == 0);
+    if (checker.branch(0 < var))
+      checker.add_error(var == 0);
     tracer().append_thread_end_event();
 
-    if (!tracer().errors().empty())
+    if (!checker.errors().empty())
     {
       checks++;
-      EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+      EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
     }
     else
     {
       unchecks++;
     }
   }
-  while (tracer().flip());
+  while (checker.find_next_path());
 
-  EXPECT_EQ(1, tracer().flip_cnt());
+  EXPECT_EQ(1, checker.path_cnt());
   EXPECT_EQ(1, checks);
   EXPECT_EQ(1, unchecks);
 }
@@ -1733,6 +1781,7 @@ TEST(CrvTest, UnsatFlipInMultipleThread)
 TEST(CrvTest, UnsatFlipErrorConditionDueToFalseGuard)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   unsigned checks = 0;
@@ -1743,22 +1792,22 @@ TEST(CrvTest, UnsatFlipErrorConditionDueToFalseGuard)
     External<bool> true_bool(true);
     External<bool> false_bool(false);
 
-    if (tracer().decide_flip(false_bool))
-      tracer().add_error(true_bool);
+    if (checker.branch(false_bool))
+      checker.add_error(true_bool);
 
-    if (!tracer().errors().empty())
+    if (!checker.errors().empty())
     {
       checks++;
-      EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+      EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
     }
     else
     {
       unchecks++;
     }
   }
-  while (tracer().flip());
+  while (checker.find_next_path());
 
-  EXPECT_EQ(1, tracer().flip_cnt());
+  EXPECT_EQ(1, checker.path_cnt());
   EXPECT_EQ(1, checks);
   EXPECT_EQ(1, unchecks);
 }
@@ -1766,6 +1815,7 @@ TEST(CrvTest, UnsatFlipErrorConditionDueToFalseGuard)
 TEST(CrvTest, FlipFour)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   unsigned sat_checks = 0;
@@ -1781,20 +1831,20 @@ TEST(CrvTest, FlipFour)
     External<bool> false_bool(false);
     External<bool> true_bool(true);
 
-    if (tracer().decide_flip(false_bool))
+    if (checker.branch(false_bool))
     {
       expect = smt::unsat;
-      tracer().add_error(true_bool);
+      checker.add_error(true_bool);
     }
 
-    if (tracer().decide_flip(true_bool))
+    if (checker.branch(true_bool))
     {
       if (expect == smt::unknown)
         expect = smt::sat;
-      tracer().add_error(true_bool);
+      checker.add_error(true_bool);
     }
 
-    if (!tracer().errors().empty())
+    if (!checker.errors().empty())
     {
       switch (expect)
       {
@@ -1802,16 +1852,16 @@ TEST(CrvTest, FlipFour)
       case smt::unsat:   unsat_checks++;   break;
       case smt::unknown: unknown_checks++; break;
       }
-      EXPECT_EQ(expect, encoder.check(tracer()));
+      EXPECT_EQ(expect, encoder.check(tracer(), checker));
     }
     else
     {
       unchecks++;
     }
   }
-  while (tracer().flip());
+  while (checker.find_next_path());
 
-  EXPECT_EQ(3, tracer().flip_cnt());
+  EXPECT_EQ(3, checker.path_cnt());
   EXPECT_EQ(1, sat_checks);
   EXPECT_EQ(2, unsat_checks);
   EXPECT_EQ(0, unknown_checks);
@@ -1839,44 +1889,46 @@ TEST(CrvTest, ThreadApi)
   EXPECT_EQ(1, ThisThread::thread_id());
 }
 
-void thread_false_guard(const External<bool>& false_bool)
+void thread_false_guard(DfsChecker& checker, const External<bool>& false_bool)
 {
-  tracer().decide_flip(false_bool);
+  checker.branch(false_bool);
 }
 
-void thread_true_error(const External<bool>& true_bool)
+void thread_true_error(DfsChecker& checker, const External<bool>& true_bool)
 {
-  tracer().add_error(true_bool);
+  checker.add_error(true_bool);
 }
 
 TEST(CrvTest, ThreadGuard)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<bool> true_bool(true);
   External<bool> false_bool(false);
 
-  Thread f(thread_false_guard, false_bool);
-  Thread g(thread_true_error, true_bool);
+  Thread f(thread_false_guard, checker, false_bool);
+  Thread g(thread_true_error, checker, true_bool);
 
-  EXPECT_FALSE(tracer().errors().empty());
-  EXPECT_EQ(smt::sat, encoder.check(tracer()));
+  EXPECT_FALSE(checker.errors().empty());
+  EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
 
   tracer().reset();
   unsigned n = 0;
 
-  tracer().decide_flip(false_bool);
+  checker.branch(false_bool);
   Thread h(thread_api_test, &n, 7);
-  tracer().add_error(true_bool);
+  checker.add_error(true_bool);
 
   EXPECT_EQ(7, n);
-  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
 }
 
 TEST(CrvTest, MutexSatSingleWriter1)
 {
   tracer().reset();
+  dfs_checker().reset();
   Encoder encoder;
 
   External<int> shared_var(0);
@@ -1887,17 +1939,18 @@ TEST(CrvTest, MutexSatSingleWriter1)
   tracer().append_thread_end_event();
 
   tracer().append_thread_begin_event();
-  tracer().add_error(shared_var == 3);
+  dfs_checker().add_error(shared_var == 3);
   tracer().append_thread_end_event();
 
-  EXPECT_TRUE(tracer().assertions().empty());
-  EXPECT_FALSE(tracer().errors().empty());
-  EXPECT_EQ(smt::sat, encoder.check(tracer()));
+  EXPECT_TRUE(dfs_checker().assertions().empty());
+  EXPECT_FALSE(dfs_checker().errors().empty());
+  EXPECT_EQ(smt::sat, encoder.check(tracer(), dfs_checker()));
 }
 
 TEST(CrvTest, MutexUnsatSingleWriter1)
 {
   tracer().reset();
+  dfs_checker().reset();
   Encoder encoder;
 
   External<int> shared_var(0);
@@ -1912,18 +1965,19 @@ TEST(CrvTest, MutexUnsatSingleWriter1)
 
   tracer().append_thread_begin_event();
   mutex.lock();
-  tracer().add_error(shared_var == 3);
+  dfs_checker().add_error(shared_var == 3);
   mutex.unlock();
   tracer().append_thread_end_event();
 
-  EXPECT_FALSE(tracer().assertions().empty());
-  EXPECT_FALSE(tracer().errors().empty());
-  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  EXPECT_FALSE(dfs_checker().assertions().empty());
+  EXPECT_FALSE(dfs_checker().errors().empty());
+  EXPECT_EQ(smt::unsat, encoder.check(tracer(), dfs_checker()));
 }
 
 TEST(CrvTest, MutexSatSingleWriter2)
 {
   tracer().reset();
+  dfs_checker().reset();
   Encoder encoder;
 
   External<int> shared_var(0);
@@ -1934,17 +1988,18 @@ TEST(CrvTest, MutexSatSingleWriter2)
   tracer().append_thread_end_event();
 
   tracer().append_thread_begin_event();
-  tracer().add_error(shared_var == 3);
+  dfs_checker().add_error(shared_var == 3);
   tracer().append_thread_end_event();
 
-  EXPECT_TRUE(tracer().assertions().empty());
-  EXPECT_FALSE(tracer().errors().empty());
-  EXPECT_EQ(smt::sat, encoder.check(tracer()));
+  EXPECT_TRUE(dfs_checker().assertions().empty());
+  EXPECT_FALSE(dfs_checker().errors().empty());
+  EXPECT_EQ(smt::sat, encoder.check(tracer(), dfs_checker()));
 }
 
 TEST(CrvTest, MutexUnsatSingleWriter2)
 {
   tracer().reset();
+  dfs_checker().reset();
   Encoder encoder;
 
   External<int> shared_var(0);
@@ -1959,18 +2014,19 @@ TEST(CrvTest, MutexUnsatSingleWriter2)
 
   tracer().append_thread_begin_event();
   mutex.lock();
-  tracer().add_error(shared_var == 3);
+  dfs_checker().add_error(shared_var == 3);
   mutex.unlock();
   tracer().append_thread_end_event();
 
-  EXPECT_FALSE(tracer().assertions().empty());
-  EXPECT_FALSE(tracer().errors().empty());
-  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  EXPECT_FALSE(dfs_checker().assertions().empty());
+  EXPECT_FALSE(dfs_checker().errors().empty());
+  EXPECT_EQ(smt::unsat, encoder.check(tracer(), dfs_checker()));
 }
 
 TEST(CrvTest, MutexSatMultipleWriters1)
 {
   tracer().reset();
+  dfs_checker().reset();
   Encoder encoder;
 
   External<char> x('\0');
@@ -1999,13 +2055,14 @@ TEST(CrvTest, MutexSatMultipleWriters1)
   b = y;
   c = z;
 
-  EXPECT_EQ(smt::sat, encoder.check(a == 'A' && b == '\2' && c == 'C', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a == '\1' && b == 'B' && c == '\3', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'A' && b == '\2' && c == 'C', tracer(), dfs_checker()));
+  EXPECT_EQ(smt::sat, encoder.check(a == '\1' && b == 'B' && c == '\3', tracer(), dfs_checker()));
 }
 
 TEST(CrvTest, MutexSatMultipleWriters2)
 {
   tracer().reset();
+  dfs_checker().reset();
   Encoder encoder;
 
   External<char> x('\0');
@@ -2040,13 +2097,14 @@ TEST(CrvTest, MutexSatMultipleWriters2)
   b = y;
   c = z;
 
-  EXPECT_EQ(smt::sat, encoder.check(a == 'A' && b == '\2' && c == 'C', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a == '\1' && b == 'B' && c == '\3', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a == 'A' && b == '\2' && c == 'C', tracer(), dfs_checker()));
+  EXPECT_EQ(smt::sat, encoder.check(a == '\1' && b == 'B' && c == '\3', tracer(), dfs_checker()));
 }
 
 TEST(CrvTest, MutexUnsatMultipleWriters)
 {
   tracer().reset();
+  dfs_checker().reset();
   Encoder encoder;
 
   External<char> x('\0');
@@ -2087,13 +2145,14 @@ TEST(CrvTest, MutexUnsatMultipleWriters)
   c = z;
   mutex.unlock();
 
-  EXPECT_EQ(smt::unsat, encoder.check(a == 'A' && b == '\2' && c == 'C', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a == '\1' && b == 'B' && c == '\3', tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(a == 'A' && b == '\2' && c == 'C', tracer(), dfs_checker()));
+  EXPECT_EQ(smt::unsat, encoder.check(a == '\1' && b == 'B' && c == '\3', tracer(), dfs_checker()));
 }
 
 TEST(CrvTest, MutexJoinMultipleWriters)
 {
   tracer().reset();
+  dfs_checker().reset();
   Encoder encoder;
 
   External<int> x(10);
@@ -2125,8 +2184,8 @@ TEST(CrvTest, MutexJoinMultipleWriters)
   tracer().append_join_event(child_thread_id_1);
   tracer().append_join_event(child_thread_id_2);
 
-  EXPECT_EQ(smt::sat, encoder.check(x == 16 && y == 5, tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(!(x == 16 && y == 5), tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(x == 16 && y == 5, tracer(), dfs_checker()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(x == 16 && y == 5), tracer(), dfs_checker()));
 }
 
 TEST(CrvTest, ImmediateDominator)
@@ -2567,9 +2626,9 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  EXPECT_TRUE(tracer.decide_flip(any_bool));
+  tracer.branch_then(any_bool);
   tracer.append_write_event(x); // 2
-  EXPECT_TRUE(tracer.decide_flip(any_bool));
+  tracer.branch_then(any_bool);
   tracer.append_write_event(x); // 3
   tracer.append_thread_end_event();
 
@@ -2586,9 +2645,9 @@ TEST(CrvTest, ImmediateDominator)
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
   tracer.append_write_event(x); // 2
-  EXPECT_TRUE(tracer.decide_flip(any_bool));
+  tracer.branch_then(any_bool);
   tracer.append_write_event(x); // 3
-  EXPECT_TRUE(tracer.decide_flip(any_bool));
+  tracer.branch_then(any_bool);
   tracer.append_write_event(x); // 4
   tracer.append_write_event(x); // 5
   tracer.append_thread_end_event();
@@ -2607,10 +2666,10 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  EXPECT_TRUE(tracer.decide_flip(any_bool));
+  tracer.branch_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.append_write_event(x); // 3
-  EXPECT_TRUE(tracer.decide_flip(any_bool));
+  tracer.branch_then(any_bool);
   tracer.append_write_event(x); // 4
   tracer.append_write_event(x); // 5
   tracer.append_thread_end_event();
@@ -2681,6 +2740,7 @@ TEST(CrvTest, CommunicationImmediateDominator)
 TEST(CrvTest, DeadlockSingleSend)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Channel<int> c;
@@ -2688,18 +2748,19 @@ TEST(CrvTest, DeadlockSingleSend)
   c.send(5);
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer()));
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer(), checker));
 
   tracer().append_thread_begin_event();
   c.recv();
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer(), checker));
 }
 
 TEST(CrvTest, DeadlockSingleRecv)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Channel<int> c;
@@ -2707,18 +2768,19 @@ TEST(CrvTest, DeadlockSingleRecv)
   c.recv();
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer()));
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer(), checker));
 
   tracer().append_thread_begin_event();
   c.send(5);
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer(), checker));
 }
 
 TEST(CrvTest, Deadlock)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Channel<int> c;
@@ -2739,12 +2801,13 @@ TEST(CrvTest, Deadlock)
   c.recv();
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer()));
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer(), checker));
 }
 
 TEST(CrvTest, InitDeadlockFree)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Channel<int> c;
@@ -2757,7 +2820,7 @@ TEST(CrvTest, InitDeadlockFree)
   c.recv();
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer(), checker));
 }
 
 // Unlike CrvTest::InitDeadlockFree, this test also relies
@@ -2765,6 +2828,7 @@ TEST(CrvTest, InitDeadlockFree)
 TEST(CrvTest, ExtensionDeadlockFree)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Channel<int> c;
@@ -2779,12 +2843,13 @@ TEST(CrvTest, ExtensionDeadlockFree)
   c.send(6);
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer(), checker));
 }
 
 TEST(CrvTest, CommunicationValue)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Channel<int> c;
@@ -2799,20 +2864,21 @@ TEST(CrvTest, CommunicationValue)
   c.send(6);
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::unsat, encoder.check(r != 6, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(r == 6, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(r != 6, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(r == 6, tracer(), checker));
 }
 
 TEST(CrvTest, CommunicationWithTrueGuard)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Channel<int> c;
 
   tracer().append_thread_begin_event();
   c.send(5);
-  EXPECT_TRUE(tracer().decide_flip(6 == c.recv()));
+  EXPECT_TRUE(checker.branch(6 == c.recv()));
   c.send(7);
   tracer().append_thread_end_event();
 
@@ -2822,21 +2888,22 @@ TEST(CrvTest, CommunicationWithTrueGuard)
   Internal<int> r(c.recv());
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::unsat, encoder.check(r != 7, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(r == 7, tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(r != 7, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(r == 7, tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer(), checker));
 }
 
 TEST(CrvTest, CommunicationWithFalseGuard)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Channel<int> c;
 
   tracer().append_thread_begin_event();
   c.send(5);
-  EXPECT_TRUE(tracer().decide_flip(6 != c.recv()));
+  EXPECT_TRUE(checker.branch(6 != c.recv()));
   c.send(7);
   tracer().append_thread_end_event();
 
@@ -2848,14 +2915,15 @@ TEST(CrvTest, CommunicationWithFalseGuard)
 
   // if there is a deadlock (which there is), then receive
   // events can take on nondeterministic values.
-  EXPECT_EQ(smt::sat, encoder.check(r != 7, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(r == 7, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(r != 7, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(r == 7, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer(), checker));
 }
 
 TEST(CrvTest, ScopeCommunicationWithElse)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Channel<int> c;
@@ -2875,14 +2943,15 @@ TEST(CrvTest, ScopeCommunicationWithElse)
   Internal<int> r(c.recv());
   tracer().append_thread_end_event();
 
-  EXPECT_EQ(smt::unsat, encoder.check(r != 7, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(r == 7, tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(r != 7, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(r == 7, tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check_deadlock(tracer(), checker));
 }
 
 TEST(CrvTest, ScopeCommunicationWithFalseThen)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Channel<int> c;
@@ -2902,9 +2971,9 @@ TEST(CrvTest, ScopeCommunicationWithFalseThen)
 
   // if there is a deadlock (which there is), then receive
   // events can take on nondeterministic values.
-  EXPECT_EQ(smt::sat, encoder.check(r != 7, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(r == 7, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(r != 7, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(r == 7, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check_deadlock(tracer(), checker));
 }
 
 template<smt::Opcode opcode, class T>
@@ -2977,6 +3046,7 @@ TEST(CrvTest, LazyInternal)
 TEST(CrvTest, SimplifierMakeLazyAndConstantPropagation)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<int> x = 0;
@@ -2993,8 +3063,8 @@ TEST(CrvTest, SimplifierMakeLazyAndConstantPropagation)
   EXPECT_TRUE(b.is_lazy());
   EXPECT_FALSE(b.is_literal());
 
-  EXPECT_EQ(smt::unsat, encoder.check(!(b == 8), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == 8), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer(), checker));
   EXPECT_EQ(8, roperand<smt::ADD>(b));
 
   EXPECT_TRUE((a < 2).is_literal());
@@ -3022,14 +3092,15 @@ TEST(CrvTest, SimplifierMakeLazyAndConstantPropagation)
   EXPECT_TRUE(e.is_lazy());
   EXPECT_FALSE(e.is_literal());
 
-  EXPECT_EQ(smt::unsat, encoder.check(!(e == 8), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(e == 8, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(e == 8), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(e == 8, tracer(), checker));
   EXPECT_EQ(8, roperand<smt::ADD>(e));
 }
 
 TEST(CrvTest, SimplifierOnlyConstantPropagation)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Internal<int> b(0);
@@ -3044,8 +3115,8 @@ TEST(CrvTest, SimplifierOnlyConstantPropagation)
   EXPECT_TRUE(b.is_literal());
   EXPECT_EQ(8, b.literal());
 
-  EXPECT_EQ(smt::unsat, encoder.check(!(b == 8), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == 8), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer(), checker));
 
   // rvalue reference arguments, copy constructors and assignment operators
   Internal<int> c = b;
@@ -3064,16 +3135,17 @@ TEST(CrvTest, SimplifierOnlyConstantPropagation)
   EXPECT_TRUE(d.is_literal());
   EXPECT_EQ(9, d.literal());
 
-  EXPECT_EQ(smt::unsat, encoder.check(!(e == 14), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(e == 14, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(e == 14), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(e == 14, tracer(), checker));
 
-  EXPECT_EQ(smt::unsat, encoder.check(!(d == 9), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(d == 9, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(d == 9), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(d == 9, tracer(), checker));
 }
 
 TEST(CrvTest, SimplifyInternalOperations)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   External<int> a = 0;
@@ -3089,8 +3161,8 @@ TEST(CrvTest, SimplifyInternalOperations)
   EXPECT_TRUE(b.is_lazy());
   EXPECT_FALSE(b.is_literal());
 
-  EXPECT_EQ(smt::unsat, encoder.check(!(b == 8), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == 8), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer(), checker));
   EXPECT_EQ(8, roperand<smt::ADD>(b));
 
   b = 8;
@@ -3192,6 +3264,7 @@ TEST(CrvTest, LazyGroup)
 TEST(CrvTest, PostIncrement)
 {
   tracer().reset();
+  DfsChecker checker;
   Encoder encoder;
 
   Internal<short> a(3);
@@ -3207,8 +3280,8 @@ TEST(CrvTest, PostIncrement)
   External<short> b(7);
   post_increment(b);
 
-  EXPECT_EQ(smt::unsat, encoder.check(!(b == 8), tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(!(b == 8), tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer(), checker));
 }
 
 #ifndef __BIT_PRECISION__
@@ -3216,39 +3289,41 @@ TEST(CrvTest, PostIncrement)
 TEST(CrvTest, BvApproximation)
 {
   tracer().reset();
+  DfsChecker checker; 
   Encoder encoder;
 
   External<unsigned int> star;
   Internal<unsigned int> n = star;
   Internal<unsigned int> x = n, y = 0u;
-  tracer().add_assertion(x <= 0u);
+  checker.add_assertion(x <= 0u);
 
   encoder.encode_bv_approximation(tracer());
-  EXPECT_EQ(smt::unsat, encoder.check(y != n, tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(y == n, tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(y != n, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(y == n, tracer(), checker));
 
   tracer().reset();
   External<unsigned int> z = 0u;
-  tracer().add_error(z == 0u);
+  checker.add_error(z == 0u);
   z = z - 1u;
 
   // error is found as expected
-  EXPECT_EQ(smt::sat, encoder.check(tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
 
   tracer().reset();
   External<unsigned int> w = 0u;
-  tracer().add_error(w == 0u);
+  checker.add_error(w == 0u);
   w = w - 1u;
 
   // error cannot be found any longer!
   encoder.encode_bv_approximation(tracer());
-  EXPECT_EQ(smt::unsat, encoder.check(tracer()));
+  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
 }
 #endif
 
 TEST(CrvTest, InternalArray)
 {
   tracer().reset();
+  DfsChecker checker; 
   Encoder encoder;
 
   Internal<char[]> a;
@@ -3257,86 +3332,87 @@ TEST(CrvTest, InternalArray)
   a[1] = 'A';
 
   Internal<char> b = a[1];
-  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'A', tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer(), checker));
 
   Internal<size_t> i;
   Internal<char> c = a[i];
 
-  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'A', tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer(), checker));
 
   a[i] = 'B';
 
-  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer(), checker));
 
   // satisfied by i equals 1
-  EXPECT_EQ(smt::sat, encoder.check(a[1] != 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] != 'A', tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[i] == 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[i] != 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[i] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[i] != 'B', tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer(), checker));
 
   a[1] = a[i];
 
-  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'B', tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[i] == 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[i] != 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[i] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[i] != 'B', tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer(), checker));
 }
 
 TEST(CrvTest, InternalArrayWithExplicitSize)
 {
   tracer().reset();
+  DfsChecker checker; 
   Encoder encoder;
 
   Internal<char[5]> a;
@@ -3345,79 +3421,79 @@ TEST(CrvTest, InternalArrayWithExplicitSize)
   a[1] = 'A';
 
   Internal<char> b = a[1];
-  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'A', tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer(), checker));
 
   Internal<size_t> i;
   Internal<char> c = a[i];
 
-  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'A', tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer(), checker));
 
   a[i] = 'B';
 
-  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer(), checker));
 
   // satisfied by i equals 1
-  EXPECT_EQ(smt::sat, encoder.check(a[1] != 'A', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] != 'A', tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[i] == 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[i] != 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[i] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[i] != 'B', tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer(), checker));
 
   a[1] = a[i];
 
-  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(b == 'A', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[1] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(b != 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[1] != 'B', tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[0] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[0] != a[0], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer()));
-  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(a[2] != 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[2] != a[2], tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(a[i] == 'B', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(a[i] != 'B', tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(a[i] == 'B', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(a[i] != 'B', tracer(), checker));
 
-  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer()));
-  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer()));
+  EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer(), checker));
 }
