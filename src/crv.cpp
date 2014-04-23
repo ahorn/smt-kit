@@ -123,13 +123,91 @@ bool DfsChecker::branch(const Internal<bool>& g, const bool direction_hint)
   if (g.is_literal())
     return g.literal();
 
-  const bool direction = m_dfs.branch(direction_hint);
-  if (direction)
-    tracer().branch_then(g);
+  bool direction = direction_hint;
+  if (m_dfs.is_end())
+    m_dfs.append_flip(direction_hint);
   else
-    tracer().branch_else(g);
+    direction = m_dfs.next();
 
+  force_branch(g, direction);
   return direction;
+}
+
+DfsPruneChecker& dfs_prune_checker()
+{
+  static DfsPruneChecker s_dfs_prune_checker;
+  return s_dfs_prune_checker;
+}
+
+bool DfsPruneChecker::branch(const Internal<bool>& g, const bool direction_hint)
+{
+  if (g.is_literal())
+    return g.literal();
+
+  if (!m_dfs.is_end())
+  {
+    assert(m_is_feasible);
+
+    const bool direction = m_dfs.next();
+    DfsChecker::force_branch(g, direction);
+    return direction;
+  }
+
+  if (!m_is_feasible)
+    // exactly like NO_BRANCH
+    return false;
+
+  assert(!g.is_literal() && m_dfs.is_end() && m_is_feasible);
+  m_dfs.append_flip(direction_hint);
+
+  if (direction_hint)
+    goto THEN_BRANCH;
+  else
+    goto ELSE_BRANCH;
+
+THEN_BRANCH:
+  if (smt::sat == check(tracer().guard()))
+  {
+    tracer().branch_then(g);
+    assert(m_dfs.is_end());
+
+    // Have we already tried ELSE_BRANCH?
+    if (!direction_hint)
+      m_dfs.freeze_last_flip(true);
+
+    assert(m_dfs.last_flip().direction);
+    return true;
+  }
+
+  // neither THEN_BRANCH nor ELSE_BRANCH is feasible
+  if (!direction_hint)
+    goto NO_BRANCH;
+
+// fall through THEN_BRANCH to try ELSE_BRANCH
+ELSE_BRANCH:
+  if (smt::sat == check(not tracer().guard()))
+  {
+    tracer().branch_else(g);
+    assert(m_dfs.is_end());
+
+    // Have we already tried THEN_BRANCH?
+    if (direction_hint)
+      m_dfs.freeze_last_flip(false);
+
+    assert(!m_dfs.last_flip().direction);
+    return false;
+  }
+
+  if (!direction_hint)
+    // try the other branch
+    goto THEN_BRANCH;
+
+NO_BRANCH:
+  // both THEN_BRANCH and ELSE_BRANCH are infeasible
+  m_is_feasible = false;
+
+  // favour "else" branch, hoping for shorter infeasible path
+  return false;
 }
 
 namespace ThisThread

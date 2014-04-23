@@ -3229,17 +3229,20 @@ EventMap Encoder::immediate_dominator_map(const Tracer& tracer,
 struct Flip
 {
   bool direction;
-  bool is_flip;
+
+  /// freezing means that we won't try the other direction
+  bool is_frozen;
 
   Flip(const Flip&) = delete;
 
+  // initially unfrozen
   Flip(bool direction)
   : direction(direction),
-    is_flip(false) {}
+    is_frozen(false) {}
 };
 
 typedef std::list<Flip> Flips;
-typedef std::list<Flip>::const_iterator FlipIter;
+typedef std::list<Flip>::iterator FlipIter;
 
 // Explore execution paths in a program using depth-first search
 class Dfs
@@ -3253,13 +3256,13 @@ public:
   Dfs()
   : m_path_cnt(0),
     m_flips(),
-    m_flip_iter(m_flips.cbegin()) {}
+    m_flip_iter(m_flips.begin()) {}
 
   void reset()
   {
     m_path_cnt = 0;
     m_flips.clear();
-    m_flip_iter = m_flips.cbegin();
+    m_flip_iter = m_flips.begin();
   }
 
   unsigned long long path_cnt() const
@@ -3282,9 +3285,9 @@ public:
   /// \return is there more to explore?
   bool find_next_path()
   {
-    m_flip_iter = m_flips.cbegin();
+    m_flip_iter = m_flips.begin();
 
-    while (!m_flips.empty() && m_flips.back().is_flip)
+    while (!m_flips.empty() && m_flips.back().is_frozen)
     {
       m_flips.pop_back();
     }
@@ -3294,7 +3297,7 @@ public:
 
     Flip& flip = m_flips.back();
     flip.direction = !flip.direction;
-    flip.is_flip = true;
+    flip.is_frozen = true;
     m_path_cnt++;
 
     assert(0 < m_path_cnt);
@@ -3303,41 +3306,69 @@ public:
     return true;
   }
 
-  bool branch(const bool direction_hint)
-  {
-    bool direction = direction_hint;
-    if (is_frontier())
-    {
-      m_flips.emplace_back(direction);
-      assert(m_flips.back().direction == direction_hint);
-    }
-    else
-    {
-      direction = m_flip_iter->direction;
-      m_flip_iter++;
-    }
-    return direction;
-  }
-
-  bool is_frontier() const
+  bool is_end() const
   {
     return m_flip_iter == m_flips.cend();
   }
 
-  // \pre: !is_frontier()
+  void append_flip(const bool direction)
+  {
+    m_flips.emplace_back(direction);
+    assert(last_flip().direction == direction);
+    assert(!last_flip().is_frozen);
+  }
+
+  /// \pre: !is_end()
+
+  /// \return direction of current_flip()
+  bool next()
+  {
+    assert(!is_end());
+
+    // increment after returning m_flip_iter->direction
+    return (m_flip_iter++)->direction;
+  }
+
+  const Flip& last_flip() const
+  {
+    return m_flips.back();
+  }
+
   const Flip& current_flip() const
   {
-    assert(!is_frontier());
+    if (is_end())
+      return last_flip();
+
     return *m_flip_iter;
   }
 
-  //TODO: update_current_flip(...)
+  void freeze_current_flip(const bool direction)
+  {
+    Flip& flip = is_end() ? m_flips.back() : *m_flip_iter;
+    flip.is_frozen = true;
+    flip.direction= direction;
+  }
+
+  void freeze_last_flip(const bool direction)
+  {
+    Flip& flip = m_flips.back();
+    flip.is_frozen = true;
+    flip.direction= direction;
+  }
 };
 
 class DfsChecker : public Checker
 {
-private:
+protected:
   Dfs m_dfs;
+
+  void force_branch(const Internal<bool>& g, const bool direction)
+  {
+    if (direction)
+      tracer().branch_then(g);
+    else
+      tracer().branch_else(g);
+  }
 
 public:
   DfsChecker()
@@ -3397,8 +3428,53 @@ public:
   }
 };
 
-/// Symbolic execution in a depth-first search manner
+/// Symbolic execution of possibly infeasible in a depth-first search manner
 extern DfsChecker& dfs_checker();
+
+/// Non-polymorphic extension of depth-first search checker
+class DfsPruneChecker : public DfsChecker
+{
+private:
+  smt::Z3Solver m_solver;
+  bool m_is_feasible;
+
+  smt::CheckResult check(const smt::Bool& condition)
+  {
+    m_solver.push();
+    m_solver.add(condition);
+    const smt::CheckResult r = m_solver.check();
+    m_solver.pop();
+    return r;
+  }
+
+public:
+  using DfsChecker::m_dfs;
+
+  DfsPruneChecker()
+  : DfsChecker(),
+    m_solver(smt::QF_AUFLIRA_LOGIC),
+    m_is_feasible(true) {}
+
+  void reset_dfs()
+  {
+    m_is_feasible = true;
+    DfsChecker::reset_dfs();
+  }
+
+  void reset()
+  {
+    m_is_feasible = true;
+    DfsChecker::reset();
+  }
+
+  /// Follow a feasible control flow direction
+
+  /// The second direction argument is only a suggestion that may be ignored.
+  bool branch(const Internal<bool>&, const bool direction_hint = true);
+};
+
+/// Symbolic execution of only feasible paths in a depth-first search manner
+extern DfsPruneChecker& dfs_prune_checker();
 
 /// Symbolic thread using partial order encoding
 class Thread
