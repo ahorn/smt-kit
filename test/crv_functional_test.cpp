@@ -20,7 +20,7 @@ TEST(CrvFunctionalTest, SafeIf)
 
     crv::dfs_prune_checker().add_error(!(a == 'B' || a == 'A'));
 
-    if (!crv::dfs_prune_checker().errors().empty() &&
+    if (!crv::dfs_prune_checker().errors().is_null() &&
         smt::sat == encoder.check(crv::tracer(), crv::dfs_prune_checker()))
       error = true;
   }
@@ -637,8 +637,8 @@ TEST(CrvFunctionalTest, UnsatFib6)
   t0.join();
   t1.join();
 
-  EXPECT_TRUE(crv::dfs_checker().assertions().empty());
-  EXPECT_FALSE(crv::dfs_checker().errors().empty());
+  EXPECT_TRUE(crv::dfs_checker().assertions().is_null());
+  EXPECT_FALSE(crv::dfs_checker().errors().is_null());
   EXPECT_TRUE(smt::unsat == encoder.check(crv::tracer(), crv::dfs_checker()));
   EXPECT_FALSE(crv::dfs_checker().find_next_path());
 }
@@ -662,8 +662,8 @@ TEST(CrvFunctionalTest, SatFib6)
   t0.join();
   t1.join();
 
-  EXPECT_TRUE(crv::dfs_checker().assertions().empty());
-  EXPECT_FALSE(crv::dfs_checker().errors().empty());
+  EXPECT_TRUE(crv::dfs_checker().assertions().is_null());
+  EXPECT_FALSE(crv::dfs_checker().errors().is_null());
   EXPECT_TRUE(smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()));
   EXPECT_FALSE(crv::dfs_checker().find_next_path());
 }
@@ -718,7 +718,7 @@ TEST(CrvFunctionalTest, UnsatStateful)
 
     crv::dfs_checker().add_error(i != 16 || j != 5);
 
-    if (!crv::dfs_checker().errors().empty() &&
+    if (!crv::dfs_checker().errors().is_null() &&
         smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()))
       error = true;
   }
@@ -748,7 +748,7 @@ TEST(CrvFunctionalTest, SatStateful)
 
     crv::dfs_checker().add_error(i == 16 && j == 5);
 
-    if (!crv::dfs_checker().errors().empty() &&
+    if (!crv::dfs_checker().errors().is_null() &&
         smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()))
       error = true;
   }
@@ -809,7 +809,7 @@ TEST(CrvFunctionalTest, SatStack)
     crv::Thread t0(sat_stack_t0, N, mutex, top, flag);
     crv::Thread t1(sat_stack_t1, N, mutex, top, flag);
 
-    if (!crv::dfs_checker().errors().empty() &&
+    if (!crv::dfs_checker().errors().is_null() &&
         smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()))
       error = true;
   }
@@ -866,7 +866,7 @@ TEST(CrvFunctionalTest, UnsatStack)
     crv::Thread t0(unsat_stack_t0, N, mutex, top);
     crv::Thread t1(unsat_stack_t1, N, mutex, top);
 
-    if (!crv::dfs_checker().errors().empty() &&
+    if (!crv::dfs_checker().errors().is_null() &&
         smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()))
       error = true;
   }
@@ -903,7 +903,7 @@ TEST(CrvFunctionalTest, SatCommunication)
   crv::Thread g(sat_communication_g, s, t);
   crv::Thread h(sat_communication_h, s);
 
-  EXPECT_TRUE(crv::dfs_checker().errors().empty());
+  EXPECT_TRUE(crv::dfs_checker().errors().is_null());
   EXPECT_EQ(smt::sat, encoder.check_deadlock(crv::tracer(), crv::dfs_checker()));
 }
 
@@ -924,7 +924,7 @@ TEST(CrvFunctionalTest, UnsatCommunication)
   crv::Thread f(sat_communication_f, s, t);
   crv::Thread g_prime(sat_communication_g_prime, s, t);
 
-  EXPECT_TRUE(crv::dfs_checker().errors().empty());
+  EXPECT_TRUE(crv::dfs_checker().errors().is_null());
   EXPECT_EQ(smt::unsat, encoder.check_deadlock(crv::tracer(), crv::dfs_checker()));
 }
 

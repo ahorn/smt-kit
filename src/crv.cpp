@@ -71,21 +71,19 @@ void Tracer::scope_end()
   m_scope_stack.pop();
 }
 
-void Tracer::branch_then(const Internal<bool>& g)
+void Tracer::add_guard(smt::Bool&& g)
 {
   assert(!m_scope_stack.empty());
-  assert(!g.is_literal());
 
-  m_guard = m_guard and Internal<bool>::term(g);
+  m_guard = m_guard and std::move(g);
   m_scope_stack.top().guard = m_guard;
 }
 
-void Tracer::branch_else(const Internal<bool>& g)
+void Tracer::add_guard(const smt::Bool& g)
 {
   assert(!m_scope_stack.empty());
-  assert(!g.is_literal());
 
-  m_guard = m_guard and not Internal<bool>::term(g);
+  m_guard = m_guard and g;
   m_scope_stack.top().guard = m_guard;
 }
 
@@ -100,7 +98,10 @@ void Checker::add_assertion(Internal<bool>&& assertion)
   if (assertion.is_literal())
     assert(assertion.literal());
 
-  m_assertions.push_back(Internal<bool>::term(std::move(assertion)));
+  if (m_assertions.is_null())
+    m_assertions = Internal<bool>::term(std::move(assertion));
+  else
+    m_assertions = m_assertions and Internal<bool>::term(std::move(assertion));
 }
 
 void Checker::add_error(Internal<bool>&& error)
@@ -108,13 +109,24 @@ void Checker::add_error(Internal<bool>&& error)
   if (error.is_literal())
   {
     if (error.literal())
-      m_errors.push_back(tracer().guard());
+    {
+      if (m_errors.is_null())
+        m_errors = tracer().guard();
+      else
+        m_errors = m_errors or tracer().guard();
+    }
     else
-      m_errors.push_back(smt::literal<smt::Bool>(false));
+    {
+      if (m_errors.is_null())
+        m_errors = smt::literal<smt::Bool>(false);
+    }
   }
   else
   {
-    m_errors.push_back(tracer().guard() and Internal<bool>::term(std::move(error)));
+    if (m_errors.is_null())
+      m_errors = tracer().guard() and Internal<bool>::term(std::move(error));
+    else
+      m_errors = m_errors or (tracer().guard() and Internal<bool>::term(std::move(error)));
   }
 }
 
@@ -158,22 +170,18 @@ bool DfsPruneChecker::branch(const Internal<bool>& g, const bool direction_hint)
     return false;
 
   assert(!g.is_literal() && m_dfs.is_end() && m_is_feasible);
-  m_dfs.append_flip(direction_hint);
 
+  const smt::Bool g_term = Internal<bool>::term(g);
   if (direction_hint)
     goto THEN_BRANCH;
   else
     goto ELSE_BRANCH;
 
 THEN_BRANCH:
-  if (smt::sat == check(tracer().guard()))
+  if (smt::sat == check(tracer().guard() and g_term))
   {
-    tracer().branch_then(g);
-    assert(m_dfs.is_end());
-
-    // Have we already tried ELSE_BRANCH?
-    if (!direction_hint)
-      m_dfs.freeze_last_flip(true);
+    tracer().add_guard(g_term);
+    m_dfs.append_flip(true, !direction_hint);
 
     assert(m_dfs.last_flip().direction);
     return true;
@@ -185,14 +193,10 @@ THEN_BRANCH:
 
 // fall through THEN_BRANCH to try ELSE_BRANCH
 ELSE_BRANCH:
-  if (smt::sat == check(not tracer().guard()))
+  if (smt::sat == check(tracer().guard() and not g_term))
   {
-    tracer().branch_else(g);
-    assert(m_dfs.is_end());
-
-    // Have we already tried THEN_BRANCH?
-    if (direction_hint)
-      m_dfs.freeze_last_flip(false);
+    tracer().add_guard(not g_term);
+    m_dfs.append_flip(false, direction_hint);
 
     assert(!m_dfs.last_flip().direction);
     return false;

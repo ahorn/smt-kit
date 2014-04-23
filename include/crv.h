@@ -296,8 +296,8 @@ template<typename T> class Internal;
 class Checker
 {
 private:
-  Bools m_assertions;
-  Bools m_errors;
+  smt::Bool m_assertions;
+  smt::Bool m_errors;
 
 protected:
   // no polymorphic deletes
@@ -310,12 +310,12 @@ public:
 
   void reset_assertions()
   {
-    m_assertions.clear();
+    m_assertions = smt::Bool();
   }
 
   void reset_errors()
   {
-    m_errors.clear();
+    m_errors = smt::Bool();
   }
 
   /// Add Boolean term of argument to assertions()
@@ -327,14 +327,14 @@ public:
   /// Add conjunction of guard() and given Boolean term to errors()
   void add_error(Internal<bool>&&);
 
-  /// Encoded as conjunction
-  const Bools& assertions() const
+  /// is_null() or logical conjunction
+  const smt::Bool& assertions() const
   {
     return m_assertions;
   }
 
-  /// Encoded as disjunction
-  const Bools& errors() const
+  /// is_null() or logical disjunction
+  const smt::Bool& errors() const
   {
     return m_errors;
   }
@@ -731,8 +731,8 @@ public:
   void scope_else();
   void scope_end();
 
-  void branch_then(const Internal<bool>&);
-  void branch_else(const Internal<bool>&);
+  void add_guard(smt::Bool&&);
+  void add_guard(const smt::Bool&);
 };
 
 // Global for symbolic execution
@@ -3023,27 +3023,6 @@ private:
     unsafe_add(thread_order);
   }
 
-  void encode_errors(const Bools& errors)
-  {
-    if (errors.empty())
-      return;
-
-    smt::Bool or_error(smt::literal<smt::Bool>(false));
-    for (const smt::Bool& error : errors)
-    {
-      or_error = or_error or error;
-    }
-    unsafe_add(or_error);
-  }
-
-  void encode_assertions(const Bools& assertions)
-  {
-    for (const smt::Bool& assertion : assertions)
-    {
-      unsafe_add(assertion);
-    }
-  }
-
   void encode(const Tracer& tracer, bool check_deadlock)
   {
     unsafe_add(tracer.guard());
@@ -3075,7 +3054,10 @@ public:
   {
     m_solver.push();
     encode(tracer, true);
-    encode_assertions(checker.assertions());
+
+    if (!checker.assertions().is_null())
+      unsafe_add(checker.assertions());
+
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
     return result;
@@ -3090,15 +3072,20 @@ public:
   /// permitted to take on nondeterministic values possibly
   /// leading to false alarms.
   ///
-  /// pre: not Checker::errors().empty()
+  /// pre: not Checker::errors().is_null()
   smt::CheckResult check(const Tracer& tracer, const Checker& checker)
   {
-    assert(!checker.errors().empty());
+    assert(!checker.errors().is_null());
 
     m_solver.push();
     encode(tracer, false);
-    encode_assertions(checker.assertions());
-    encode_errors(checker.errors());
+
+    if (!checker.assertions().is_null())
+      unsafe_add(checker.assertions());
+
+    if (!checker.errors().is_null())
+      unsafe_add(checker.errors());
+
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
     return result;
@@ -3118,7 +3105,10 @@ public:
     m_solver.push();
     unsafe_add(tracer.guard() and Internal<bool>::term(std::move(condition)));
     encode(tracer, false);
-    encode_assertions(checker.assertions());
+
+    if (!checker.assertions().is_null())
+      unsafe_add(checker.assertions());
+
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
     return result;
@@ -3235,10 +3225,9 @@ struct Flip
 
   Flip(const Flip&) = delete;
 
-  // initially unfrozen
-  Flip(bool direction)
-  : direction(direction),
-    is_frozen(false) {}
+  Flip(const bool direction_arg, const bool is_frozen_arg)
+  : direction(direction_arg),
+    is_frozen(is_frozen_arg) {}
 };
 
 typedef std::list<Flip> Flips;
@@ -3311,11 +3300,12 @@ public:
     return m_flip_iter == m_flips.cend();
   }
 
-  void append_flip(const bool direction)
+  void append_flip(const bool direction = true, const bool is_frozen = false)
   {
-    m_flips.emplace_back(direction);
+    m_flips.emplace_back(direction, is_frozen);
+
     assert(last_flip().direction == direction);
-    assert(!last_flip().is_frozen);
+    assert(last_flip().is_frozen == is_frozen);
   }
 
   /// \pre: !is_end()
@@ -3341,20 +3331,6 @@ public:
 
     return *m_flip_iter;
   }
-
-  void freeze_current_flip(const bool direction)
-  {
-    Flip& flip = is_end() ? m_flips.back() : *m_flip_iter;
-    flip.is_frozen = true;
-    flip.direction= direction;
-  }
-
-  void freeze_last_flip(const bool direction)
-  {
-    Flip& flip = m_flips.back();
-    flip.is_frozen = true;
-    flip.direction= direction;
-  }
 };
 
 class DfsChecker : public Checker
@@ -3365,9 +3341,9 @@ protected:
   void force_branch(const Internal<bool>& g, const bool direction)
   {
     if (direction)
-      tracer().branch_then(g);
+      tracer().add_guard(Internal<bool>::term(g));
     else
-      tracer().branch_else(g);
+      tracer().add_guard(not Internal<bool>::term(g));
   }
 
 public:
@@ -3380,6 +3356,7 @@ public:
     m_dfs.reset();
   }
 
+  /// \post: like reset_dfs() but also assertions().empty() and errors.empty()
   void reset()
   {
     reset_dfs();
@@ -3464,6 +3441,7 @@ public:
   void reset()
   {
     m_is_feasible = true;
+    m_solver.reset();
     DfsChecker::reset();
   }
 
@@ -3471,6 +3449,18 @@ public:
 
   /// The second direction argument is only a suggestion that may be ignored.
   bool branch(const Internal<bool>&, const bool direction_hint = true);
+
+  void add_assertion(Internal<bool>&& assertion)
+  {
+    tracer().add_guard(Internal<bool>::term(assertion));
+    Checker::add_assertion(std::move(assertion));
+  }
+
+  bool find_next_path()
+  {
+    m_is_feasible = true;
+    return DfsChecker::find_next_path();
+  }
 };
 
 /// Symbolic execution of only feasible paths in a depth-first search manner
