@@ -300,44 +300,44 @@ TEST(CrvTest, DfsChecker)
   External<long> v;
 
   // if (v < 0) { if (v < 1)  { skip } }
-  EXPECT_TRUE(checker.branch(v < 0));
-  EXPECT_TRUE(checker.branch(v < 1));
-
+  EXPECT_FALSE(checker.branch(v < 0));
   EXPECT_TRUE(checker.find_next_path());
+
   EXPECT_TRUE(checker.branch(v < 0));
   EXPECT_FALSE(checker.branch(v < 1));
-
   EXPECT_TRUE(checker.find_next_path());
-  EXPECT_FALSE(checker.branch(v < 0));
 
+  EXPECT_TRUE(checker.branch(v < 0));
+  EXPECT_TRUE(checker.branch(v < 1));
   EXPECT_FALSE(checker.find_next_path());
+
   EXPECT_EQ(2, checker.path_cnt());
 
   checker.reset();
 
   // if (v < 0) { skip } ; if (v < 1)  { skip }
-  EXPECT_TRUE(checker.branch(v < 0));
-  EXPECT_TRUE(checker.branch(v < 1));
-
-  EXPECT_TRUE(checker.find_next_path());
-  EXPECT_TRUE(checker.branch(v < 0));
-  EXPECT_FALSE(checker.branch(v < 1));
-
-  EXPECT_TRUE(checker.find_next_path());
-  EXPECT_FALSE(checker.branch(v < 0));
-  EXPECT_TRUE(checker.branch(v < 1));
-
-  EXPECT_TRUE(checker.find_next_path());
   EXPECT_FALSE(checker.branch(v < 0));
   EXPECT_FALSE(checker.branch(v < 1));
+  EXPECT_TRUE(checker.find_next_path());
 
+  EXPECT_FALSE(checker.branch(v < 0));
+  EXPECT_TRUE(checker.branch(v < 1));
+  EXPECT_TRUE(checker.find_next_path());
+
+  EXPECT_TRUE(checker.branch(v < 0));
+  EXPECT_FALSE(checker.branch(v < 1));
+  EXPECT_TRUE(checker.find_next_path());
+
+  EXPECT_TRUE(checker.branch(v < 0));
+  EXPECT_TRUE(checker.branch(v < 1));
   EXPECT_FALSE(checker.find_next_path());
+
   EXPECT_EQ(3, checker.path_cnt());
 
   checker.reset();
   tracer().reset();
 
-  EXPECT_TRUE(checker.branch(v < 0));
+  EXPECT_FALSE(checker.branch(v < 0));
   tracer().append_thread_begin_event();
   EXPECT_EQ(2, tracer().current_thread_id());
   tracer().append_thread_end_event();
@@ -372,25 +372,48 @@ TEST(CrvTest, DfsPruneCheck)
 {
   DfsPruneChecker checker;
 
+  // if (a < 7) { skip } ; if (a < 4)  { skip }
   Internal<int> a;
-  EXPECT_TRUE(checker.branch(a < 7));
-  EXPECT_TRUE(checker.branch(a < 4));
-  EXPECT_TRUE(checker.find_next_path());
-
-  EXPECT_TRUE(checker.branch(a < 7));
+  EXPECT_FALSE(checker.branch(a < 7));
   EXPECT_FALSE(checker.branch(a < 4));
   EXPECT_TRUE(checker.find_next_path());
 
   EXPECT_FALSE(checker.branch(a < 7));
+  EXPECT_TRUE(checker.branch(a < 4));
+
+  // ignored because "a >= 7 and a < 4" is unsat
+  EXPECT_FALSE(checker.branch(a < 1));
+  EXPECT_FALSE(checker.branch(a < 2));
+  EXPECT_FALSE(checker.branch(a < 3));
+  EXPECT_TRUE(checker.find_next_path());
+
+  EXPECT_TRUE(checker.branch(a < 7));
   EXPECT_FALSE(checker.branch(a < 4));
+  EXPECT_TRUE(checker.find_next_path());
+
+  EXPECT_TRUE(checker.branch(a < 7));
+  EXPECT_TRUE(checker.branch(a < 4));
   EXPECT_FALSE(checker.find_next_path());
 
   checker.reset();
 
   Internal<int> b;
-  checker.add_assertion(!(b < 7));
-  EXPECT_FALSE(checker.branch(b < 7));
+  checker.add_assertion(b < 7);
+  EXPECT_TRUE(checker.branch(b < 7));
   EXPECT_FALSE(checker.branch(b < 4));
+  EXPECT_TRUE(checker.find_next_path());
+
+  checker.add_assertion(b < 7);
+  EXPECT_TRUE(checker.branch(b < 7));
+  EXPECT_TRUE(checker.branch(b < 4));
+  EXPECT_FALSE(checker.find_next_path());
+
+  checker.reset();
+
+  Internal<int> c;
+  checker.add_assertion(c < 4);
+  EXPECT_TRUE(checker.branch(c < 7));
+  EXPECT_TRUE(checker.branch(c < 4));
   EXPECT_FALSE(checker.find_next_path());
 }
 
@@ -624,10 +647,33 @@ TEST(CrvTest, Guard)
   DfsChecker checker;
   Encoder encoder;
 
-  External<int> i;
+  Internal<int> i;
+
+  EXPECT_FALSE(checker.branch(i < 3));
+  EXPECT_EQ(smt::sat, encoder.check(i == 3, tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(i == 2, tracer(), checker));
+  EXPECT_TRUE(checker.find_next_path());
   EXPECT_TRUE(checker.branch(i < 3));
   EXPECT_EQ(smt::unsat, encoder.check(i == 3, tracer(), checker));
   EXPECT_EQ(smt::sat, encoder.check(i == 2, tracer(), checker));
+  EXPECT_FALSE(checker.find_next_path());
+
+  tracer().reset();
+  checker.reset();
+
+  External<int> j;
+
+  make_any(j);
+  EXPECT_FALSE(checker.branch(j < 3));
+  EXPECT_EQ(smt::sat, encoder.check(j == 3, tracer(), checker));
+  EXPECT_EQ(smt::unsat, encoder.check(j == 2, tracer(), checker));
+  EXPECT_TRUE(checker.find_next_path());
+
+  make_any(j);
+  EXPECT_TRUE(checker.branch(j < 3));
+  EXPECT_EQ(smt::unsat, encoder.check(j == 3, tracer(), checker));
+  EXPECT_EQ(smt::sat, encoder.check(j == 2, tracer(), checker));
+  EXPECT_FALSE(checker.find_next_path());
 
   tracer().reset();
   checker.reset();
@@ -646,90 +692,105 @@ TEST(CrvTest, Guard)
   EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
   EXPECT_FALSE(checker.find_next_path());
 
+  tracer().reset();
+  checker.reset();
+
   External<bool> false_bool;
   External<bool> true_bool;
 
-  tracer().reset_events();
-  tracer().reset_address();
-  tracer().reset_barrier();
-  checker.reset_dfs();
-  false_bool = false;
-  true_bool = true;
-  EXPECT_TRUE(checker.branch(false_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
-
-  EXPECT_TRUE(checker.find_next_path());
   false_bool = false;
   true_bool = true;
   EXPECT_FALSE(checker.branch(false_bool));
   EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
+  EXPECT_TRUE(checker.find_next_path());
 
-  tracer().reset_events();
-  tracer().reset_address();
-  tracer().reset_barrier();
-  checker.reset_dfs();
+  false_bool = false;
+  true_bool = true;
+  EXPECT_TRUE(checker.branch(false_bool));
+  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
+  EXPECT_FALSE(checker.find_next_path());
+
+  tracer().reset();
+  checker.reset();
+
+  false_bool = false;
+  true_bool = true;
+  EXPECT_FALSE(checker.branch(true_bool));
+  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
+  EXPECT_TRUE(checker.find_next_path());
+
   false_bool = false;
   true_bool = true;
   EXPECT_TRUE(checker.branch(true_bool));
   EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
+  EXPECT_FALSE(checker.find_next_path());
 
-  EXPECT_TRUE(checker.find_next_path());
+  tracer().reset();
+  checker.reset();
+
   false_bool = false;
   true_bool = true;
+  EXPECT_FALSE(checker.branch(false_bool));
   EXPECT_FALSE(checker.branch(true_bool));
   EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
-
-  tracer().reset_events();
-  tracer().reset_address();
-  tracer().reset_barrier();
-  checker.reset_dfs();
-  false_bool = false;
-  true_bool = true;
-  EXPECT_TRUE(checker.branch(false_bool));
-  EXPECT_TRUE(checker.branch(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
-
   EXPECT_TRUE(checker.find_next_path());
-  false_bool = false;
-  true_bool = true;
-  EXPECT_TRUE(checker.branch(false_bool));
-  EXPECT_FALSE(checker.branch(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
 
-  EXPECT_TRUE(checker.find_next_path());
   false_bool = false;
   true_bool = true;
   EXPECT_FALSE(checker.branch(false_bool));
   EXPECT_TRUE(checker.branch(true_bool));
   EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
-
-  tracer().reset_events();
-  tracer().reset_address();
-  tracer().reset_barrier();
-  checker.reset_dfs();
-  false_bool = false;
-  true_bool = true;
-  EXPECT_TRUE(checker.branch(false_bool));
-  checker.add_error(true_bool);
-  EXPECT_TRUE(checker.branch(true_bool));
-  checker.add_error(true_bool);
-  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
-
   EXPECT_TRUE(checker.find_next_path());
+
   false_bool = false;
   true_bool = true;
   EXPECT_TRUE(checker.branch(false_bool));
   checker.add_error(true_bool);
   EXPECT_FALSE(checker.branch(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
-
+  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
   EXPECT_TRUE(checker.find_next_path());
+
+  false_bool = false;
+  true_bool = true;
+  EXPECT_TRUE(checker.branch(false_bool));
+  EXPECT_TRUE(checker.branch(true_bool));
+  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
+  EXPECT_FALSE(checker.find_next_path());
+
+  tracer().reset();
+  checker.reset();
+
+  false_bool = false;
+  true_bool = true;
+  EXPECT_FALSE(checker.branch(false_bool));
+  EXPECT_FALSE(checker.branch(true_bool));
+  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
+  EXPECT_TRUE(checker.find_next_path());
+
   false_bool = false;
   true_bool = true;
   EXPECT_FALSE(checker.branch(false_bool));
   EXPECT_TRUE(checker.branch(true_bool));
   checker.add_error(true_bool);
   EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
+  EXPECT_TRUE(checker.find_next_path());
+
+  false_bool = false;
+  true_bool = true;
+  EXPECT_TRUE(checker.branch(false_bool));
+  checker.add_error(true_bool);
+  EXPECT_FALSE(checker.branch(true_bool));
+  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
+  EXPECT_TRUE(checker.find_next_path());
+
+  false_bool = false;
+  true_bool = true;
+  EXPECT_TRUE(checker.branch(false_bool));
+  checker.add_error(true_bool);
+  EXPECT_TRUE(checker.branch(true_bool));
+  checker.add_error(true_bool);
+  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
+  EXPECT_FALSE(checker.find_next_path());
 }
 
 TEST(CrvTest, ThinAir) {
@@ -2898,7 +2959,7 @@ TEST(CrvTest, CommunicationWithTrueGuard)
 
   tracer().append_thread_begin_event();
   c.send(5);
-  EXPECT_TRUE(checker.branch(6 == c.recv()));
+  EXPECT_FALSE(checker.branch(6 != c.recv()));
   c.send(7);
   tracer().append_thread_end_event();
 
@@ -2923,7 +2984,7 @@ TEST(CrvTest, CommunicationWithFalseGuard)
 
   tracer().append_thread_begin_event();
   c.send(5);
-  EXPECT_TRUE(checker.branch(6 != c.recv()));
+  EXPECT_FALSE(checker.branch(6 == c.recv()));
   c.send(7);
   tracer().append_thread_end_event();
 

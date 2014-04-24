@@ -46,7 +46,6 @@ TEST(CrvFunctionalTest, MultipathSafeIf)
 TEST(CrvFunctionalTest, SafeCounter)
 {
   constexpr unsigned N = 4;
-  unsigned unwind;
 
   crv::tracer().reset();
   crv::dfs_prune_checker().reset();
@@ -60,14 +59,9 @@ TEST(CrvFunctionalTest, SafeCounter)
 
     crv::Internal<int> x = n, y = 0;
 
-    unwind = N;
     while (crv::dfs_prune_checker().branch(x > 0)) {
       x = x - 1;
       y = y + 1;
-
-      unwind--;
-      if (unwind == 0)
-        break;
     }
 
     crv::dfs_prune_checker().add_error(0 <= y && y != n);
@@ -79,7 +73,6 @@ TEST(CrvFunctionalTest, SafeCounter)
 TEST(CrvFunctionalTest, UnsafeCounter)
 {
   constexpr unsigned N = 4;
-  unsigned unwind;
 
   crv::tracer().reset();
   crv::dfs_prune_checker().reset();
@@ -94,14 +87,9 @@ TEST(CrvFunctionalTest, UnsafeCounter)
 
     crv::Internal<int> x = n, y = 0;
 
-    unwind = N;
     while (crv::dfs_prune_checker().branch(x > 0)) {
       x = x - 1;
       y = y + 1;
-
-      unwind--;
-      if (unwind == 0)
-        break;
     }
 
     crv::dfs_prune_checker().add_error(0 <= y && y == n);
@@ -930,7 +918,7 @@ TEST(CrvFunctionalTest, UnsatCommunication)
 
 void unsat_communication_deadlock_with_guard_f(crv::Channel<int>& c)
 {
-  EXPECT_TRUE(crv::dfs_checker().branch(6 == c.recv()));
+  EXPECT_FALSE(crv::dfs_checker().branch(6 != c.recv()));
   c.send(7);
 }
 
@@ -955,7 +943,7 @@ TEST(CrvFunctionalTest, UnsatCommunicationDeadlockWithGuard)
 
 void sat_communication_deadlock_with_guard_f(crv::Channel<int>& c)
 {
-  EXPECT_TRUE(crv::dfs_checker().branch(6 != c.recv()));
+  EXPECT_FALSE(crv::dfs_checker().branch(6 == c.recv()));
   c.send(7);
 }
 

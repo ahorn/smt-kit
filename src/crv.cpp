@@ -136,10 +136,10 @@ bool DfsChecker::branch(const Internal<bool>& g, const bool direction_hint)
     return g.literal();
 
   bool direction = direction_hint;
-  if (m_dfs.is_end())
-    m_dfs.append_flip(direction_hint);
-  else
+  if (m_dfs.has_next())
     direction = m_dfs.next();
+  else
+    m_dfs.append_flip(direction_hint);
 
   force_branch(g, direction);
   return direction;
@@ -151,25 +151,26 @@ DfsPruneChecker& dfs_prune_checker()
   return s_dfs_prune_checker;
 }
 
+// maintainer note: recall Dfs::find_next_path(). If the newly alternated
+// flip F causes the conjunction of guards to be unsatisfiable, then this
+// will be detected here as soon as another branch condition is conjoined.
+// In the case there is no such other branch condition, progress is still
+// guaranteed because F is frozen and therefore will be popped by Dfs.
 bool DfsPruneChecker::branch(const Internal<bool>& g, const bool direction_hint)
 {
   if (g.is_literal())
     return g.literal();
 
-  if (!m_dfs.is_end())
-  {
-    assert(m_is_feasible);
-
-    const bool direction = m_dfs.next();
-    DfsChecker::force_branch(g, direction);
-    return direction;
-  }
-
   if (!m_is_feasible)
     // exactly like NO_BRANCH
     return false;
 
-  assert(!g.is_literal() && m_dfs.is_end() && m_is_feasible);
+  if (m_dfs.has_next())
+  {
+    const bool direction = m_dfs.next();
+    DfsChecker::force_branch(g, direction);
+    return direction;
+  }
 
   const smt::Bool g_term = Internal<bool>::term(g);
   if (direction_hint)
@@ -182,8 +183,6 @@ THEN_BRANCH:
   {
     tracer().add_guard(g_term);
     m_dfs.append_flip(true, !direction_hint);
-
-    assert(m_dfs.last_flip().direction);
     return true;
   }
 
@@ -197,8 +196,6 @@ ELSE_BRANCH:
   {
     tracer().add_guard(not g_term);
     m_dfs.append_flip(false, direction_hint);
-
-    assert(!m_dfs.last_flip().direction);
     return false;
   }
 

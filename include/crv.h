@@ -3295,39 +3295,34 @@ public:
     return true;
   }
 
-  bool is_end() const
+  bool has_next() const
   {
-    return m_flip_iter == m_flips.cend();
+    return m_flip_iter != m_flips.end();
   }
 
-  void append_flip(const bool direction = true, const bool is_frozen = false)
+  void append_flip(const bool direction = false, const bool is_frozen = false)
   {
     m_flips.emplace_back(direction, is_frozen);
 
-    assert(last_flip().direction == direction);
-    assert(last_flip().is_frozen == is_frozen);
+    assert(m_flips.back().direction == direction);
+    assert(m_flips.back().is_frozen == is_frozen);
   }
 
-  /// \pre: !is_end()
+  /// \pre: has_next()
 
   /// \return direction of current_flip()
   bool next()
   {
-    assert(!is_end());
+    assert(has_next());
 
     // increment after returning m_flip_iter->direction
     return (m_flip_iter++)->direction;
   }
 
-  const Flip& last_flip() const
-  {
-    return m_flips.back();
-  }
-
+  /// \pre: has_next()
   const Flip& current_flip() const
   {
-    if (is_end())
-      return last_flip();
+    assert(has_next());
 
     return *m_flip_iter;
   }
@@ -3351,15 +3346,10 @@ public:
   : Checker(),
     m_dfs() {}
 
-  void reset_dfs()
-  {
-    m_dfs.reset();
-  }
-
-  /// \post: like reset_dfs() but also assertions().empty() and errors.empty()
+  /// \post: dfs().flips().empty(), assertions().empty() and errors.empty()
   void reset()
   {
-    reset_dfs();
+    m_dfs.reset();
 
     Checker::reset_assertions();
     Checker::reset_errors();
@@ -3387,7 +3377,7 @@ public:
   /// Decide which control flow direction to follow
 
   /// The second direction argument is only a suggestion that may be ignored.
-  bool branch(const Internal<bool>&, const bool direction_hint = true);
+  bool branch(const Internal<bool>&, const bool direction_hint = false);
 
   const Dfs& dfs() const
   {
@@ -3432,12 +3422,6 @@ public:
     m_solver(smt::QF_AUFLIRA_LOGIC),
     m_is_feasible(true) {}
 
-  void reset_dfs()
-  {
-    m_is_feasible = true;
-    DfsChecker::reset_dfs();
-  }
-
   void reset()
   {
     m_is_feasible = true;
@@ -3448,7 +3432,7 @@ public:
   /// Follow a feasible control flow direction
 
   /// The second direction argument is only a suggestion that may be ignored.
-  bool branch(const Internal<bool>&, const bool direction_hint = true);
+  bool branch(const Internal<bool>&, const bool direction_hint = false);
 
   void add_assertion(Internal<bool>&& assertion)
   {
