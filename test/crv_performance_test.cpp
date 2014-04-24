@@ -84,8 +84,7 @@ TEST(CrvPerformanceTest, SafeSequentialSymbolicModulus)
 
   do
   {
-    crv::External<unsigned> any_int;
-    crv::Internal<unsigned> k = any_int;
+    crv::Internal<unsigned> k;
 
     crv::dfs_checker().add_assertion(0 <= k && k < K);
     for (crv::Internal<unsigned> n = 0; crv::dfs_checker().branch(n < N); n = n + 1)
@@ -121,8 +120,7 @@ TEST(CrvPerformanceTest, UnsafeSequentialSymbolicModulus)
   bool found_bug = false;
   do
   {
-    crv::External<unsigned> any_int;
-    crv::Internal<unsigned> k = any_int;
+    crv::Internal<unsigned> k;
 
     crv::dfs_checker().add_assertion(0 <= k && k < K);
     for (crv::Internal<unsigned> n = 0; crv::dfs_checker().branch(n < N); n = n + 1)
