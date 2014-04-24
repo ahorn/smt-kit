@@ -704,12 +704,12 @@ TEST(CrvFunctionalTest, UnsatStateful)
   crv::dfs_checker().reset();
   crv::Encoder encoder;
 
-  crv::Mutex mutex;
-  crv::External<int> i(10), j(10);
-
   bool error = false;
   do
   {
+    crv::Mutex mutex;
+    crv::External<int> i(10), j(10);
+
     crv::Thread t0(stateful_t0, mutex, i, j);
     crv::Thread t1(stateful_t1, mutex, i, j);
 
@@ -734,12 +734,12 @@ TEST(CrvFunctionalTest, SatStateful)
   crv::dfs_checker().reset();
   crv::Encoder encoder;
 
-  crv::Mutex mutex;
-  crv::External<int> i(10), j(10);
-
   bool error = false;
   do
   {
+    crv::Mutex mutex;
+    crv::External<int> i(10), j(10);
+
     crv::Thread t0(stateful_t0, mutex, i, j);
     crv::Thread t1(stateful_t1, mutex, i, j);
 
@@ -799,13 +799,13 @@ TEST(CrvFunctionalTest, SatStack)
   crv::dfs_checker().reset();
   crv::Encoder encoder;
 
-  crv::Mutex mutex;
-  crv::External<unsigned int> top(0U);
-  crv::External<int> flag(0);
-
   bool error = false;
   do
   {
+    crv::Mutex mutex;
+    crv::External<unsigned int> top(0U);
+    crv::External<int> flag(0);
+
     crv::Thread t0(sat_stack_t0, N, mutex, top, flag);
     crv::Thread t1(sat_stack_t1, N, mutex, top, flag);
 
@@ -857,12 +857,12 @@ TEST(CrvFunctionalTest, UnsatStack)
   crv::dfs_checker().reset();
   crv::Encoder encoder;
 
-  crv::Mutex mutex;
-  crv::External<unsigned int> top(0U);
-
   bool error = false;
   do
   {
+    crv::Mutex mutex;
+    crv::External<unsigned int> top(0U);
+
     crv::Thread t0(unsat_stack_t0, N, mutex, top);
     crv::Thread t1(unsat_stack_t1, N, mutex, top);
 
