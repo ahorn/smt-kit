@@ -428,6 +428,52 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     return OK;
   }
 
+  virtual Error __encode_bv_zero_extend(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned ext) override
+  {
+    const Error err = bv.encode(*this);
+    if (err) {
+      return err;
+    }
+
+    m_z3_expr = z3::expr(m_z3_context,
+      Z3_mk_zero_ext(m_z3_context, ext, m_z3_expr));
+    return OK;
+  }
+
+  virtual Error __encode_bv_sign_extend(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned ext) override
+  {
+    const Error err = bv.encode(*this);
+    if (err) {
+      return err;
+    }
+
+    m_z3_expr = z3::expr(m_z3_context,
+      Z3_mk_sign_ext(m_z3_context, ext, m_z3_expr));
+    return OK;
+  }
+
+  virtual Error __encode_bv_extract(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned high,
+    const unsigned low) override
+  {
+    const Error err = bv.encode(*this);
+    if (err) {
+      return err;
+    }
+
+    m_z3_expr = z3::expr(m_z3_context,
+      Z3_mk_extract(m_z3_context, high, low, m_z3_expr));
+    return OK;
+  }
+
   virtual void __reset() override
   {
     m_z3_solver.reset();

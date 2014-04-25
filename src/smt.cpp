@@ -221,6 +221,34 @@ Error Solver::encode_nary(
   return __encode_nary(opcode, sort, args);
 }
 
+Error Solver::encode_bv_zero_extend(
+  const Sort& sort,
+  const UnsafeTerm& bv,
+  const unsigned ext)
+{
+  assert(bv.sort().is_bv());
+  return __encode_bv_zero_extend(sort, bv, ext);
+}
+
+Error Solver::encode_bv_sign_extend(
+  const Sort& sort,
+  const UnsafeTerm& bv,
+  const unsigned ext)
+{
+  assert(bv.sort().is_bv());
+  return __encode_bv_sign_extend(sort, bv, ext);
+}
+
+Error Solver::encode_bv_extract(
+  const Sort& sort,
+  const UnsafeTerm& bv,
+  const unsigned high,
+  const unsigned low)
+{
+  assert(bv.sort().is_bv());
+  return __encode_bv_extract(sort, bv, high, low);
+}
+
 void Solver::reset()
 {
   return __reset();

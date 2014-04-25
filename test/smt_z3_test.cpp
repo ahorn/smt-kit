@@ -1051,3 +1051,139 @@ TEST(SmtZ3Test, UnsafeAdd)
   }
   s.pop();
 }
+
+TEST(SmtZ3Test, BvSignExtend)
+{
+  Z3Solver s;
+
+  Bv<int8_t> x = any<Bv<int8_t>>("x");
+  Bv<int16_t> y = any<Bv<int16_t>>("y");
+  Bv<uint16_t> z = any<Bv<uint16_t>>("z");
+
+  s.push();
+  {
+    s.add(x == 0x07);
+    s.add(y == bv_cast<int16_t>(x));
+
+    EXPECT_EQ(sat, s.check());
+
+    std::stringstream out;
+    out << s.solver().get_model();
+    EXPECT_EQ("(define-fun y () (_ BitVec 16)\n  #x0007)\n(define-fun x () (_ BitVec 8)\n  #x07)", out.str());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x87);
+    s.add(y == bv_cast<int16_t>(x));
+
+    EXPECT_EQ(sat, s.check());
+
+    std::stringstream out;
+    out << s.solver().get_model();
+    EXPECT_EQ("(define-fun y () (_ BitVec 16)\n  #xff87)\n(define-fun x () (_ BitVec 8)\n  #x87)", out.str());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x87);
+
+    // we cast from a signed to an unsigned integer so sign extension is required,
+    // see inline comments in bv_cast<T>(const Bv<S>&) about C++ specification
+    s.add(z == bv_cast<uint16_t>(x));
+
+    EXPECT_EQ(sat, s.check());
+
+    std::stringstream out;
+    out << s.solver().get_model();
+    EXPECT_EQ("(define-fun z () (_ BitVec 16)\n  #xff87)\n(define-fun x () (_ BitVec 8)\n  #x87)", out.str());
+  }
+  s.pop();
+}
+
+TEST(SmtZ3Test, BvZeroExtend)
+{
+  Z3Solver s;
+
+  Bv<uint8_t> x = any<Bv<uint8_t>>("x");
+  Bv<int16_t> y = any<Bv<int16_t>>("y");
+  Bv<uint16_t> z = any<Bv<uint16_t>>("z");
+
+  s.push();
+  {
+    s.add(x == 0x07);
+    s.add(y == bv_cast<int16_t>(x));
+
+    EXPECT_EQ(sat, s.check());
+
+    std::stringstream out;
+    out << s.solver().get_model();
+    EXPECT_EQ("(define-fun y () (_ BitVec 16)\n  #x0007)\n(define-fun x () (_ BitVec 8)\n  #x07)", out.str());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x87);
+
+    // we cast from an unsigned to a signed integer so extend by zeros.
+    s.add(y == bv_cast<int16_t>(x));
+
+    EXPECT_EQ(sat, s.check());
+
+    std::stringstream out;
+    out << s.solver().get_model();
+    EXPECT_EQ("(define-fun y () (_ BitVec 16)\n  #x0087)\n(define-fun x () (_ BitVec 8)\n  #x87)", out.str());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x87);
+    s.add(z == bv_cast<uint16_t>(x));
+
+    EXPECT_EQ(sat, s.check());
+
+    std::stringstream out;
+    out << s.solver().get_model();
+    EXPECT_EQ("(define-fun z () (_ BitVec 16)\n  #x0087)\n(define-fun x () (_ BitVec 8)\n  #x87)", out.str());
+  }
+  s.pop();
+}
+
+TEST(SmtZ3Test, BvTruncate)
+{
+  Z3Solver s;
+
+  Bv<int16_t> x = any<Bv<int16_t>>("x");
+  Bv<int8_t> y = any<Bv<int8_t>>("y");
+  Bv<uint8_t> z = any<Bv<uint8_t>>("z");
+
+  s.push();
+  {
+    s.add(x == 0xbeef);
+    s.add(y == bv_cast<int8_t>(x));
+
+    EXPECT_EQ(sat, s.check());
+
+    std::stringstream out;
+    out << s.solver().get_model();
+    EXPECT_EQ("(define-fun y () (_ BitVec 8)\n  #xef)\n(define-fun x () (_ BitVec 16)\n  #xbeef)", out.str());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0xbeef);
+    s.add(z == bv_cast<uint8_t>(x));
+
+    EXPECT_EQ(sat, s.check());
+
+    std::stringstream out;
+    out << s.solver().get_model();
+    EXPECT_EQ("(define-fun z () (_ BitVec 8)\n  #xef)\n(define-fun x () (_ BitVec 16)\n  #xbeef)", out.str());
+  }
+  s.pop();
+}

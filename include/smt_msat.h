@@ -490,6 +490,49 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     }
   }
 
+  virtual Error __encode_bv_zero_extend(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned ext) override
+  {
+    const Error err = bv.encode(*this);
+    if (err) {
+      return err;
+    }
+
+    set_term(msat_make_bv_zext(m_env, ext, m_term));
+    return OK;
+  }
+
+  virtual Error __encode_bv_sign_extend(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned ext) override
+  {
+    const Error err = bv.encode(*this);
+    if (err) {
+      return err;
+    }
+
+    set_term(msat_make_bv_sext(m_env, ext, m_term));
+    return OK;
+  }
+
+  virtual Error __encode_bv_extract(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned high,
+    const unsigned low) override
+  {
+    const Error err = bv.encode(*this);
+    if (err) {
+      return err;
+    }
+
+    set_term(msat_make_bv_extract(m_env, high, low, m_term));
+    return OK;
+  }
+
   virtual void __reset() override
   {
     msat_reset_env(m_env);

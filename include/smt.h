@@ -402,6 +402,9 @@ enum ExprKind : unsigned
   ARRAY_STORE_EXPR_KIND,
   CONSTANT_EXPR_KIND,
   FUNC_APP_EXPR_KIND,
+  BV_ZERO_EXTEND_EXPR_KIND,
+  BV_SIGN_EXTEND_EXPR_KIND,
+  BV_EXTRACT_EXPR_KIND,
 };
 
 class Sort {
@@ -831,6 +834,22 @@ private:
     const Sort& sort,
     const UnsafeTerms& args) = 0;
 
+  virtual Error __encode_bv_zero_extend(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned ext) = 0;
+
+  virtual Error __encode_bv_sign_extend(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned ext) = 0;
+
+  virtual Error __encode_bv_extract(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned high,
+    const unsigned low) = 0;
+
   virtual void __reset() = 0;
   virtual void __push() = 0;
   virtual void __pop() = 0;
@@ -880,6 +899,22 @@ public:
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerms& args);
+
+  Error encode_bv_zero_extend(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned ext);
+
+  Error encode_bv_sign_extend(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned ext);
+
+  Error encode_bv_extract(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned high,
+    const unsigned low);
 
   // Generic SMT formula statistics
   const Stats& stats()
@@ -1118,6 +1153,8 @@ SMT_TERM_DEF(Int)
 SMT_TERM_DEF(Real)
 
 /// Fixed-size bit vector
+
+/// The least significant bit is at the right-most position.
 template<typename T, typename Enable =
   typename std::enable_if<std::is_integral<T>::value>::type>
 struct Bv : public internal::Term<Bv<T>>
@@ -1209,6 +1246,199 @@ public:
     return m_decl;
   }
 };
+
+/// For example, if \c x is equal to \c #110, then \c BvZeroExtendExpr(x, 4)
+/// is a bit vector of length seven (= 3+4) that is equal to \c #b0000110.
+class BvZeroExtendExpr : public Expr
+{
+private:
+  const UnsafeTerm m_bv;
+  const unsigned m_ext;
+
+  virtual Error __encode(Solver& solver) const override
+  {
+    return solver.encode_bv_zero_extend(Expr::sort(), m_bv, m_ext);
+  }
+
+public:
+  /// Allocate sort statically!
+  BvZeroExtendExpr(const Sort& sort, const UnsafeTerm& bv, unsigned ext)
+  : Expr(BV_ZERO_EXTEND_EXPR_KIND, sort),
+    m_bv(bv), m_ext(ext)
+  {
+    assert(sort.is_bv());
+    assert(!bv.sort().is_signed());
+    assert(sort.bv_size() > bv.sort().bv_size());
+    assert(m_ext == sort.bv_size() - bv.sort().bv_size());
+
+    // no truncation in above subtraction
+    assert(m_ext > 0);
+  }
+};
+
+/// For example, if \c x is equal to \c #110, then \c BvSignExtendExpr(x, 4)
+/// is a bit vector of length seven (= 3+4) that is equal to \c #b1111110.
+class BvSignExtendExpr : public Expr
+{
+private:
+  const UnsafeTerm m_bv;
+  const unsigned m_ext;
+
+  virtual Error __encode(Solver& solver) const override
+  {
+    return solver.encode_bv_sign_extend(Expr::sort(), m_bv, m_ext);
+  }
+
+public:
+  /// Allocate sort statically!
+  BvSignExtendExpr(const Sort& sort, const UnsafeTerm& bv, unsigned ext)
+  : Expr(BV_SIGN_EXTEND_EXPR_KIND, sort),
+    m_bv(bv), m_ext(ext)
+  {
+    assert(sort.is_bv());
+    assert(bv.sort().is_signed());
+    assert(sort.bv_size() > bv.sort().bv_size());
+    assert(m_ext == sort.bv_size() - bv.sort().bv_size());
+
+    // no truncation in above subtraction
+    assert(m_ext > 0);
+  }
+};
+
+/// For example, if \c x is equal to \c #b00011, then \c BvExtractExpr(x, 2, 0)
+/// is a bit vector of length three (0..2 inclusive) that is equal to \c #b011.
+class BvExtractExpr : public Expr
+{
+private:
+  const UnsafeTerm m_bv;
+  const unsigned m_high;
+  const unsigned m_low;
+
+  virtual Error __encode(Solver& solver) const override
+  {
+    return solver.encode_bv_extract(Expr::sort(), m_bv, m_high, m_low);
+  }
+
+public:
+  /// Allocate sort statically!
+
+  /// \pre: high > low
+  BvExtractExpr(const Sort& sort, const UnsafeTerm& bv, unsigned high, unsigned low)
+  : Expr(BV_EXTRACT_EXPR_KIND, sort),
+    m_bv(bv), m_high(high), m_low(low)
+  {
+    assert(m_high > m_low);
+
+    assert(sort.is_bv());
+    assert(sort.bv_size() == (m_high - m_low) + 1);
+  }
+};
+
+namespace internal
+{
+  struct BvZeroExtend
+  {
+    BvZeroExtend() = delete;
+
+    template<typename T, typename S>
+    static Bv<T> bv_cast(const Bv<S>& source)
+    {
+      static_assert(__Bv<T>::bv_size() > __Bv<S>::bv_size(),
+        "Bit vector size of target must be strictly greater than source's bit vector size");
+
+      constexpr unsigned ext = __Bv<T>::bv_size() - __Bv<S>::bv_size();
+      return Bv<T>(std::make_shared<BvZeroExtendExpr>(internal::sort<T>(), source, ext));
+    }
+  };
+
+  struct BvSignExtend
+  {
+    BvSignExtend() = delete;
+
+    template<typename T, typename S>
+    static Bv<T> bv_cast(const Bv<S>& source)
+    {
+      static_assert(__Bv<T>::bv_size() > __Bv<S>::bv_size(),
+        "Bit vector size of target must be strictly greater than source's bit vector size");
+
+      constexpr unsigned ext = __Bv<T>::bv_size() - __Bv<S>::bv_size();
+      return Bv<T>(std::make_shared<BvSignExtendExpr>(internal::sort<T>(), source, ext));
+    }
+  };
+
+  struct BvTruncate
+  {
+  public:
+    BvTruncate() = delete;
+
+    template<typename T, typename S>
+    static Bv<T> bv_cast(const Bv<S>& source)
+    {
+      static_assert(0 < __Bv<T>::bv_size(),
+        "Bit vector size of target must be strictly greater than zero");
+
+      static_assert(__Bv<T>::bv_size() <= __Bv<S>::bv_size(),
+        "Bit vector size of target must be less than or equal to source's bit vector size");
+
+      constexpr unsigned high = __Bv<T>::bv_size() - 1;
+      return Bv<T>(std::make_shared<BvExtractExpr>(internal::sort<T>(), source, high, 0));
+    }
+  };
+
+  struct BvExtend
+  {
+    BvExtend() = delete;
+
+    template<typename T, typename S>
+    static Bv<T> bv_cast(const Bv<S>& source)
+    {
+      // Recall that "a is congruent to b (modulo n)" if and only if n divides a - b.
+      // According to the C++11 language specification, paragraph 4.7:
+      //
+      //   If the destination type is unsigned, the resulting value is the
+      //   smallest unsigned value equal to the source value modulo 2^n
+      //   where n is the number of bits used to represent the destination type.
+      //
+      //   \see_also:
+      //     http://en.cppreference.com/w/cpp/language/implicit_cast#Integral_conversions
+      //
+      // Example:
+      //
+      //   signed int x = -1;
+      //   unsigned long y = x;
+      //   assert(std::numeric_limits<unsigned long>::max() == y);
+      //
+      // In the example, the assertion always holds because the least unsigned integer
+      // congruent to -1 (modulo 2^N where N = 8 * sizeof(unsigned long)) is the max
+      // value of unsigned long. Note that the modulo arithmetic is with respect to
+      // mathematical numbers (as opposed to finite bit vectors).
+      //
+      // Thus, on 2's complement platforms (assumed here), if source is signed,
+      // then we apply sign extension (regardless of target).
+      return std::conditional<
+        /* if */ std::is_signed<S>::value,
+        /* then */ internal::BvSignExtend,
+        /* else */ internal::BvZeroExtend>::type::template bv_cast<T, S>(source);
+    }
+  };
+}
+
+template<typename T, typename S>
+Bv<T> bv_cast(const Bv<S>& source)
+{
+  // TODO: optimize, if sizeof(T) is equal to sizeof(S), then
+  // we still truncate so that T's signedness is as expected.
+  return std::conditional<
+    /* if */ sizeof(T) <= sizeof(S),
+    /* then */ internal::BvTruncate,
+    /* else */ internal::BvExtend>::type::template bv_cast<T, S>(source);
+}
+
+template<typename T>
+Bv<T> bv_cast(const Bv<T>& source)
+{
+  return source;
+}
 
 template<size_t arity>
 class FuncAppExpr : public Expr

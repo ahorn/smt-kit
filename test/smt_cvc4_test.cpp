@@ -737,3 +737,190 @@ TEST(SmtCVC4Test, QF_IDL)
 
   EXPECT_EQ(smt::sat, solver.check());
 }
+
+TEST(SmtCVC4Test, BvSignExtend)
+{
+  CVC4Solver s(QF_BV_LOGIC);
+
+  Bv<int8_t> x = any<Bv<int8_t>>("x");
+  Bv<int16_t> y = any<Bv<int16_t>>("y");
+  Bv<uint16_t> z = any<Bv<uint16_t>>("z");
+
+  s.push();
+  {
+    s.add(x == 0x07);
+    s.add(y == bv_cast<int16_t>(x));
+    s.add(y == 0x0007);
+
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x07);
+    s.add(y == bv_cast<int16_t>(x));
+    s.add(y != 0x0007);
+
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x87);
+    s.add(y == bv_cast<int16_t>(x));
+    s.add(y == 0xff87);
+
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x87);
+    s.add(y == bv_cast<int16_t>(x));
+    s.add(y != 0xff87);
+
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x87);
+
+    // we cast from a signed to an unsigned integer so sign extension is required,
+    // see inline comments in bv_cast<T>(const Bv<S>&) about C++ specification
+    s.add(z == bv_cast<uint16_t>(x));
+    s.add(z == 0xff87U);
+
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x87);
+
+    // we cast from a signed to an unsigned integer so sign extension is required,
+    // see inline comments in bv_cast<T>(const Bv<S>&) about C++ specification
+    s.add(z == bv_cast<uint16_t>(x));
+    s.add(z != 0xff87U);
+
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+}
+
+TEST(SmtCVC4Test, BvZeroExtend)
+{
+  CVC4Solver s(QF_BV_LOGIC);
+
+  Bv<uint8_t> x = any<Bv<uint8_t>>("x");
+  Bv<int16_t> y = any<Bv<int16_t>>("y");
+  Bv<uint16_t> z = any<Bv<uint16_t>>("z");
+
+  s.push();
+  {
+    s.add(x == 0x07);
+    s.add(y == bv_cast<int16_t>(x));
+    s.add(y == 0x0007);
+
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x07);
+    s.add(y == bv_cast<int16_t>(x));
+    s.add(y != 0x0007);
+
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x87);
+
+    // we cast from an unsigned to a signed integer so extend by zeros.
+    s.add(y == bv_cast<int16_t>(x));
+    s.add(y == 0x0087);
+
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x87);
+
+    // we cast from an unsigned to a signed integer so extend by zeros.
+    s.add(y == bv_cast<int16_t>(x));
+    s.add(y != 0x0087);
+
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x87);
+    s.add(z == bv_cast<uint16_t>(x));
+    s.add(z == 0x0087U);
+
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0x87);
+    s.add(z == bv_cast<uint16_t>(x));
+    s.add(z != 0x0087U);
+
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+}
+
+TEST(SmtCVC4Test, BvTruncate)
+{
+  CVC4Solver s(QF_BV_LOGIC);
+
+  Bv<int16_t> x = any<Bv<int16_t>>("x");
+  Bv<int8_t> y = any<Bv<int8_t>>("y");
+  Bv<uint8_t> z = any<Bv<uint8_t>>("z");
+
+  s.push();
+  {
+    s.add(x == 0xbeef);
+    s.add(y == bv_cast<int8_t>(x));
+    s.add(y == 0xef);
+
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0xbeef);
+    s.add(y == bv_cast<int8_t>(x));
+    s.add(y != 0xefU);
+
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == 0xbeef);
+    s.add(z == bv_cast<uint8_t>(x));
+    s.add(z != 0xefU);
+
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+}

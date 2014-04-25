@@ -1078,3 +1078,79 @@ TEST(SmtTest, Implies)
   EXPECT_FALSE(e.is_null());
   EXPECT_FALSE(f.is_null());
 }
+
+TEST(SmtTest, BvSignExtend)
+{
+  const smt::Bv<signed short> a(smt::literal<smt::Bv<signed short>>(7));
+  const smt::Bv<signed long long> b = smt::bv_cast<signed long long>(a);
+  EXPECT_TRUE(a.sort().is_bv());
+  EXPECT_TRUE(a.sort().is_signed());
+  EXPECT_TRUE(b.sort().is_signed());
+  EXPECT_TRUE(b.sort().is_bv());
+  EXPECT_TRUE(a.sort().bv_size() < b.sort().bv_size());
+
+  const smt::Bv<signed short> c(smt::literal<smt::Bv<signed short>>(7));
+  const smt::Bv<unsigned long long> d = smt::bv_cast<unsigned long long>(c);
+  EXPECT_TRUE(c.sort().is_bv());
+  EXPECT_TRUE(c.sort().is_signed());
+  EXPECT_FALSE(d.sort().is_signed());
+  EXPECT_TRUE(d.sort().is_bv());
+  EXPECT_TRUE(c.sort().bv_size() < d.sort().bv_size());
+}
+
+TEST(SmtTest, BvZeroExtend)
+{
+  const smt::Bv<unsigned short> a(smt::literal<smt::Bv<unsigned short>>(7));
+  const smt::Bv<signed long long> b = smt::bv_cast<signed long long>(a);
+  EXPECT_TRUE(a.sort().is_bv());
+  EXPECT_FALSE(a.sort().is_signed());
+  EXPECT_TRUE(b.sort().is_signed());
+  EXPECT_TRUE(b.sort().is_bv());
+  EXPECT_TRUE(a.sort().bv_size() < b.sort().bv_size());
+
+  const smt::Bv<unsigned short> c(smt::literal<smt::Bv<unsigned short>>(7));
+  const smt::Bv<unsigned long long> d = smt::bv_cast<unsigned long long>(c);
+  EXPECT_TRUE(c.sort().is_bv());
+  EXPECT_FALSE(c.sort().is_signed());
+  EXPECT_FALSE(d.sort().is_signed());
+  EXPECT_TRUE(d.sort().is_bv());
+  EXPECT_TRUE(c.sort().bv_size() < d.sort().bv_size());
+}
+
+TEST(SmtTest, BvTruncate)
+{
+  const smt::Bv<unsigned long> a(smt::literal<smt::Bv<unsigned long>>(7));
+  const smt::Bv<unsigned short> b = smt::bv_cast<unsigned short>(a);
+  EXPECT_FALSE(a.sort().is_signed());
+  EXPECT_TRUE(a.sort().is_bv());
+  EXPECT_FALSE(b.sort().is_signed());
+  EXPECT_TRUE(b.sort().is_bv());
+  EXPECT_TRUE(a.sort().bv_size() > b.sort().bv_size());
+
+  const smt::Bv<signed long> c(smt::literal<smt::Bv<signed long>>(7));
+  const smt::Bv<signed short> d = smt::bv_cast<signed short>(c);
+  EXPECT_TRUE(c.sort().is_signed());
+  EXPECT_TRUE(c.sort().is_bv());
+  EXPECT_TRUE(d.sort().is_signed());
+  EXPECT_TRUE(d.sort().is_bv());
+  EXPECT_TRUE(c.sort().bv_size() > d.sort().bv_size());
+}
+
+TEST(SmtTest, BvChangeSignedness)
+{
+  const smt::Bv<signed short> a(smt::literal<smt::Bv<signed short>>(7));
+  const smt::Bv<unsigned short> b = smt::bv_cast<unsigned short>(a);
+  EXPECT_TRUE(a.sort().is_signed());
+  EXPECT_TRUE(a.sort().is_bv());
+  EXPECT_FALSE(b.sort().is_signed());
+  EXPECT_TRUE(b.sort().is_bv());
+  EXPECT_EQ(a.sort().bv_size(), b.sort().bv_size());
+
+  const smt::Bv<unsigned short> c(smt::literal<smt::Bv<unsigned short>>(7));
+  const smt::Bv<signed short> d = smt::bv_cast<signed short>(c);
+  EXPECT_FALSE(c.sort().is_signed());
+  EXPECT_TRUE(c.sort().is_bv());
+  EXPECT_TRUE(d.sort().is_signed());
+  EXPECT_TRUE(d.sort().is_bv());
+  EXPECT_EQ(c.sort().bv_size(), d.sort().bv_size());
+}

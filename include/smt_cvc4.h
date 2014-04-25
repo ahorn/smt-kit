@@ -498,6 +498,52 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     }
   }
 
+  virtual Error __encode_bv_zero_extend(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned ext) override
+  {
+    const Error err = bv.encode(*this);
+    if (err) {
+      return err;
+    }
+
+    set_expr(m_expr_manager.mkExpr(CVC4::kind::BITVECTOR_ZERO_EXTEND,
+      m_expr_manager.mkConst(CVC4::BitVectorZeroExtend(ext)), m_expr));
+    return OK;
+  }
+
+  virtual Error __encode_bv_sign_extend(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned ext) override
+  {
+    const Error err = bv.encode(*this);
+    if (err) {
+      return err;
+    }
+
+    set_expr(m_expr_manager.mkExpr(CVC4::kind::BITVECTOR_SIGN_EXTEND,
+      m_expr_manager.mkConst(CVC4::BitVectorSignExtend(ext)), m_expr));
+    return OK;
+  }
+
+  virtual Error __encode_bv_extract(
+    const Sort& sort,
+    const UnsafeTerm& bv,
+    const unsigned high,
+    const unsigned low) override
+  {
+    const Error err = bv.encode(*this);
+    if (err) {
+      return err;
+    }
+
+    set_expr(m_expr_manager.mkExpr(CVC4::kind::BITVECTOR_EXTRACT,
+      m_expr_manager.mkConst(CVC4::BitVectorExtract(high, low)), m_expr));
+    return OK;
+  }
+
   virtual void __reset() override
   {
     // currently unsupported
