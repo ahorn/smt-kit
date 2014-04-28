@@ -53,8 +53,7 @@ TEST(CrvFunctionalTest, SafeCounter)
 
   do
   {
-    crv::External<int> star;
-    crv::Internal<int> n = star;
+    crv::Internal<int> n;
     crv::dfs_prune_checker().add_assertion(0 <= n && n < N);
 
     crv::Internal<int> x = n, y = 0;
@@ -81,8 +80,7 @@ TEST(CrvFunctionalTest, UnsafeCounter)
   bool error = false;
   do
   {
-    crv::External<int> star;
-    crv::Internal<int> n = star;
+    crv::Internal<int> n;
     crv::dfs_prune_checker().add_assertion(0 <= n && n < N);
 
     crv::Internal<int> x = n, y = 0;
@@ -500,16 +498,14 @@ crv::Internal<int> sumR(
 TEST(CrvFunctionalTest, SafeRecurrenceSum)
 {
   // N must be even
-  constexpr unsigned N = 4;
+  constexpr int N = 2;
 
   crv::tracer().reset();
   crv::dfs_checker().reset();
   crv::Encoder encoder;
 
-  crv::External<int> x;
-  crv::External<int> y;
-  crv::Internal<int> a = x;
-  crv::Internal<int> b = y;
+  crv::Internal<int> a;
+  crv::Internal<int> b;
   crv::Internal<int> result = sumR(a, b, N);
   crv::dfs_checker().add_error(result != ((a*(N+1)) + (b*(N+1)*(N/2))));
   EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_checker()));
@@ -518,16 +514,14 @@ TEST(CrvFunctionalTest, SafeRecurrenceSum)
 TEST(CrvFunctionalTest, UnsafeRecurrenceSum)
 {
   // N must be even
-  constexpr unsigned N = 4;
+  constexpr unsigned N = 2;
 
   crv::tracer().reset();
   crv::dfs_checker().reset();
   crv::Encoder encoder;
 
-  crv::External<int> x;
-  crv::External<int> y;
-  crv::Internal<int> a = x;
-  crv::Internal<int> b = y;
+  crv::Internal<int> a;
+  crv::Internal<int> b;
   crv::Internal<int> result = sumR(a, b, N);
   crv::dfs_checker().add_error(result == ((a*(N+1)) + (b*(N+1)*(N/2))));
   EXPECT_EQ(smt::sat, encoder.check(crv::tracer(), crv::dfs_checker()));
@@ -581,6 +575,8 @@ TEST(CrvFunctionalTest, SafeThreads)
 
   EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_checker()));
 }
+
+#ifndef _BV_THEORY_
 
 void fib_t0(
   const unsigned N,
@@ -655,6 +651,8 @@ TEST(CrvFunctionalTest, SatFib6)
   EXPECT_TRUE(smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()));
   EXPECT_FALSE(crv::dfs_checker().find_next_path());
 }
+
+#endif
 
 void stateful_t0(
   crv::Mutex& mutex,
@@ -743,6 +741,8 @@ TEST(CrvFunctionalTest, SatStateful)
   while (crv::dfs_checker().find_next_path());
   EXPECT_TRUE(error);
 }
+
+#ifndef _BV_THEORY_
 
 void sat_stack_t0(
   const unsigned N,
@@ -861,6 +861,8 @@ TEST(CrvFunctionalTest, UnsatStack)
   while (crv::dfs_checker().find_next_path());
   EXPECT_FALSE(error);
 }
+
+#endif
 
 void sat_communication_f(crv::Channel<int>& s, crv::Channel<int>& t)
 {

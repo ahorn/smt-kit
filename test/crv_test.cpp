@@ -118,6 +118,14 @@ TEST(CrvTest, ReturnType)
 
   STATIC_EXPECT_TRUE((std::is_same<bool, typename internal::Return<smt::LNOT,
     unsigned int>::Type>::value));
+
+  // language specification, 6.3.1.8
+  STATIC_EXPECT_TRUE((std::is_same<unsigned int, typename internal::Return<smt::ADD,
+    unsigned int, int>::Type>::value));
+
+  // no warning since we are doing meta-programming
+  STATIC_EXPECT_TRUE((std::is_same<bool, typename internal::Return<smt::LSS,
+    unsigned int, int>::Type>::value));
 }
 
 TEST(CrvTest, Reflect)
@@ -874,6 +882,8 @@ TEST(CrvTest, ThinAirWithThread) {
   EXPECT_EQ(8, tracer().events().size());
 }
 
+#ifndef _BV_THEORY_
+
 TEST(CrvTest, Fib5)
 {
   constexpr unsigned N = 5;
@@ -900,6 +910,8 @@ TEST(CrvTest, Fib5)
   EXPECT_EQ(smt::sat, encoder.check(
     144 < i || 144 == i || 144 < j || 144 == j, tracer(), checker));
 }
+
+#endif
 
 TEST(CrvTest, Stack)
 {
@@ -3418,7 +3430,7 @@ TEST(CrvTest, PostIncrement)
   EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer(), checker));
 }
 
-#ifndef __BIT_PRECISION__
+#ifndef _BV_THEORY_
 // Optional feature (beware it can hide bugs!)
 TEST(CrvTest, BvApproximation)
 {

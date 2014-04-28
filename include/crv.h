@@ -20,6 +20,10 @@
 #include <iostream>
 #endif
 
+#ifndef _BV_THEORY_
+#define _REAL_TIME_ 1
+#endif
+
 namespace crv
 {
 
@@ -347,19 +351,25 @@ struct Smt
   typedef typename std::conditional<
     /* if */ std::is_same<bool, T>::value,
     /* then */ smt::Bool,
-    /* else */ smt::Int>::type Sort;
+    /* else */
+#ifdef _BV_THEORY_
+  smt::Bv<T>
+#else
+  smt::Int
+#endif
+  >::type Sort;
 };
 
 template<class T>
 struct Smt<T[]>
 {
-  typedef smt::Array<smt::Int, typename Smt<T>::Sort> Sort;
+  typedef smt::Array<typename Smt<size_t>::Sort, typename Smt<T>::Sort> Sort;
 };
 
 template<class T, size_t N>
 struct Smt<T[N]>
 {
-  typedef smt::Array<smt::Int, typename Smt<T>::Sort> Sort;
+  typedef smt::Array<typename Smt<size_t>::Sort, typename Smt<T>::Sort> Sort;
 };
 
 /// Nesting of branches within a single thread
@@ -1069,6 +1079,17 @@ public:
     assert(!m_term.is_null());
   }
 
+#ifdef _BV_THEORY_
+  template<typename U>
+  explicit Internal(smt::Bv<U>&& term)
+  : m_term(smt::bv_cast<T>(std::move(term))),
+    m_v(),
+    m_op(nullptr)
+  {
+    assert(!m_term.is_null());
+  }
+#endif
+
   Internal(T v)
   : m_term(nullptr),
     m_v(v),
@@ -1208,6 +1229,44 @@ public:
     // lazy term
     return arg.m_op->fuse(std::move(arg.m_term), std::move(arg.m_v));
   }
+
+  template<typename S>
+  static typename Smt<T>::Sort term(const Internal<S>& arg)
+  {
+#ifdef _BV_THEORY_
+    return smt::bv_cast<T>(Internal<S>::term(arg));
+#else
+    // assume no cast required
+    return Internal<S>::term(arg);
+#endif
+  }
+
+  template<typename S>
+  static typename Smt<T>::Sort term(Internal<S>&& arg)
+  {
+#ifdef _BV_THEORY_
+    return smt::bv_cast<T>(Internal<S>::term(std::move(arg)));
+#else
+    // assume no cast required
+    return Internal<S>::term(std::move(arg));
+#endif
+  }
+
+  template<typename S>
+  static Internal<T> cast(const Internal<S>& source)
+  {
+    return Internal<T>(term<S>(source));
+  }
+
+  static Internal cast(const Internal& source)
+  {
+    return source;
+  }
+
+  static Internal cast(Internal&& source)
+  {
+    return std::move(source);
+  }
 };
 
 template<typename T, typename U> class _Internal;
@@ -1217,7 +1276,8 @@ template<typename T>
 class Internal<T[]>
 {
 public:
-  typedef smt::Int DomainSort;
+  typedef size_t Size;
+  typedef typename Smt<Size>::Sort DomainSort;
   typedef typename Smt<T>::Sort RangeSort;
   typedef smt::Array<DomainSort, RangeSort> Sort;
 
@@ -1249,11 +1309,11 @@ public:
   Internal() : m_term(), m_vector() {}
 
   template<typename U>
-  _Internal<T, U> operator[](const Internal<U>& offset);
+  _Internal<T, Size> operator[](const Internal<U>& offset);
 
-  _Internal<T, size_t> operator[](size_t offset)
+  _Internal<T, Size> operator[](Size offset)
   {
-    return operator[](Internal<size_t>(offset));
+    return operator[](Internal<Size>(offset));
   }
 };
 
@@ -1262,6 +1322,7 @@ template<typename T, size_t N>
 class Internal<T[N]>
 {
 private:
+  typedef size_t Size;
   typedef Internal<T[]> Forward;
   Forward m_forward;
 
@@ -1272,7 +1333,7 @@ public:
   Internal() : m_forward() {}
 
   template<typename U>
-  _Internal<T, U> operator[](const Internal<U>& offset)
+  _Internal<T, Size> operator[](const Internal<U>& offset)
   {
     if (offset.is_literal())
       assert(offset.literal() < N);
@@ -1280,7 +1341,7 @@ public:
     return m_forward[offset];
   }
 
-  _Internal<T, size_t> operator[](size_t offset)
+  _Internal<T, Size> operator[](Size offset)
   {
     return m_forward[offset];
   }
@@ -1301,8 +1362,8 @@ private:
   typename InternalArray::Vector& m_vector_ref;
   const Internal<U> m_offset;
 
-  template<typename _U>
-  friend _Internal<T, _U> Internal<T[]>::operator[](const Internal<_U>&);
+  template<typename V>
+  friend _Internal<T, U> Internal<T[]>::operator[](const Internal<V>&);
 
   // McCarthy array without simplifications
   _Internal(
@@ -1396,7 +1457,7 @@ typename Internal<T[]>::Vector _Internal<T, U>::s_empty;
 
 template<typename T>
 template<typename U>
-_Internal<T, U> Internal<T[]>::operator[](const Internal<U>& offset)
+_Internal<T, size_t> Internal<T[]>::operator[](const Internal<U>& offset)
 {
   if (m_term.is_null())
   {
@@ -1417,7 +1478,7 @@ _Internal<T, U> Internal<T[]>::operator[](const Internal<U>& offset)
       }
 
       assert(offset_literal < m_vector.size());
-      return _Internal<T, U>(m_term, m_vector, offset_literal);
+      return _Internal<T, Size>(m_term, m_vector, offset_literal);
     }
     else
     {
@@ -1438,7 +1499,7 @@ _Internal<T, U> Internal<T[]>::operator[](const Internal<U>& offset)
   assert(!m_term.is_null());
   assert(m_vector.empty());
 
-  return _Internal<T, U>(m_term, offset);
+  return _Internal<T, Size>(m_term, Internal<Size>::cast(offset));
 }
 
 namespace simplifier
@@ -1515,137 +1576,133 @@ namespace simplifier
   // No constant propagation but literal simplifications
   struct Eager
   {
-    template<smt::Opcode opcode, typename T, typename U, typename V>
-    static Internal<T> apply(const Internal<U>& u, const V literal)
+    template<smt::Opcode opcode, typename T, typename S>
+    static Internal<T> apply(const Internal<S>& u, const S literal)
     {
       if (u.is_literal())
         return Internal<T>(internal::Eval<opcode>::eval(u.literal(), literal));
       else
         return Internal<T>(internal::Eval<opcode>::eval(
-          Internal<U>::term(u), literal));
+          Internal<S>::term(u), literal));
     }
 
-    template<smt::Opcode opcode, typename T, typename U, typename V>
-    static Internal<T> apply(Internal<U>&& u, const V literal)
+    template<smt::Opcode opcode, typename T, typename S>
+    static Internal<T> apply(Internal<S>&& u, const S literal)
     {
       if (u.is_literal())
         return Internal<T>(internal::Eval<opcode>::eval(u.literal(), literal));
       else
         return Internal<T>(internal::Eval<opcode>::eval(
-          Internal<U>::term(std::move(u)), literal));
+          Internal<S>::term(std::move(u)), literal));
     }
 
-    template<smt::Opcode opcode, typename T, typename U, typename V>
-    static Internal<T> apply(const U literal, const Internal<V>& v)
+    template<smt::Opcode opcode, typename T, typename S>
+    static Internal<T> apply(const S literal, const Internal<S>& v)
     {
       if (v.is_literal())
         return Internal<T>(internal::Eval<opcode>::eval(literal, v.literal()));
       else
         return Internal<T>(internal::Eval<opcode>::eval(
-          literal, Internal<V>::term(v)));
+          literal, Internal<S>::term(v)));
     }
 
-    template<smt::Opcode opcode, typename T, typename U, typename V>
-    static Internal<T> apply(const U literal, Internal<V>&& v)
+    template<smt::Opcode opcode, typename T, typename S>
+    static Internal<T> apply(const S literal, Internal<S>&& v)
     {
       if (v.is_literal())
         return Internal<T>(internal::Eval<opcode>::eval(literal, v.literal()));
       else
         return Internal<T>(internal::Eval<opcode>::eval(
-          literal, Internal<V>::term(std::move(v))));
+          literal, Internal<S>::term(std::move(v))));
     }
   };
 
-  template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(const Internal<U>& u, const V literal)
+  template<smt::Opcode opcode, typename T, typename S>
+  static Internal<T> apply(const Internal<S>& u, const S literal)
   {
     return std::conditional<
-      /* if */ std::is_same<T, U>::value and
-               std::is_same<U, V>::value and
+      /* if */ std::is_same<T, S>::value and
                IsCommutativeMonoid<opcode, T>::value,
       /* then */ Lazy,
       /* else */ Eager>::type::template apply<opcode, T>(u, literal);
   }
 
-  template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(Internal<U>&& u, const V literal)
+  template<smt::Opcode opcode, typename T, typename S>
+  static Internal<T> apply(Internal<S>&& u, const S literal)
   {
     return std::conditional<
-      /* if */ std::is_same<T, U>::value and
-               std::is_same<U, V>::value and
+      /* if */ std::is_same<T, S>::value and
                IsCommutativeMonoid<opcode, T>::value,
       /* then */ Lazy,
       /* else */ Eager>::type::template apply<opcode, T>(std::move(u), literal);
   }
 
-  template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(const U literal, const Internal<V>& v)
+  template<smt::Opcode opcode, typename T, typename S>
+  static Internal<T> apply(const S literal, const Internal<S>& v)
   {
     return std::conditional<
-      /* if */ std::is_same<T, U>::value and
-               std::is_same<U, V>::value and
+      /* if */ std::is_same<T, S>::value and
                IsCommutativeMonoid<opcode, T>::value,
       /* then */ Lazy,
       /* else */ Eager>::type::template apply<opcode, T>(literal, v);
   }
 
-  template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(const U literal, Internal<V>&& v)
+  template<smt::Opcode opcode, typename T, typename S>
+  static Internal<T> apply(const S literal, Internal<S>&& v)
   {
     return std::conditional<
-      /* if */ std::is_same<T, U>::value and
-               std::is_same<U, V>::value and
+      /* if */ std::is_same<T, S>::value and
                IsCommutativeMonoid<opcode, T>::value,
       /* then */ Lazy,
       /* else */ Eager>::type::template apply<opcode, T>(literal, std::move(v));
   }
 
-  template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(const Internal<U>& u, const Internal<V>& v)
+  template<smt::Opcode opcode, typename T, typename S>
+  static Internal<T> apply(const Internal<S>& u, const Internal<S>& v)
   {
     if (u.is_literal())
-      return apply<opcode, T, U, V>(u.literal(), v);
+      return apply<opcode, T, S>(u.literal(), v);
     else if (v.is_literal())
-      return apply<opcode, T, U, V>(u, v.literal());
+      return apply<opcode, T, S>(u, v.literal());
     else
       return Internal<T>(internal::Eval<opcode>::eval(
-        Internal<U>::term(u), Internal<V>::term(v)));
+        Internal<S>::term(u), Internal<S>::term(v)));
   }
 
-  template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(const Internal<U>& u, Internal<V>&& v)
+  template<smt::Opcode opcode, typename T, typename S>
+  static Internal<T> apply(const Internal<S>& u, Internal<S>&& v)
   {
     if (u.is_literal())
-      return apply<opcode, T, U, V>(u.literal(), std::move(v));
+      return apply<opcode, T, S>(u.literal(), std::move(v));
     else if (v.is_literal())
-      return apply<opcode, T, U, V>(u, v.literal());
+      return apply<opcode, T, S>(u, v.literal());
     else
       return Internal<T>(internal::Eval<opcode>::eval(
-        Internal<U>::term(u), Internal<V>::term(std::move(v))));
+        Internal<S>::term(u), Internal<S>::term(std::move(v))));
   }
 
-  template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(Internal<U>&& u, const Internal<V>& v)
+  template<smt::Opcode opcode, typename T, typename S>
+  static Internal<T> apply(Internal<S>&& u, const Internal<S>& v)
   {
     if (u.is_literal())
-      return apply<opcode, T, U, V>(u.literal(), v);
+      return apply<opcode, T, S>(u.literal(), v);
     else if (v.is_literal())
-      return apply<opcode, T, U, V>(std::move(u), v.literal());
+      return apply<opcode, T, S>(std::move(u), v.literal());
     else
       return Internal<T>(internal::Eval<opcode>::eval(
-        Internal<U>::term(std::move(u)), Internal<V>::term(v)));
+        Internal<S>::term(std::move(u)), Internal<S>::term(v)));
   }
 
-  template<smt::Opcode opcode, typename T, typename U, typename V>
-  static Internal<T> apply(Internal<U>&& u, Internal<V>&& v)
+  template<smt::Opcode opcode, typename T, typename S>
+  static Internal<T> apply(Internal<S>&& u, Internal<S>&& v)
   {
     if (u.is_literal())
-      return apply<opcode, T, U, V>(u.literal(), std::move(v));
+      return apply<opcode, T, S>(u.literal(), std::move(v));
     else if (v.is_literal())
-      return apply<opcode, T, U, V>(std::move(u), v.literal());
+      return apply<opcode, T, S>(std::move(u), v.literal());
     else
       return Internal<T>(internal::Eval<opcode>::eval(
-        Internal<U>::term(std::move(u)), Internal<V>::term(std::move(v))));
+        Internal<S>::term(std::move(u)), Internal<S>::term(std::move(v))));
   }
 }
 
@@ -1929,7 +1986,7 @@ typename Smt<T>::Sort Tracer::append_message_recv_event(const Address address)
 CRV_BUILTIN_UNARY_OP(-, SUB)
 CRV_BUILTIN_UNARY_OP(!, LNOT)
 
-#ifdef __BIT_PRECISION__
+#ifdef _BV_THEORY_
 CRV_BUILTIN_UNARY_OP(~, NOT)
 #endif
 
@@ -1940,8 +1997,11 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::Internal<V>& v)                                                  \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
+    typedef typename std::common_type<U, V>::type CommonType;                   \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
-    return crv::simplifier::apply<smt::opcode, ReturnType>(u, v);               \
+    return crv::simplifier::apply<smt::opcode, ReturnType>(                     \
+      crv::Internal<CommonType>::cast(u),                                       \
+      crv::Internal<CommonType>::cast(v));                                      \
   }                                                                             \
                                                                                 \
   template<typename U, typename V>                                              \
@@ -1950,8 +2010,11 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     crv::Internal<V>&& v)                                                       \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
+    typedef typename std::common_type<U, V>::type CommonType;                   \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
-    return crv::simplifier::apply<smt::opcode, ReturnType>(u, std::move(v));    \
+    return crv::simplifier::apply<smt::opcode, ReturnType>(                     \
+      crv::Internal<CommonType>::cast(u),                                       \
+      crv::Internal<CommonType>::cast(std::move(v)));                           \
   }                                                                             \
                                                                                 \
   template<typename U, typename V>                                              \
@@ -1960,8 +2023,11 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::Internal<V>& v)                                                  \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
+    typedef typename std::common_type<U, V>::type CommonType;                   \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
-    return crv::simplifier::apply<smt::opcode, ReturnType>(std::move(u), v);    \
+    return crv::simplifier::apply<smt::opcode, ReturnType>(                     \
+      crv::Internal<CommonType>::cast(std::move(u)),                            \
+      crv::Internal<CommonType>::cast(v));                                      \
   }                                                                             \
                                                                                 \
   template<typename U, typename V>                                              \
@@ -1970,9 +2036,11 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     crv::Internal<V>&& v)                                                       \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
+    typedef typename std::common_type<U, V>::type CommonType;                   \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
     return crv::simplifier::apply<smt::opcode, ReturnType>(                     \
-      std::move(u), std::move(v));                                              \
+      crv::Internal<CommonType>::cast(std::move(u)),                            \
+      crv::Internal<CommonType>::cast(std::move(v)));                           \
   }                                                                             \
                                                                                 \
   template<typename U, typename V,                                              \
@@ -1982,8 +2050,11 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     V literal)                                                                  \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
+    typedef typename std::common_type<U, V>::type CommonType;                   \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
-    return crv::simplifier::apply<smt::opcode, ReturnType>(u, literal);         \
+    return crv::simplifier::apply<smt::opcode, ReturnType>(                     \
+      crv::Internal<CommonType>::cast(u),                                       \
+      static_cast<CommonType>(literal));                                        \
   }                                                                             \
                                                                                 \
   template<typename U, typename V,                                              \
@@ -1993,9 +2064,11 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     V literal)                                                                  \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
+    typedef typename std::common_type<U, V>::type CommonType;                   \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
     return crv::simplifier::apply<smt::opcode, ReturnType>(                     \
-      std::move(u), literal);                                                   \
+      crv::Internal<CommonType>::cast(std::move(u)),                            \
+      static_cast<CommonType>(literal));                                        \
   }                                                                             \
                                                                                 \
   template<typename U, typename V,                                              \
@@ -2005,8 +2078,11 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::Internal<V>& v)                                                  \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
+    typedef typename std::common_type<U, V>::type CommonType;                   \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
-    return crv::simplifier::apply<smt::opcode, ReturnType>(literal, v);         \
+    return crv::simplifier::apply<smt::opcode, ReturnType>(                     \
+      static_cast<CommonType>(literal),                                         \
+      crv::Internal<CommonType>::cast(v));                                      \
   }                                                                             \
                                                                                 \
   template<typename U, typename V,                                              \
@@ -2016,9 +2092,11 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     crv::Internal<V>&& v)                                                       \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
+    typedef typename std::common_type<U, V>::type CommonType;                   \
     typedef typename crv::internal::Return<smt::opcode, U, V>::Type ReturnType; \
     return crv::simplifier::apply<smt::opcode, ReturnType>(                     \
-      literal, std::move(v));                                                   \
+      static_cast<CommonType>(literal),                                         \
+      crv::Internal<CommonType>::cast(std::move(v)));                           \
   }                                                                             \
                                                                                 \
   template<typename U, typename V>                                              \
@@ -2027,8 +2105,9 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
   const crv::Internal<V>& v)                                                    \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> u_internal(crv::append_input_event(u));                    \
-    return std::move(u_internal) op v;                                          \
+    typedef typename std::common_type<U, V>::type CommonType;                   \
+    crv::Internal<CommonType> u_internal(crv::append_input_event(u));           \
+    return std::move(u_internal) op crv::Internal<CommonType>::cast(v);         \
   }                                                                             \
                                                                                 \
   template<typename U, typename V>                                              \
@@ -2037,8 +2116,10 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
   crv::Internal<V>&& v)                                                         \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> u_internal(crv::append_input_event(u));                    \
-    return std::move(u_internal) op std::move(v);                               \
+    typedef typename std::common_type<U, V>::type CommonType;                   \
+    crv::Internal<CommonType> u_internal(crv::append_input_event(u));           \
+    return std::move(u_internal) op                                             \
+      crv::Internal<CommonType>::cast(std::move(v));                            \
   }                                                                             \
                                                                                 \
   template<typename U, typename V>                                              \
@@ -2047,8 +2128,9 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::External<V>& v)                                                  \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> v_internal(crv::append_input_event(v));                    \
-    return u op std::move(v_internal);                                          \
+    typedef typename std::common_type<U, V>::type CommonType;                   \
+    crv::Internal<CommonType> v_internal(crv::append_input_event(v));           \
+    return crv::Internal<CommonType>::cast(u) op std::move(v_internal);         \
   }                                                                             \
                                                                                 \
   template<typename U, typename V>                                              \
@@ -2057,8 +2139,10 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::External<V>& v)                                                  \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<V> v_internal(crv::append_input_event(v));                    \
-    return std::move(u) op std::move(v_internal);                               \
+    typedef typename std::common_type<U, V>::type CommonType;                   \
+    crv::Internal<CommonType> v_internal(crv::append_input_event(v));           \
+    return crv::Internal<CommonType>::cast(std::move(u)) op                     \
+      std::move(v_internal);                                                    \
   }                                                                             \
                                                                                 \
   template<typename U, typename V>                                              \
@@ -2067,8 +2151,9 @@ CRV_BUILTIN_UNARY_OP(~, NOT)
     const crv::External<V>& v)                                                  \
   -> crv::Internal<typename crv::internal::Return<smt::opcode, U, V>::Type>     \
   {                                                                             \
-    crv::Internal<U> u_internal(crv::append_input_event(u));                    \
-    crv::Internal<V> v_internal(crv::append_input_event(v));                    \
+    typedef typename std::common_type<U, V>::type CommonType;                   \
+    crv::Internal<CommonType> u_internal(crv::append_input_event(u));           \
+    crv::Internal<CommonType> v_internal(crv::append_input_event(v));           \
     return std::move(u_internal) op std::move(v_internal);                      \
   }                                                                             \
                                                                                 \
@@ -2108,7 +2193,7 @@ CRV_BUILTIN_BINARY_OP(==, EQL)
 CRV_BUILTIN_BINARY_OP(&&, LAND)
 CRV_BUILTIN_BINARY_OP(||, LOR)
 
-#ifdef __BIT_PRECISION__
+#ifdef _BV_THEORY_
 CRV_BUILTIN_BINARY_OP(&, AND)
 CRV_BUILTIN_BINARY_OP(|, OR)
 CRV_BUILTIN_BINARY_OP(^, XOR)
@@ -2132,7 +2217,8 @@ template<typename T> void make_any(__External<T>&& arg) { arg = any<T>(); }
 template<typename T> void make_any(Internal<T[]>& arg) { arg.clear(); }
 
 /// Make a fixed-size array nondeterministic (i.e. symbolic)
-template<typename T, size_t N> void make_any(Internal<T[N]>& arg)
+template<typename T, size_t N>
+void make_any(Internal<T[N]>& arg)
 {
   make_any(arg.m_forward);
 }
@@ -2141,7 +2227,7 @@ template<typename T,
   class Enable = typename std::enable_if<std::is_arithmetic<T>::value>::type>
 inline Internal<T>& post_increment(Internal<T>& arg)
 {
-  arg = simplifier::apply<smt::ADD, T>(arg, 1);
+  arg = simplifier::apply<smt::ADD, T>(arg, static_cast<T>(1));
   return arg;
 }
 
@@ -2150,14 +2236,14 @@ template<typename T,
 inline External<T>& post_increment(External<T>& arg)
 {
   Internal<T> arg_internal(append_input_event(arg));
-  arg = simplifier::apply<smt::ADD, T>(std::move(arg_internal), 1);
+  arg = simplifier::apply<smt::ADD, T>(std::move(arg_internal), static_cast<T>(1));
   return arg;
 }
 
-#ifdef __BV_TIME__
-typedef smt::Bv<unsigned short> TimeSort;
-#else
+#ifdef _REAL_TIME_
 typedef smt::Real TimeSort;
+#else
+typedef smt::Bv<unsigned short> TimeSort;
 #endif
 
 class Time
@@ -2243,7 +2329,13 @@ private:
     return x.event_id == app;
   }
 
+public:
+#ifdef _BV_THEORY_
+  smt::MsatSolver m_solver;
+#else
   smt::Z3Solver m_solver;
+#endif
+
   std::unordered_map<EventIdentifier, Time> m_time_map;
 
 #ifdef _SUP_READ_FROM_
@@ -3036,7 +3128,7 @@ private:
 
 public:
   Encoder()
-#ifdef __BV_TIME__
+#ifdef _BV_THEORY_
   : m_solver(smt::QF_AUFBV_LOGIC),
 #else
   : m_solver(smt::QF_AUFLIRA_LOGIC),
@@ -3114,7 +3206,7 @@ public:
     return result;
   }
 
-#ifndef __BIT_PRECISION__
+#ifndef _BV_THEORY_
   // Use best effort to enforce some BV constraints such
   // as 'unsigned int' even though we use Real etc.
   //
@@ -3419,7 +3511,11 @@ public:
 
   DfsPruneChecker()
   : DfsChecker(),
+#ifdef _BV_THEORY_
+    m_solver(smt::QF_AUFBV_LOGIC),
+#else
     m_solver(smt::QF_AUFLIRA_LOGIC),
+#endif
     m_is_feasible(true) {}
 
   void reset()
