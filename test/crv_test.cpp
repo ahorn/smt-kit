@@ -629,16 +629,26 @@ TEST(CrvTest, EncoderCheck)
   External<bool> true_bool(true);
   EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
 
-  tracer().reset();
+  // See comment in CrvTest::Guard
+  tracer().reset_events();
+
   External<bool> false_bool(false);
-  EXPECT_EQ(smt::unsat, encoder.check(false_bool, tracer(), checker));
+  {
+    EXPECT_EQ(smt::unsat, encoder.check(false_bool, tracer(), checker));
+  }
 
   // with literal
-  tracer().reset();
-  EXPECT_EQ(smt::sat, encoder.check(true, tracer(), checker));
+  tracer().reset_events();
 
-  tracer().reset();
-  EXPECT_EQ(smt::unsat, encoder.check(false, tracer(), checker));
+  {
+    EXPECT_EQ(smt::sat, encoder.check(true, tracer(), checker));
+  }
+
+  tracer().reset_events();
+
+  {
+    EXPECT_EQ(smt::unsat, encoder.check(false, tracer(), checker));
+  }
 }
 
 TEST(CrvTest, Guard)
@@ -649,148 +659,191 @@ TEST(CrvTest, Guard)
 
   Internal<int> i;
 
-  EXPECT_FALSE(checker.branch(i < 3));
-  EXPECT_EQ(smt::sat, encoder.check(i == 3, tracer(), checker));
-  EXPECT_EQ(smt::unsat, encoder.check(i == 2, tracer(), checker));
-  EXPECT_TRUE(checker.find_next_path());
-  EXPECT_TRUE(checker.branch(i < 3));
-  EXPECT_EQ(smt::unsat, encoder.check(i == 3, tracer(), checker));
-  EXPECT_EQ(smt::sat, encoder.check(i == 2, tracer(), checker));
-  EXPECT_FALSE(checker.find_next_path());
+  {
+    EXPECT_FALSE(checker.branch(i < 3));
+    EXPECT_EQ(smt::sat, encoder.check(i == 3, tracer(), checker));
+    EXPECT_EQ(smt::unsat, encoder.check(i == 2, tracer(), checker));
+    EXPECT_TRUE(checker.find_next_path());
+    EXPECT_TRUE(checker.branch(i < 3));
+    EXPECT_EQ(smt::unsat, encoder.check(i == 3, tracer(), checker));
+    EXPECT_EQ(smt::sat, encoder.check(i == 2, tracer(), checker));
+    EXPECT_FALSE(checker.find_next_path());
+  }
 
-  tracer().reset();
+  // We don't call tracer().reset() because MathSAT5 keeps
+  // SMT terms even if push/pop is used. This is no problem
+  // as long as we avoid calling reset_event_identifiers().
+  tracer().reset_events();
   checker.reset();
 
   External<int> j;
 
   make_any(j);
-  EXPECT_FALSE(checker.branch(j < 3));
-  EXPECT_EQ(smt::sat, encoder.check(j == 3, tracer(), checker));
-  EXPECT_EQ(smt::unsat, encoder.check(j == 2, tracer(), checker));
-  EXPECT_TRUE(checker.find_next_path());
+  {
+    EXPECT_FALSE(checker.branch(j < 3));
+    EXPECT_EQ(smt::sat, encoder.check(j == 3, tracer(), checker));
+    EXPECT_EQ(smt::unsat, encoder.check(j == 2, tracer(), checker));
+    EXPECT_TRUE(checker.find_next_path());
+  }
 
   make_any(j);
-  EXPECT_TRUE(checker.branch(j < 3));
-  EXPECT_EQ(smt::unsat, encoder.check(j == 3, tracer(), checker));
-  EXPECT_EQ(smt::sat, encoder.check(j == 2, tracer(), checker));
-  EXPECT_FALSE(checker.find_next_path());
+  {
+    EXPECT_TRUE(checker.branch(j < 3));
+    EXPECT_EQ(smt::unsat, encoder.check(j == 3, tracer(), checker));
+    EXPECT_EQ(smt::sat, encoder.check(j == 2, tracer(), checker));
+    EXPECT_FALSE(checker.find_next_path());
+  }
 
-  tracer().reset();
+  // see above
+  tracer().reset_events();
   checker.reset();
 
-  EXPECT_FALSE(checker.branch(false, false));
-  EXPECT_TRUE(checker.branch(true, true));
-  checker.add_error(true);
-  EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
-  EXPECT_FALSE(checker.find_next_path());
+  {
+    EXPECT_FALSE(checker.branch(false, false));
+    EXPECT_TRUE(checker.branch(true, true));
+    checker.add_error(true);
+    EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
+    EXPECT_FALSE(checker.find_next_path());
+  }
 
-  tracer().reset();
+  // see above
+  tracer().reset_events();
   checker.reset();
 
-  EXPECT_TRUE(checker.branch(true, false));
-  checker.add_error(true);
-  EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
-  EXPECT_FALSE(checker.find_next_path());
+  {
+    EXPECT_TRUE(checker.branch(true, false));
+    checker.add_error(true);
+    EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
+    EXPECT_FALSE(checker.find_next_path());
+  }
 
-  tracer().reset();
+  // see above
+  tracer().reset_events();
   checker.reset();
 
   External<bool> false_bool;
   External<bool> true_bool;
 
-  false_bool = false;
-  true_bool = true;
-  EXPECT_FALSE(checker.branch(false_bool));
-  EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
-  EXPECT_TRUE(checker.find_next_path());
+  {
+    false_bool = false;
+    true_bool = true;
+    EXPECT_FALSE(checker.branch(false_bool));
+    EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
+    EXPECT_TRUE(checker.find_next_path());
+  }
 
-  false_bool = false;
-  true_bool = true;
-  EXPECT_TRUE(checker.branch(false_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
-  EXPECT_FALSE(checker.find_next_path());
+  {
+    false_bool = false;
+    true_bool = true;
+    EXPECT_TRUE(checker.branch(false_bool));
+    EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
+    EXPECT_FALSE(checker.find_next_path());
+  }
 
-  tracer().reset();
+  // see above
+  tracer().reset_events();
   checker.reset();
 
-  false_bool = false;
-  true_bool = true;
-  EXPECT_FALSE(checker.branch(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
-  EXPECT_TRUE(checker.find_next_path());
+  {
+    false_bool = false;
+    true_bool = true;
+    EXPECT_FALSE(checker.branch(true_bool));
+    EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
+    EXPECT_TRUE(checker.find_next_path());
+  }
 
-  false_bool = false;
-  true_bool = true;
-  EXPECT_TRUE(checker.branch(true_bool));
-  EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
-  EXPECT_FALSE(checker.find_next_path());
+  {
+    false_bool = false;
+    true_bool = true;
+    EXPECT_TRUE(checker.branch(true_bool));
+    EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
+    EXPECT_FALSE(checker.find_next_path());
+  }
 
-  tracer().reset();
+  // see above
+  tracer().reset_events();
   checker.reset();
 
-  false_bool = false;
-  true_bool = true;
-  EXPECT_FALSE(checker.branch(false_bool));
-  EXPECT_FALSE(checker.branch(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
-  EXPECT_TRUE(checker.find_next_path());
+  {
+    false_bool = false;
+    true_bool = true;
+    EXPECT_FALSE(checker.branch(false_bool));
+    EXPECT_FALSE(checker.branch(true_bool));
+    EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
+    EXPECT_TRUE(checker.find_next_path());
+  }
 
-  false_bool = false;
-  true_bool = true;
-  EXPECT_FALSE(checker.branch(false_bool));
-  EXPECT_TRUE(checker.branch(true_bool));
-  EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
-  EXPECT_TRUE(checker.find_next_path());
+  {
+    false_bool = false;
+    true_bool = true;
+    EXPECT_FALSE(checker.branch(false_bool));
+    EXPECT_TRUE(checker.branch(true_bool));
+    EXPECT_EQ(smt::sat, encoder.check(true_bool, tracer(), checker));
+    EXPECT_TRUE(checker.find_next_path());
+  }
 
-  false_bool = false;
-  true_bool = true;
-  EXPECT_TRUE(checker.branch(false_bool));
-  checker.add_error(true_bool);
-  EXPECT_FALSE(checker.branch(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
-  EXPECT_TRUE(checker.find_next_path());
+  {
+    false_bool = false;
+    true_bool = true;
+    EXPECT_TRUE(checker.branch(false_bool));
+    checker.add_error(true_bool);
+    EXPECT_FALSE(checker.branch(true_bool));
+    EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
+    EXPECT_TRUE(checker.find_next_path());
+  }
 
-  false_bool = false;
-  true_bool = true;
-  EXPECT_TRUE(checker.branch(false_bool));
-  EXPECT_TRUE(checker.branch(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
-  EXPECT_FALSE(checker.find_next_path());
+  {
+    false_bool = false;
+    true_bool = true;
+    EXPECT_TRUE(checker.branch(false_bool));
+    EXPECT_TRUE(checker.branch(true_bool));
+    EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
+    EXPECT_FALSE(checker.find_next_path());
+  }
 
-  tracer().reset();
+  // see above
+  tracer().reset_events();
   checker.reset();
 
-  false_bool = false;
-  true_bool = true;
-  EXPECT_FALSE(checker.branch(false_bool));
-  EXPECT_FALSE(checker.branch(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
-  EXPECT_TRUE(checker.find_next_path());
+  {
+    false_bool = false;
+    true_bool = true;
+    EXPECT_FALSE(checker.branch(false_bool));
+    EXPECT_FALSE(checker.branch(true_bool));
+    EXPECT_EQ(smt::unsat, encoder.check(true_bool, tracer(), checker));
+    EXPECT_TRUE(checker.find_next_path());
+  }
 
-  false_bool = false;
-  true_bool = true;
-  EXPECT_FALSE(checker.branch(false_bool));
-  EXPECT_TRUE(checker.branch(true_bool));
-  checker.add_error(true_bool);
-  EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
-  EXPECT_TRUE(checker.find_next_path());
+  {
+    false_bool = false;
+    true_bool = true;
+    EXPECT_FALSE(checker.branch(false_bool));
+    EXPECT_TRUE(checker.branch(true_bool));
+    checker.add_error(true_bool);
+    EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
+    EXPECT_TRUE(checker.find_next_path());
+  }
 
-  false_bool = false;
-  true_bool = true;
-  EXPECT_TRUE(checker.branch(false_bool));
-  checker.add_error(true_bool);
-  EXPECT_FALSE(checker.branch(true_bool));
-  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
-  EXPECT_TRUE(checker.find_next_path());
+  {
+    false_bool = false;
+    true_bool = true;
+    EXPECT_TRUE(checker.branch(false_bool));
+    checker.add_error(true_bool);
+    EXPECT_FALSE(checker.branch(true_bool));
+    EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
+    EXPECT_TRUE(checker.find_next_path());
+  }
 
-  false_bool = false;
-  true_bool = true;
-  EXPECT_TRUE(checker.branch(false_bool));
-  checker.add_error(true_bool);
-  EXPECT_TRUE(checker.branch(true_bool));
-  checker.add_error(true_bool);
-  EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
-  EXPECT_FALSE(checker.find_next_path());
+  {
+    false_bool = false;
+    true_bool = true;
+    EXPECT_TRUE(checker.branch(false_bool));
+    checker.add_error(true_bool);
+    EXPECT_TRUE(checker.branch(true_bool));
+    checker.add_error(true_bool);
+    EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
+    EXPECT_FALSE(checker.find_next_path());
+  }
 }
 
 TEST(CrvTest, ThinAir) {
