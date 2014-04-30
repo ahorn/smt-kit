@@ -1,0 +1,28 @@
+STP is published under an MIT license.
+
+To get the sources, execute the following commands:
+
+  $ git clone https://github.com/stp/stp.git
+  $ cd stp
+
+One easy way to install STP is as follows:
+
+  $ mkdir build
+  $ cd build
+  $ cmake -G 'Unix Makefiles' ..
+  $ make
+
+More detailed installation instructions can be found
+in the stp/INSTALL file. For example, on OS X (10.9)
+with MacPorts already setup, another way to install
+as well as automatically test STP is as follows:
+
+  $ sudo easy_install lit
+  $ git submodule init
+  $ git submodule update
+  $ mkdir build
+  $ cd build
+  $ cmake -G 'Unix Makefiles' -DENABLE_TESTING=ON ..
+  $ make
+  $ make check
+

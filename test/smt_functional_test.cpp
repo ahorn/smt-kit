@@ -32,6 +32,10 @@ TEST(SmtFunctionalTest, DeMorgan)
   msat_solver.add(lhs != rhs);
   EXPECT_EQ(smt::unsat, msat_solver.check());
 
+  smt::StpSolver stp_solver(smt::QF_BV_LOGIC);
+  stp_solver.add(lhs != rhs);
+  EXPECT_EQ(smt::unsat, stp_solver.check());
+
   smt::CVC4Solver cvc4_solver(smt::QF_AUFBV_LOGIC);
   cvc4_solver.add(lhs != rhs);
   EXPECT_EQ(smt::unsat, cvc4_solver.check());
@@ -53,6 +57,10 @@ TEST(SmtFunctionalTest, SeparateDecls)
   smt::MsatSolver msat_solver;
   msat_solver.add(lhs != rhs);
   EXPECT_EQ(smt::unsat, msat_solver.check());
+
+  smt::StpSolver stp_solver;
+  stp_solver.add(lhs != rhs);
+  EXPECT_EQ(smt::unsat, stp_solver.check());
 
   smt::CVC4Solver cvc4_solver;
   cvc4_solver.add(lhs != rhs);
@@ -98,6 +106,22 @@ TEST(SmtFunctionalTest, BitVectors)
   }
   msat_solver.pop();
 
+  smt::StpSolver stp_solver;
+  stp_solver.add(equality);
+
+  stp_solver.push();
+  {
+    stp_solver.add(z != 0L);
+    EXPECT_EQ(smt::unsat, stp_solver.check());
+  }
+  stp_solver.pop();
+  stp_solver.push();
+  {
+    stp_solver.add(z == 0L);
+    EXPECT_EQ(smt::sat, stp_solver.check());
+  }
+  stp_solver.pop();
+
   smt::CVC4Solver cvc4_solver;
   cvc4_solver.add(equality);
 
@@ -128,6 +152,10 @@ TEST(SmtFunctionalTest, UnsafeExpr)
   smt::MsatSolver msat_solver;
   msat_solver.unsafe_add(equality);
   EXPECT_EQ(smt::sat, msat_solver.check());
+
+  smt::StpSolver stp_solver;
+  stp_solver.unsafe_add(equality);
+  EXPECT_EQ(smt::sat, stp_solver.check());
 
   smt::CVC4Solver cvc4_solver;
   cvc4_solver.unsafe_add(equality);
@@ -176,6 +204,38 @@ TEST(SmtFunctionalTest, Array)
   smt::MsatSolver msat_solver;
   msat_solver.add(smt::select(new_array, index) != value);
   EXPECT_EQ(smt::unsat, msat_solver.check());
+
+  smt::CVC4Solver cvc4_solver;
+  cvc4_solver.add(smt::select(new_array, index) != value);
+  EXPECT_EQ(smt::unsat, cvc4_solver.check());
+}
+
+TEST(SmtFunctionalTest, BvArray)
+{
+  typedef smt::Array<smt::Bv<unsigned>, smt::Bv<char>> UnsignedToCharArray;
+  const smt::Decl<UnsignedToCharArray> array_decl("array");
+
+  UnsignedToCharArray array, new_array;
+  smt::Bv<unsigned> index;
+  smt::Bv<char> value;
+
+  array = smt::constant(array_decl);
+  index = smt::any<smt::Bv<unsigned>>("index");
+  value = smt::literal<smt::Bv<char>>('p');
+
+  new_array = smt::store(array, index, value);
+
+  smt::Z3Solver z3_solver;
+  z3_solver.add(smt::select(new_array, index) != value);
+  EXPECT_EQ(smt::unsat, z3_solver.check());
+
+  smt::MsatSolver msat_solver;
+  msat_solver.add(smt::select(new_array, index) != value);
+  EXPECT_EQ(smt::unsat, msat_solver.check());
+
+  smt::StpSolver stp_solver;
+  stp_solver.add(smt::select(new_array, index) != value);
+  EXPECT_EQ(smt::unsat, stp_solver.check());
 
   smt::CVC4Solver cvc4_solver;
   cvc4_solver.add(smt::select(new_array, index) != value);

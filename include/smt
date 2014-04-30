@@ -1,4 +1,4 @@
-// Copyright 2013, Alex Horn. All rights reserved.
+// Copyright 2013-2014, Alex Horn. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "smt.h"
 #include "smt_z3.h"
 #include "smt_msat.h"
+#include "smt_stp.h"
 #include "smt_cvc4.h"
 
 #endif

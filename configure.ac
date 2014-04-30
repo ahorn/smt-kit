@@ -39,12 +39,13 @@ AS_IF([test x$CLANG = xyes], [CXXFLAGS="$CXXFLAGS -stdlib=libc++"])
 
 Z3_DIR="solvers/z3"
 MSAT_DIR="solvers/msat"
+STP_DIR="solvers/stp"
 CVC4_DIR="solvers/CVC4"
 GMP_DIR="/opt/local"
 
 # Search for SMT and SAT solver libraries
-CXXFLAGS="$CXXFLAGS -I$Z3_DIR/src/api -I$Z3_DIR/src/api/c++ -I$MSAT_DIR/include -I$CVC4_DIR/target/include -I$GMP_DIR/include"
-LDFLAGS="$LDFLAGS -L$Z3_DIR/build -L$MSAT_DIR/lib -L$CVC4_DIR/target/lib -L$GMP_DIR/lib -lcvc4"
+CXXFLAGS="$CXXFLAGS -I$Z3_DIR/src/api -I$Z3_DIR/src/api/c++ -I$MSAT_DIR/include -I$CVC4_DIR/target/include -I$GMP_DIR/include -I$STP_DIR/build/include"
+LDFLAGS="$LDFLAGS -L$Z3_DIR/build -L$MSAT_DIR/lib -L$CVC4_DIR/target/lib -L$GMP_DIR/lib -lcvc4 -L$STP_DIR/build/lib"
 
 AC_SEARCH_LIBS([Z3_mk_config], [z3], , AC_MSG_ERROR([Unable to find Z3 theorem prover]))
 AX_CXX_CHECK_LIB(cvc4, [CVC4::SmtEngine::push] , AC_MSG_ERROR([Unable to find CVC4 theorem prover]))
@@ -52,6 +53,7 @@ AX_CXX_CHECK_LIB(cvc4, [CVC4::SmtEngine::push] , AC_MSG_ERROR([Unable to find CV
 AC_CHECK_LIB(stdc++, main, ,[AC_MSG_ERROR([Unable to find stdc++])])
 AC_CHECK_LIB(gmp, __gmpz_init, ,[AC_MSG_ERROR([Unable to find gmp])])
 AC_SEARCH_LIBS([msat_create_config], [mathsat], , AC_MSG_ERROR([Unable to find MathSAT5]), [-lstdc++ -lgmp])
+AC_SEARCH_LIBS([vc_createValidityChecker], [stp], , AC_MSG_ERROR([Unable to find STP]))
 
 # Output the generated files. No further autoconf macros may be used.
 AC_OUTPUT

@@ -61,6 +61,7 @@ pkginclude_HEADERS = \
   include/smt.h \
   include/smt_z3.h \
   include/smt_msat.h \
+  include/smt_stp.h \
   include/smt_cvc4.h \
   include/crv.h
 
@@ -91,6 +92,7 @@ test_smt_SOURCES = \
   test/smt_test.cpp \
   test/smt_z3_test.cpp \
   test/smt_msat_test.cpp \
+  test/smt_stp_test.cpp \
   test/smt_cvc4_test.cpp \
   test/smt_functional_test.cpp \
   test/crv_test.cpp \
