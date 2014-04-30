@@ -796,11 +796,7 @@ TEST(SmtStpTest, BvSignExtend)
     s.add(y == bv_cast<int16_t>(x));
     s.add(y != 0x0007);
 
-
-
     EXPECT_EQ(unsat, s.check());
-
-vc_printCounterExample(s.vc());
   }
   s.pop();
 
