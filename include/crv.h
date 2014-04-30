@@ -3129,7 +3129,7 @@ private:
 public:
   Encoder()
 #ifdef _BV_THEORY_
-  : m_solver(smt::QF_AUFBV_LOGIC),
+  : m_solver(smt::QF_ABV_LOGIC),
 #else
   : m_solver(smt::QF_AUFLIRA_LOGIC),
 #endif
@@ -3512,7 +3512,7 @@ public:
   DfsPruneChecker()
   : DfsChecker(),
 #ifdef _BV_THEORY_
-    m_solver(smt::QF_AUFBV_LOGIC),
+    m_solver(smt::QF_ABV_LOGIC),
 #else
     m_solver(smt::QF_AUFLIRA_LOGIC),
 #endif
