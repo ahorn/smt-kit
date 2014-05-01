@@ -377,6 +377,31 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
     const Sort& sort,
     const UnsafeTerms& args) override
   {
+    Error err;
+
+    if (opcode == NEQ)
+    {
+      // pair-wise disequality, formula size O(N^2)
+      const Sort& bool_sort = internal::sort<Bool>();
+      VCExpr distinct_expr = vc_trueExpr(m_vc);
+      for (UnsafeTerms::const_iterator outer = args.cbegin();
+           outer != args.cend(); outer++)
+      {
+        for (UnsafeTerms::const_iterator inner = outer + 1;
+             inner != args.cend(); inner++)
+         {
+          err = encode_binary(NEQ, bool_sort, *outer, *inner);
+          if (err)
+            return err;
+
+          distinct_expr = vc_andExpr(m_vc, distinct_expr, m_expr);
+        }
+
+      }
+      m_expr = distinct_expr;
+      return OK;
+    }
+
     return UNSUPPORT_ERROR;
   }
 

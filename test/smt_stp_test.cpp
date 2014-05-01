@@ -665,7 +665,60 @@ TEST(SmtStpTest, Distinct)
 
   Bool d(distinct(std::move(operand_terms)));
 
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(d).encode(s));
+  EXPECT_EQ(OK, static_cast<UnsafeTerm>(d).encode(s));
+
+  unsigned long len;
+  print(s.vc(), s.expr(), len);
+  EXPECT_EQ(69, len);
+  EXPECT_EQ("((( NOT( (x = y\n))) AND "
+              "( NOT( (x = z\n)))\n) AND "
+              "( NOT( (y = z\n)))\n) ", std::string(buf));
+
+  s.add(d);
+
+  EXPECT_EQ(sat, s.check());
+
+  s.push();
+  {
+    s.add(x == y);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == z);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(y == z);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == w);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(y == w);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(z == w);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
 }
 
 TEST(SmtStpTest, AutoConfig)
