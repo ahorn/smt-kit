@@ -12,6 +12,17 @@ One easy way to install STP is as follows:
   $ cmake -G 'Unix Makefiles' ..
   $ make
 
+If the static Boost libraries are not installed
+on your machine, check out the following link:
+
+  https://github.com/stp/stp/issues/96
+
+Another known issue is that STP does not currently
+support multiple solver instances. This manifests
+itself as TermToConstTermUsingModel fatal errors:
+
+  https://github.com/stp/stp/issues/97
+
 More detailed installation instructions can be found
 in the stp/INSTALL file. For example, on OS X (10.9)
 with MacPorts already setup, another way to install
