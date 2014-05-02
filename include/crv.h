@@ -2330,12 +2330,7 @@ private:
   }
 
 public:
-#ifdef _BV_THEORY_
-  smt::MsatSolver m_solver;
-#else
   smt::Z3Solver m_solver;
-#endif
-
   std::unordered_map<EventIdentifier, Time> m_time_map;
 
 #ifdef _SUP_READ_FROM_
@@ -3540,6 +3535,29 @@ public:
   {
     m_is_feasible = true;
     return DfsChecker::find_next_path();
+  }
+
+  /// Check for any program safety violations (i.e. bugs)
+
+  /// Use SAT/SMT solver to check the satisfiability of the
+  /// disjunction of errors() and tracer.guard() conjoined with
+  /// the conjunction of assertions() (if any)
+  ///
+  /// pre: not Checker::errors().is_null()
+  smt::CheckResult check(const Tracer& tracer)
+  {
+    assert(!Checker::errors().is_null());
+
+    m_solver.push();
+    m_solver.add(tracer.guard());
+    m_solver.add(Checker::errors());
+
+    if (!Checker::assertions().is_null())
+      m_solver.add(Checker::assertions());
+
+    const smt::CheckResult result = m_solver.check();
+    m_solver.pop();
+    return result;
   }
 };
 

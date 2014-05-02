@@ -49,7 +49,6 @@ TEST(CrvFunctionalTest, SafeCounter)
 
   crv::tracer().reset();
   crv::dfs_prune_checker().reset();
-  crv::Encoder encoder;
 
   do
   {
@@ -64,7 +63,7 @@ TEST(CrvFunctionalTest, SafeCounter)
     }
 
     crv::dfs_prune_checker().add_error(0 <= y && y != n);
-    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_prune_checker()));
+    EXPECT_EQ(smt::unsat, crv::dfs_prune_checker().check(crv::tracer()));
   }
   while (crv::dfs_prune_checker().find_next_path());
 }
@@ -75,7 +74,6 @@ TEST(CrvFunctionalTest, UnsafeCounter)
 
   crv::tracer().reset();
   crv::dfs_prune_checker().reset();
-  crv::Encoder encoder;
 
   bool error = false;
   do
@@ -91,7 +89,7 @@ TEST(CrvFunctionalTest, UnsafeCounter)
     }
 
     crv::dfs_prune_checker().add_error(0 <= y && y == n);
-    error |= smt::sat == encoder.check(crv::tracer(), crv::dfs_prune_checker());
+    error |= smt::sat == crv::dfs_prune_checker().check(crv::tracer());
   }
   while (crv::dfs_prune_checker().find_next_path());
   EXPECT_TRUE(error);
@@ -141,7 +139,6 @@ TEST(CrvFunctionalTest, SafeInsertionSort)
 
   crv::tracer().reset();
   crv::dfs_prune_checker().reset();
-  crv::Encoder encoder;
 
   do
   {
@@ -151,7 +148,7 @@ TEST(CrvFunctionalTest, SafeInsertionSort)
     for (unsigned i = 0; i < N - 1; i++)
       crv::dfs_prune_checker().add_error(!(a[i] <= a[i+1]));
 
-    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_prune_checker()));
+    EXPECT_EQ(smt::unsat, crv::dfs_prune_checker().check(crv::tracer()));
   }
   while (crv::dfs_prune_checker().find_next_path());
 }
@@ -186,7 +183,6 @@ TEST(CrvFunctionalTest, UnsafeInsertionSort)
 
   crv::tracer().reset();
   crv::dfs_prune_checker().reset();
-  crv::Encoder encoder;
 
   bool error = false;
   do
@@ -197,7 +193,7 @@ TEST(CrvFunctionalTest, UnsafeInsertionSort)
     for (unsigned i = 0; i < N - 1; i++)
       crv::dfs_prune_checker().add_error(!(a[i] <= a[i+1]));
 
-    error |= smt::sat == encoder.check(crv::tracer(), crv::dfs_prune_checker());
+    error |= smt::sat == crv::dfs_prune_checker().check(crv::tracer());
   }
   while (crv::dfs_prune_checker().find_next_path() && !error);
   EXPECT_TRUE(error);
@@ -251,7 +247,6 @@ TEST(CrvFunctionalTest, SafeMergeSort)
 
   crv::tracer().reset();
   crv::dfs_prune_checker().reset();
-  crv::Encoder encoder;
 
   do
   {
@@ -262,7 +257,7 @@ TEST(CrvFunctionalTest, SafeMergeSort)
     for (unsigned i = 0; i < N - 1; i++)
       crv::dfs_prune_checker().add_error(!(a[i] <= a[i+1]));
 
-    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_prune_checker()));
+    EXPECT_EQ(smt::unsat, crv::dfs_prune_checker().check(crv::tracer()));
   }
   while (crv::dfs_prune_checker().find_next_path());
 }
@@ -314,7 +309,6 @@ TEST(CrvFunctionalTest, UnsafeMergeSort)
 
   crv::tracer().reset();
   crv::dfs_prune_checker().reset();
-  crv::Encoder encoder;
 
   bool error = false;
   do
@@ -326,7 +320,7 @@ TEST(CrvFunctionalTest, UnsafeMergeSort)
     for (unsigned i = 0; i < N - 1; i++)
       crv::dfs_prune_checker().add_error(!(a[i] <= a[i+1]));
 
-    error |= smt::sat == encoder.check(crv::tracer(), crv::dfs_prune_checker());
+    error |= smt::sat == crv::dfs_prune_checker().check(crv::tracer());
   }
   while (crv::dfs_prune_checker().find_next_path() && !error);
   EXPECT_TRUE(error);
@@ -398,7 +392,6 @@ TEST(CrvFunctionalTest, SafeBst)
 
   crv::tracer().reset();
   crv::dfs_prune_checker().reset();
-  crv::Encoder encoder;
 
   do
   {
@@ -415,7 +408,7 @@ TEST(CrvFunctionalTest, SafeBst)
     for (unsigned i = 0; i < N - 1; i++)
       crv::dfs_prune_checker().add_error(!(bst_a[i] <= bst_a[i+1]));
 
-    EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_prune_checker()));
+    EXPECT_EQ(smt::unsat, crv::dfs_prune_checker().check(crv::tracer()));
   }
   while (crv::dfs_prune_checker().find_next_path());
 }
@@ -455,7 +448,6 @@ TEST(CrvFunctionalTest, UnsafeBst)
 
   crv::tracer().reset();
   crv::dfs_prune_checker().reset();
-  crv::Encoder encoder;
 
   bool error = false;
   do
@@ -473,7 +465,7 @@ TEST(CrvFunctionalTest, UnsafeBst)
     for (unsigned i = 0; i < N - 1; i++)
       crv::dfs_prune_checker().add_error(!(bst_a[i] <= bst_a[i+1]));
 
-    error |= smt::sat == encoder.check(crv::tracer(), crv::dfs_prune_checker());
+    error |= smt::sat == crv::dfs_prune_checker().check(crv::tracer());
   }
   while (crv::dfs_prune_checker().find_next_path() && !error);
   EXPECT_TRUE(error);
