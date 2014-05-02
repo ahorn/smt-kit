@@ -8,6 +8,7 @@
 #include <limits>
 #include <cinttypes>
 #include <mathsat.h>
+#include <unordered_map>
 
 #include "smt.h"
 
@@ -21,13 +22,35 @@ private:
   msat_env m_env;
   msat_term m_term;
 
-  void set_term(msat_term term)
+  typedef std::unordered_map<uintptr_t, const msat_term> TermMap;
+  TermMap m_term_map;
+
+  // \return has m_term been set to cached expression?
+  bool find_term(const Expr* const expr)
+  {
+    const TermMap::const_iterator citer = m_term_map.find(
+      reinterpret_cast<uintptr_t>(expr));
+
+    if (citer == m_term_map.cend())
+      return false;
+
+    m_term = citer->second;
+    return true;
+  }
+
+  // \pre: not find_term(expr)
+  void cache_term(const Expr* const expr, const msat_term term)
   {
     m_term = term;
     assert(!MSAT_ERROR_TERM(m_term));
+
+    bool ok = std::get<1>(m_term_map.emplace(
+      reinterpret_cast<uintptr_t>(expr), term));
+    assert(ok);
   }
 
   Error encode_number(
+     const Expr* const expr,
      const Sort& sort,
      const std::string& literal_rep)
   {
@@ -35,10 +58,10 @@ private:
 
     const char * const literal_str = literal_rep.c_str(); 
     if (sort.is_int()) {
-      set_term(msat_make_number(m_env, literal_str));
+      cache_term(expr, msat_make_number(m_env, literal_str));
     } else if (sort.is_bv()) {
       constexpr size_t base = 10;
-      set_term(msat_make_bv_number(m_env, literal_str,
+      cache_term(expr, msat_make_bv_number(m_env, literal_str,
         sort.bv_size(), base));
     } else {
       return UNSUPPORT_ERROR;
@@ -49,6 +72,7 @@ private:
 
   template<typename T>
   Error encode_literal(
+     const Expr* const expr,
      const Sort& sort,
      typename std::enable_if<std::is_unsigned<T>::value, T>::type literal)
   {
@@ -56,44 +80,49 @@ private:
 
     if (sort.is_bool()) {
       if (literal) {
-        set_term(msat_make_true(m_env));
+        cache_term(expr, msat_make_true(m_env));
       } else {
-        set_term(msat_make_false(m_env));
+        cache_term(expr, msat_make_false(m_env));
       }
       return OK;
     }
 
-    return encode_number(sort, std::to_string(literal));
+    return encode_number(expr, sort, std::to_string(literal));
   }
 
   template<typename T>
   Error encode_literal(
+     const Expr* const expr,
      const Sort& sort,
      typename std::enable_if<std::is_signed<T>::value, T>::type literal)
   {
     if (sort.is_bv() and literal < 0) {
       assert(std::numeric_limits<intmax_t>::min() < literal);
       std::string abs_literal_rep = std::to_string(std::abs(literal));
-      const Error err = encode_number(sort, std::move(abs_literal_rep));
-      if (err) {
-        return err;
-      }
 
-      set_term(msat_make_bv_neg(m_env, m_term));
+      constexpr size_t base = 10;
+      const msat_term number_term = msat_make_bv_number(m_env,
+        abs_literal_rep.c_str(), sort.bv_size(), base);
+
+      assert(!MSAT_ERROR_TERM(number_term));
+      cache_term(expr, msat_make_bv_neg(m_env, number_term));
       return OK;
     }
 
-    return encode_number(sort, std::to_string(literal));
+    return encode_number(expr, sort, std::to_string(literal));
   }
 
-#define SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(type) \
-  virtual Error __encode_literal(                  \
-     const Expr* const expr,                       \
-     const Sort& sort,                             \
-     type literal) override                        \
-  {                                                \
-    return encode_literal<type>(sort, literal);    \
-  }                                                \
+#define SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(type)    \
+  virtual Error __encode_literal(                     \
+     const Expr* const expr,                          \
+     const Sort& sort,                                \
+     type literal) override                           \
+  {                                                   \
+    if (find_term(expr))                              \
+      return OK;                                      \
+                                                      \
+    return encode_literal<type>(expr, sort, literal); \
+  }                                                   \
 
 SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(bool)
 SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(char)
@@ -167,6 +196,9 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const Expr* const expr,
     const UnsafeDecl& decl) override
   {
+    if (find_term(expr))
+      return OK;
+
     Error err;
 
     msat_type type;
@@ -177,7 +209,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const char* const name = decl.symbol().c_str();
     const msat_decl constant_decl = msat_declare_function(m_env, name, type);
     assert(!MSAT_ERROR_DECL(constant_decl));
-    set_term(msat_make_constant(m_env, constant_decl));
+    cache_term(expr, msat_make_constant(m_env, constant_decl));
     return OK;
   }
 
@@ -187,6 +219,9 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const size_t arity,
     const UnsafeTerm* const args) override
   {
+    if (find_term(expr))
+      return OK;
+
     Error err;
     msat_type func_type;
     err = build_type(decl.sort(), func_type);
@@ -206,7 +241,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const char* const name = decl.symbol().c_str();
     const msat_decl func_decl = msat_declare_function(m_env, name, func_type);
     assert(!MSAT_ERROR_DECL(func_decl));
-    set_term(msat_make_uf(m_env, func_decl, arg_terms));
+    cache_term(expr, msat_make_uf(m_env, func_decl, arg_terms));
     return OK;
   }
 
@@ -223,6 +258,9 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const UnsafeTerm& array,
     const UnsafeTerm& index) override
   {
+    if (find_term(expr))
+      return OK;
+
     Error err;
     err = array.encode(*this);
     if (err) {
@@ -236,7 +274,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     }
     const msat_term index_term = m_term;
 
-    set_term(msat_make_array_read(m_env, array_term, index_term));
+    cache_term(expr, msat_make_array_read(m_env, array_term, index_term));
     return OK;
   }
 
@@ -246,6 +284,9 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const UnsafeTerm& index,
     const UnsafeTerm& value) override
   {
+    if (find_term(expr))
+      return OK;
+
     Error err;
     err = array.encode(*this);
     if (err) {
@@ -265,7 +306,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     }
     const msat_term value_term = m_term;
 
-    set_term(msat_make_array_write(m_env, array_term, index_term, value_term));
+    cache_term(expr, msat_make_array_write(m_env, array_term, index_term, value_term));
     return OK;
   }
 
@@ -275,6 +316,9 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const Sort& sort,
     const UnsafeTerm& arg) override
   {
+    if (find_term(expr))
+      return OK;
+
     const Error err = arg.encode(*this);
     if (err) {
       return err;
@@ -282,14 +326,14 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
     switch (opcode) {
     case LNOT:
-      set_term(msat_make_not(m_env, m_term));
+      cache_term(expr, msat_make_not(m_env, m_term));
       break;
     case NOT:
-      set_term(msat_make_bv_not(m_env, m_term));
+      cache_term(expr, msat_make_bv_not(m_env, m_term));
       break;
     case SUB:
       if (sort.is_bv()) {
-        set_term(msat_make_bv_neg(m_env, m_term));
+        cache_term(expr, msat_make_bv_neg(m_env, m_term));
       } else {
         return UNSUPPORT_ERROR;
       }
@@ -308,6 +352,9 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const UnsafeTerm& larg,
     const UnsafeTerm& rarg) override
   {
+    if (find_term(expr))
+      return OK;
+
     Error err;
     err = larg.encode(*this);
     if (err) {
@@ -323,51 +370,51 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
     switch (opcode) {
     case SUB:
-      set_term(msat_make_bv_minus(m_env, lterm, rterm));
+      cache_term(expr, msat_make_bv_minus(m_env, lterm, rterm));
       break;
     case AND:
-      set_term(msat_make_bv_and(m_env, lterm, rterm));
+      cache_term(expr, msat_make_bv_and(m_env, lterm, rterm));
       break;
     case OR:
-      set_term(msat_make_bv_or(m_env, lterm, rterm));
+      cache_term(expr, msat_make_bv_or(m_env, lterm, rterm));
       break;
     case XOR:
-      set_term(msat_make_bv_xor(m_env, lterm, rterm));
+      cache_term(expr, msat_make_bv_xor(m_env, lterm, rterm));
       break;
     case LAND:
-      set_term(msat_make_and(m_env, lterm, rterm));
+      cache_term(expr, msat_make_and(m_env, lterm, rterm));
       break;
     case LOR:
-      set_term(msat_make_or(m_env, lterm, rterm));
+      cache_term(expr, msat_make_or(m_env, lterm, rterm));
       break;
     case IMP:
       {
         const msat_term not_lterm = msat_make_not(m_env, lterm);
         assert(!MSAT_ERROR_TERM(not_lterm));
-        set_term(msat_make_or(m_env, not_lterm, rterm));
+        cache_term(expr, msat_make_or(m_env, not_lterm, rterm));
       }
       break;
     case EQL:
       if (larg.sort().is_bool()) {
-        set_term(msat_make_iff(m_env, lterm, rterm));
+        cache_term(expr, msat_make_iff(m_env, lterm, rterm));
       } else {
-        set_term(msat_make_equal(m_env, lterm, rterm));
+        cache_term(expr, msat_make_equal(m_env, lterm, rterm));
       }
       break;
     case ADD:
       if (sort.is_bv()) {
-        set_term(msat_make_bv_plus(m_env, lterm, rterm));
+        cache_term(expr, msat_make_bv_plus(m_env, lterm, rterm));
       } else if (sort.is_int()) {
-        set_term(msat_make_plus(m_env, lterm, rterm));
+        cache_term(expr, msat_make_plus(m_env, lterm, rterm));
       } else {
         return UNSUPPORT_ERROR;
       }
       break;
     case MUL:
       if (sort.is_bv()) {
-        set_term(msat_make_bv_times(m_env, lterm, rterm));
+        cache_term(expr, msat_make_bv_times(m_env, lterm, rterm));
       } else if (sort.is_int()) {
-        set_term(msat_make_times(m_env, lterm, rterm));
+        cache_term(expr, msat_make_times(m_env, lterm, rterm));
       } else {
         return UNSUPPORT_ERROR;
       }
@@ -375,9 +422,9 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     case QUO:
       if (sort.is_bv()) {
         if (sort.is_signed()) {
-          set_term(msat_make_bv_sdiv(m_env, lterm, rterm));
+          cache_term(expr, msat_make_bv_sdiv(m_env, lterm, rterm));
         } else {
-          set_term(msat_make_bv_udiv(m_env, lterm, rterm));
+          cache_term(expr, msat_make_bv_udiv(m_env, lterm, rterm));
         }
       } else {
         return UNSUPPORT_ERROR;
@@ -386,9 +433,9 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     case REM:
       if (sort.is_bv()) {
         if (sort.is_signed()) {
-          set_term(msat_make_bv_srem(m_env, lterm, rterm));
+          cache_term(expr, msat_make_bv_srem(m_env, lterm, rterm));
         } else {
-          set_term(msat_make_bv_urem(m_env, lterm, rterm));
+          cache_term(expr, msat_make_bv_urem(m_env, lterm, rterm));
         }
       } else {
         return UNSUPPORT_ERROR;
@@ -397,9 +444,9 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     case LSS:
       if (larg.sort().is_bv()) {
         if (larg.sort().is_signed()) {
-          set_term(msat_make_bv_slt(m_env, lterm, rterm));
+          cache_term(expr, msat_make_bv_slt(m_env, lterm, rterm));
         } else {
-          set_term(msat_make_bv_ult(m_env, lterm, rterm));
+          cache_term(expr, msat_make_bv_ult(m_env, lterm, rterm));
         }
       } else if (larg.sort().is_int()) {
         const msat_term leq_term = msat_make_leq(m_env, lterm, rterm);
@@ -408,7 +455,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
         assert(!MSAT_ERROR_TERM(eq_term));
         const msat_term neq_term = msat_make_not(m_env, eq_term);
         assert(!MSAT_ERROR_TERM(neq_term));
-        set_term(msat_make_and(m_env, leq_term, neq_term));
+        cache_term(expr, msat_make_and(m_env, leq_term, neq_term));
       } else {
         return UNSUPPORT_ERROR;
       }
@@ -416,9 +463,9 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     case GTR:
       if (larg.sort().is_bv()) {
         if (larg.sort().is_signed()) {
-          set_term(msat_make_bv_slt(m_env, rterm, lterm));
+          cache_term(expr, msat_make_bv_slt(m_env, rterm, lterm));
         } else {
-          set_term(msat_make_bv_ult(m_env, rterm, lterm));
+          cache_term(expr, msat_make_bv_ult(m_env, rterm, lterm));
         }
       } else if (larg.sort().is_int()) {
         const msat_term geq_term = msat_make_leq(m_env, rterm, lterm);
@@ -427,7 +474,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
         assert(!MSAT_ERROR_TERM(eq_term));
         const msat_term neq_term = msat_make_not(m_env, eq_term);
         assert(!MSAT_ERROR_TERM(neq_term));
-        set_term(msat_make_and(m_env, geq_term, neq_term));
+        cache_term(expr, msat_make_and(m_env, geq_term, neq_term));
       }
       break;
     case NEQ:
@@ -438,28 +485,28 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
         eq_term = msat_make_equal(m_env, lterm, rterm);
       }
       assert(!MSAT_ERROR_TERM(eq_term));
-      set_term(msat_make_not(m_env, eq_term));
+      cache_term(expr, msat_make_not(m_env, eq_term));
       break;
     case LEQ:
       if (larg.sort().is_bv()) {
         if (larg.sort().is_signed()) {
-          set_term(msat_make_bv_sleq(m_env, lterm, rterm));
+          cache_term(expr, msat_make_bv_sleq(m_env, lterm, rterm));
         } else {
-          set_term(msat_make_bv_uleq(m_env, lterm, rterm));
+          cache_term(expr, msat_make_bv_uleq(m_env, lterm, rterm));
         }
       } else if (larg.sort().is_int()) {
-        set_term(msat_make_leq(m_env, lterm, rterm));
+        cache_term(expr, msat_make_leq(m_env, lterm, rterm));
       }
       break;
     case GEQ:
       if (larg.sort().is_bv()) {
         if (larg.sort().is_signed()) {
-          set_term(msat_make_bv_sleq(m_env, rterm, lterm));
+          cache_term(expr, msat_make_bv_sleq(m_env, rterm, lterm));
         } else {
-          set_term(msat_make_bv_uleq(m_env, rterm, lterm));
+          cache_term(expr, msat_make_bv_uleq(m_env, rterm, lterm));
         }
       } else if (larg.sort().is_int()) {
-        set_term(msat_make_leq(m_env, rterm, lterm));
+        cache_term(expr, msat_make_leq(m_env, rterm, lterm));
       }
       break;
     default:
@@ -475,28 +522,46 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const Sort& sort,
     const UnsafeTerms& args) override
   {
-    if (opcode == NEQ) {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+
+    if (opcode == NEQ)
+    {
       // pair-wise disequality, formula size O(N^2)
       const Sort& bool_sort = internal::sort<Bool>();
       msat_term distinct_term = msat_make_true(m_env);
-      assert(!MSAT_ERROR_TERM(distinct_term));
       for (UnsafeTerms::const_iterator outer = args.cbegin();
-           outer != args.cend(); outer++) {
+           outer != args.cend(); ++outer)
+      {
+        outer->encode(*this);
+        const msat_term outer_term = m_term;
 
         for (UnsafeTerms::const_iterator inner = outer + 1;
-             inner != args.cend(); inner++) {
+             inner != args.cend(); ++inner)
+        {
+          assert(outer->sort() == inner->sort());
 
-          encode_binary(expr, NEQ, bool_sort, *outer, *inner);
-          distinct_term = msat_make_and(m_env, distinct_term, m_term);
-          assert(!MSAT_ERROR_TERM(distinct_term));
+          inner->encode(*this);
+          const msat_term inner_term = m_term;
+
+          msat_term eq_term;
+          if (outer->sort().is_bool())
+            eq_term = msat_make_iff(m_env, outer_term, inner_term);
+          else
+            eq_term = msat_make_equal(m_env, outer_term, inner_term);
+
+          distinct_term = msat_make_and(m_env, distinct_term,
+            msat_make_not(m_env, eq_term));
         }
 
       }
-      m_term = distinct_term;
+      cache_term(expr, distinct_term);
       return OK;
-    } else {
-      return UNSUPPORT_ERROR;
     }
+
+    return UNSUPPORT_ERROR;
   }
 
   virtual Error __encode_bv_zero_extend(
@@ -505,12 +570,15 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const UnsafeTerm& bv,
     const unsigned ext) override
   {
+    if (find_term(expr))
+      return OK;
+
     const Error err = bv.encode(*this);
     if (err) {
       return err;
     }
 
-    set_term(msat_make_bv_zext(m_env, ext, m_term));
+    cache_term(expr, msat_make_bv_zext(m_env, ext, m_term));
     return OK;
   }
 
@@ -520,12 +588,15 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const UnsafeTerm& bv,
     const unsigned ext) override
   {
+    if (find_term(expr))
+      return OK;
+
     const Error err = bv.encode(*this);
     if (err) {
       return err;
     }
 
-    set_term(msat_make_bv_sext(m_env, ext, m_term));
+    cache_term(expr, msat_make_bv_sext(m_env, ext, m_term));
     return OK;
   }
 
@@ -536,24 +607,28 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const unsigned high,
     const unsigned low) override
   {
+    if (find_term(expr))
+      return OK;
+
     const Error err = bv.encode(*this);
     if (err) {
       return err;
     }
 
-    set_term(msat_make_bv_extract(m_env, high, low, m_term));
+    cache_term(expr, msat_make_bv_extract(m_env, high, low, m_term));
     return OK;
   }
 
   virtual void __notify_delete(const Expr* const expr) override
   {
-    // do nothing
+    m_term_map.erase(reinterpret_cast<uintptr_t>(expr));
   }
 
   virtual void __reset() override
   {
     // keeps terms around!
     msat_reset_env(m_env);
+    m_term_map.clear();
   }
 
   virtual void __push() override
@@ -600,7 +675,8 @@ public:
   : Solver(),
     m_config(msat_create_config()),
     m_env(msat_create_env(m_config)),
-    m_term()
+    m_term(),
+    m_term_map()
   {
     assert(!MSAT_ERROR_CONFIG(m_config));
     assert(!MSAT_ERROR_ENV(m_env));
@@ -612,7 +688,8 @@ public:
   : Solver(logic),
     m_config(msat_create_default_config(Logics::acronyms[logic])),
     m_env(msat_create_env(m_config)),
-    m_term()
+    m_term(),
+    m_term_map()
   {
     assert(!MSAT_ERROR_CONFIG(m_config));
     assert(!MSAT_ERROR_ENV(m_env));
