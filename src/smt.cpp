@@ -7,6 +7,8 @@
 namespace smt
 {
 
+Expr::SolverPtrs Expr::s_solver_ptrs;
+
 constexpr const char* const Logics::acronyms[24];
 
 static constexpr size_t MAX_BV_SIZE = 1024;
@@ -90,14 +92,33 @@ UnsafeTerm store(
     array, index, value));
 }
 
+Solver::Solver()
+: m_stats{0}
+{
+  Expr::register_solver(this);
+}
+
+Solver::Solver(Logic logic)
+: m_stats{0}
+{
+  Expr::register_solver(this);
+}
+
+Solver::~Solver()
+{
+  Expr::unregister_solver(this);
+}
+
 Error Solver::encode_constant(
+  const Expr* const expr,
   const UnsafeDecl& decl)
 {
   m_stats.constants++;
-  return __encode_constant(decl);
+  return __encode_constant(expr, decl);
 }
 
 Error Solver::encode_func_app(
+  const Expr* const expr,
   const UnsafeDecl& func_decl,
   const size_t arity,
   const UnsafeTerm* const args)
@@ -106,19 +127,21 @@ Error Solver::encode_func_app(
   assert(args != nullptr);
 
   m_stats.func_apps++;
-  return __encode_func_app(func_decl, arity, args);
+  return __encode_func_app(expr, func_decl, arity, args);
 }
 
 Error Solver::encode_const_array(
+  const Expr* const expr,
   const Sort& sort,
   const UnsafeTerm& init)
 {
   assert(!init.is_null());
 
-  return __encode_const_array(sort, init);
+  return __encode_const_array(expr, sort, init);
 }
 
 Error Solver::encode_array_select(
+  const Expr* const expr,
   const UnsafeTerm& array,
   const UnsafeTerm& index)
 {
@@ -126,10 +149,11 @@ Error Solver::encode_array_select(
   assert(!index.is_null());
 
   m_stats.array_selects++;
-  return __encode_array_select(array, index);
+  return __encode_array_select(expr, array, index);
 }
 
 Error Solver::encode_array_store(
+  const Expr* const expr,
   const UnsafeTerm& array,
   const UnsafeTerm& index,
   const UnsafeTerm& value)
@@ -139,10 +163,11 @@ Error Solver::encode_array_store(
   assert(!value.is_null());
 
   m_stats.array_stores++;
-  return __encode_array_store(array, index, value);
+  return __encode_array_store(expr, array, index, value);
 }
 
 Error Solver::encode_unary(
+  const Expr* const expr,
   Opcode opcode,
   const Sort& sort,
   const UnsafeTerm& arg)
@@ -150,10 +175,11 @@ Error Solver::encode_unary(
   assert(!arg.is_null());
 
   m_stats.unary_ops++;
-  return __encode_unary(opcode, sort, arg);
+  return __encode_unary(expr, opcode, sort, arg);
 }
 
 Error Solver::encode_binary(
+  const Expr* const expr,
   Opcode opcode,
   const Sort& sort,
   const UnsafeTerm& larg,
@@ -190,10 +216,11 @@ Error Solver::encode_binary(
   }
 
   m_stats.binary_ops++;
-  return __encode_binary(opcode, sort, larg, rarg);
+  return __encode_binary(expr, opcode, sort, larg, rarg);
 }
 
 Error Solver::encode_nary(
+  const Expr* const expr,
   Opcode opcode,
   const Sort& sort,
   const UnsafeTerms& args)
@@ -218,35 +245,38 @@ Error Solver::encode_nary(
   }
 
   m_stats.nary_ops++;
-  return __encode_nary(opcode, sort, args);
+  return __encode_nary(expr, opcode, sort, args);
 }
 
 Error Solver::encode_bv_zero_extend(
+  const Expr* const expr,
   const Sort& sort,
   const UnsafeTerm& bv,
   const unsigned ext)
 {
   assert(bv.sort().is_bv());
-  return __encode_bv_zero_extend(sort, bv, ext);
+  return __encode_bv_zero_extend(expr, sort, bv, ext);
 }
 
 Error Solver::encode_bv_sign_extend(
+  const Expr* const expr,
   const Sort& sort,
   const UnsafeTerm& bv,
   const unsigned ext)
 {
   assert(bv.sort().is_bv());
-  return __encode_bv_sign_extend(sort, bv, ext);
+  return __encode_bv_sign_extend(expr, sort, bv, ext);
 }
 
 Error Solver::encode_bv_extract(
+  const Expr* const expr,
   const Sort& sort,
   const UnsafeTerm& bv,
   const unsigned high,
   const unsigned low)
 {
   assert(bv.sort().is_bv());
-  return __encode_bv_extract(sort, bv, high, low);
+  return __encode_bv_extract(expr, sort, bv, high, low);
 }
 
 void Solver::reset()

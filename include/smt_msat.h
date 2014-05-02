@@ -88,6 +88,7 @@ private:
 
 #define SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(type) \
   virtual Error __encode_literal(                  \
+     const Expr* const expr,                       \
      const Sort& sort,                             \
      type literal) override                        \
   {                                                \
@@ -163,6 +164,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_constant(
+    const Expr* const expr,
     const UnsafeDecl& decl) override
   {
     Error err;
@@ -180,6 +182,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_func_app(
+    const Expr* const expr,
     const UnsafeDecl& decl,
     const size_t arity,
     const UnsafeTerm* const args) override
@@ -208,6 +211,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_const_array(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& init) override
   {
@@ -215,6 +219,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_array_select(
+    const Expr* const expr,
     const UnsafeTerm& array,
     const UnsafeTerm& index) override
   {
@@ -236,6 +241,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_array_store(
+    const Expr* const expr,
     const UnsafeTerm& array,
     const UnsafeTerm& index,
     const UnsafeTerm& value) override
@@ -264,6 +270,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_unary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& arg) override
@@ -295,6 +302,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_binary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& larg,
@@ -462,6 +470,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_nary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerms& args) override
@@ -477,7 +486,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
         for (UnsafeTerms::const_iterator inner = outer + 1;
              inner != args.cend(); inner++) {
 
-          encode_binary(NEQ, bool_sort, *outer, *inner);
+          encode_binary(expr, NEQ, bool_sort, *outer, *inner);
           distinct_term = msat_make_and(m_env, distinct_term, m_term);
           assert(!MSAT_ERROR_TERM(distinct_term));
         }
@@ -491,6 +500,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_bv_zero_extend(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned ext) override
@@ -505,6 +515,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_bv_sign_extend(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned ext) override
@@ -519,6 +530,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_bv_extract(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned high,
@@ -531,6 +543,11 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
     set_term(msat_make_bv_extract(m_env, high, low, m_term));
     return OK;
+  }
+
+  virtual void __notify_delete(const Expr* const expr) override
+  {
+    // do nothing
   }
 
   virtual void __reset() override
@@ -580,7 +597,8 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 public:
   /// Auto configure MathSAT5
   MsatSolver()
-  : m_config(msat_create_config()),
+  : Solver(),
+    m_config(msat_create_config()),
     m_env(msat_create_env(m_config)),
     m_term()
   {
@@ -591,7 +609,8 @@ public:
   }
 
   MsatSolver(Logic logic)
-  : m_config(msat_create_default_config(Logics::acronyms[logic])),
+  : Solver(logic),
+    m_config(msat_create_default_config(Logics::acronyms[logic])),
     m_env(msat_create_env(m_config)),
     m_term()
   {

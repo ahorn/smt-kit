@@ -5,40 +5,83 @@
 #ifndef _SMT_STP_H_
 #define _SMT_STP_H_
 
-#include <stp/c_interface.h>
+#include "smt.h"
+
+#include <unordered_map>
+#include <cstdint>
+#include <tuple>
 
 // avoid name clash
-typedef Expr VCExpr;
-
-#include "smt.h"
+#define Expr VCExpr
+#include <stp/c_interface.h>
+#undef Expr
 
 namespace smt
 {
 
-/// Solver with bit vector support only!
+/// Experimental, Solver with bit vector support only!
+
+/// May leak memory -- it is not always clear when the
+/// STP interface frees memory automatically.
+///
+/// \see_also klee/lib/solver/Solver.cpp
+/// \see_also StpSolver::__notify_delete(const Expr * const)
 class StpSolver : public Solver
 {
 private:
   VC m_vc;
   VCExpr m_expr;
-  
-  template<typename T>
-  void encode_bv_literal(const unsigned bv_size, const T number)
+
+  typedef std::unordered_map<uintptr_t, const VCExpr> ExprMap;
+  ExprMap m_expr_map;
+
+  // \return has m_expr been set to cached expression?
+  bool find_expr(const Expr* const expr)
   {
-    m_expr = vc_bvConstExprFromInt(m_vc, bv_size, number);
+    const ExprMap::const_iterator citer = m_expr_map.find(
+      reinterpret_cast<uintptr_t>(expr));
+
+    if (citer == m_expr_map.cend())
+      return false;
+
+    m_expr = citer->second;
+    return true;
   }
 
-#define SMT_STP_ENCODE_BV_LITERAL(type)               \
-  virtual Error __encode_literal(                     \
-     const Sort& sort,                                \
-     type literal) override                           \
-  {                                                   \
-    if (!sort.is_bv())                                \
-      return UNSUPPORT_ERROR;                         \
-                                                      \
-    encode_bv_literal<type>(sort.bv_size(), literal); \
-    return OK;                                        \
-  }                                                   \
+  // \pre: not find_expr(expr)
+  void cache_expr(const Expr* const expr, const VCExpr vc_expr)
+  {
+    m_expr = vc_expr;
+
+    bool ok = std::get<1>(m_expr_map.emplace(
+      reinterpret_cast<uintptr_t>(expr), vc_expr));
+    assert(ok);
+  }
+  
+  template<typename T>
+  void encode_bv_literal(
+    const Expr* const expr,
+    const unsigned bv_size,
+    const T number)
+  {
+    if (find_expr(expr))
+      return;
+
+    cache_expr(expr, vc_bvConstExprFromInt(m_vc, bv_size, number));
+  }
+
+#define SMT_STP_ENCODE_BV_LITERAL(type)                     \
+  virtual Error __encode_literal(                           \
+     const Expr* const expr,                                \
+     const Sort& sort,                                      \
+     type literal) override                                 \
+  {                                                         \
+    if (!sort.is_bv())                                      \
+      return UNSUPPORT_ERROR;                               \
+                                                            \
+    encode_bv_literal<type>(expr, sort.bv_size(), literal); \
+    return OK;                                              \
+  }                                                         \
 
 SMT_STP_ENCODE_BV_LITERAL(char)
 SMT_STP_ENCODE_BV_LITERAL(signed char)
@@ -55,7 +98,10 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long)
 SMT_STP_ENCODE_BV_LITERAL(long long)
 SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
-  virtual Error __encode_literal(const Sort& sort, bool literal) override
+  virtual Error __encode_literal(
+    const Expr* const expr,
+    const Sort& sort,
+    bool literal) override
   {
     if (sort.is_bool())
     {
@@ -70,7 +116,7 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
 
-    encode_bv_literal<unsigned>(sort.bv_size(), literal);
+    encode_bv_literal<unsigned>(expr, sort.bv_size(), literal);
     return OK;
   }
 
@@ -109,18 +155,23 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_constant(
+    const Expr* const expr,
     const UnsafeDecl& decl) override
   {
+    if (find_expr(expr))
+      return OK;
+
     Type type;
     Error err = build_type(decl.sort(), type);
     if (err)
       return err;
 
-    m_expr = vc_varExpr(m_vc, decl.symbol().c_str(), type);
+    cache_expr(expr, vc_varExpr(m_vc, decl.symbol().c_str(), type));
     return OK;
   }
 
   virtual Error __encode_func_app(
+    const Expr* const expr,
     const UnsafeDecl& decl,
     const size_t arity,
     const UnsafeTerm* const args) override
@@ -129,6 +180,7 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_const_array(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& init) override
   {
@@ -136,9 +188,13 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_array_select(
+    const Expr* const expr,
     const UnsafeTerm& array,
     const UnsafeTerm& index) override
   {
+    if (find_expr(expr))
+      return OK;
+
     Error err;
     err = array.encode(*this);
     if (err)
@@ -152,15 +208,19 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
     const VCExpr index_expr = m_expr;
 
-    m_expr = vc_readExpr(m_vc, array_expr, index_expr);
+    cache_expr(expr, vc_readExpr(m_vc, array_expr, index_expr));
     return OK;
   }
 
   virtual Error __encode_array_store(
+    const Expr* const expr,
     const UnsafeTerm& array,
     const UnsafeTerm& index,
     const UnsafeTerm& value) override
   {
+    if (find_expr(expr))
+      return OK;
+
     Error err;
     err = array.encode(*this);
     if (err)
@@ -180,15 +240,19 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
     const VCExpr value_expr = m_expr;
 
-    m_expr = vc_writeExpr(m_vc, array_expr, index_expr, value_expr);
+    cache_expr(expr, vc_writeExpr(m_vc, array_expr, index_expr, value_expr));
     return OK;
   }
 
   virtual Error __encode_unary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& arg) override
   {
+    if (find_expr(expr))
+      return OK;
+
     const Error err = arg.encode(*this);
     if (err) {
       return err;
@@ -196,16 +260,16 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
     switch (opcode) {
     case LNOT:
-      m_expr = vc_notExpr(m_vc, m_expr);
+      cache_expr(expr, vc_notExpr(m_vc, m_expr));
       break;
     case NOT:
-      m_expr = vc_bvNotExpr(m_vc, m_expr);
+      cache_expr(expr, vc_bvNotExpr(m_vc, m_expr));
       break;
     case SUB:
       if (!sort.is_bv())
         return UNSUPPORT_ERROR;
 
-      m_expr = vc_bvUMinusExpr(m_vc, m_expr);
+      cache_expr(expr, vc_bvUMinusExpr(m_vc, m_expr));
       break;
     default:
       return OPCODE_ERROR;
@@ -215,11 +279,15 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_binary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& larg,
     const UnsafeTerm& rarg) override
   {
+    if (find_expr(expr))
+      return OK;
+
     Error err;
     err = larg.encode(*this);
     if (err)
@@ -238,71 +306,71 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
       if (!sort.is_bv())
         return UNSUPPORT_ERROR;
 
-      m_expr = vc_bvMinusExpr(m_vc, sort.bv_size(), lexpr, rexpr);
+      cache_expr(expr, vc_bvMinusExpr(m_vc, sort.bv_size(), lexpr, rexpr));
       break;
     case AND:
       if (!larg.sort().is_bv() || !rarg.sort().is_bv())
         return OPCODE_ERROR;
 
-      m_expr = vc_bvAndExpr(m_vc, lexpr, rexpr);
+      cache_expr(expr, vc_bvAndExpr(m_vc, lexpr, rexpr));
       break;
     case OR:
       if (!larg.sort().is_bv() || !rarg.sort().is_bv())
         return OPCODE_ERROR;
 
-      m_expr = vc_bvOrExpr(m_vc, lexpr, rexpr);
+      cache_expr(expr, vc_bvOrExpr(m_vc, lexpr, rexpr));
       break;
     case XOR:
       if (!larg.sort().is_bv() || !rarg.sort().is_bv())
         return OPCODE_ERROR;
 
-      m_expr = vc_bvXorExpr(m_vc, lexpr, rexpr);
+      cache_expr(expr, vc_bvXorExpr(m_vc, lexpr, rexpr));
       break;
     case LAND:
       if (!larg.sort().is_bool() || !rarg.sort().is_bool())
         return OPCODE_ERROR;
 
-      m_expr = vc_andExpr(m_vc, lexpr, rexpr);
+      cache_expr(expr, vc_andExpr(m_vc, lexpr, rexpr));
       break;
     case LOR:
       if (!larg.sort().is_bool() || !rarg.sort().is_bool())
         return OPCODE_ERROR;
 
-      m_expr = vc_orExpr(m_vc, lexpr, rexpr);
+      cache_expr(expr, vc_orExpr(m_vc, lexpr, rexpr));
       break;
     case IMP:
       if (!larg.sort().is_bool() || !rarg.sort().is_bool())
         return OPCODE_ERROR;
 
-      m_expr = vc_impliesExpr(m_vc, lexpr, rexpr);
+      cache_expr(expr, vc_impliesExpr(m_vc, lexpr, rexpr));
       break;
     case EQL:
       if (larg.sort().is_bool())
-        m_expr = vc_iffExpr(m_vc, lexpr, rexpr);
+        cache_expr(expr, vc_iffExpr(m_vc, lexpr, rexpr));
       else
-        m_expr = vc_eqExpr(m_vc, lexpr, rexpr);
+        cache_expr(expr, vc_eqExpr(m_vc, lexpr, rexpr));
 
       break;
     case ADD:
       if (!sort.is_bv())
         return UNSUPPORT_ERROR;
 
-      m_expr = vc_bvPlusExpr(m_vc, sort.bv_size(), lexpr, rexpr);
+      cache_expr(expr, vc_bvPlusExpr(m_vc, sort.bv_size(), lexpr, rexpr));
       break;
     case MUL:
       if (!sort.is_bv())
         return UNSUPPORT_ERROR;
 
-      m_expr = vc_bvMultExpr(m_vc, sort.bv_size(), lexpr, rexpr);
+      cache_expr(expr, vc_bvMultExpr(m_vc, sort.bv_size(), lexpr, rexpr));
       break;
     case QUO:
       if (!sort.is_bv())
         return UNSUPPORT_ERROR;
 
       if (sort.is_signed())
-        m_expr = vc_sbvDivExpr(m_vc, sort.bv_size(), lexpr, rexpr);
+        cache_expr(expr, vc_sbvDivExpr(m_vc, sort.bv_size(), lexpr, rexpr));
       else
-        m_expr = vc_bvDivExpr(m_vc, sort.bv_size(), lexpr, rexpr);
+        cache_expr(expr, vc_bvDivExpr(m_vc, sort.bv_size(), lexpr, rexpr));
 
       break;
     case REM:
@@ -310,9 +378,9 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
         return UNSUPPORT_ERROR;
 
       if (sort.is_signed())
-        m_expr = vc_sbvModExpr(m_vc, sort.bv_size(), lexpr, rexpr);
+        cache_expr(expr, vc_sbvModExpr(m_vc, sort.bv_size(), lexpr, rexpr));
       else
-        m_expr = vc_bvModExpr(m_vc, sort.bv_size(), lexpr, rexpr);
+        cache_expr(expr, vc_bvModExpr(m_vc, sort.bv_size(), lexpr, rexpr));
 
       break;
     case LSS:
@@ -320,9 +388,9 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
         return UNSUPPORT_ERROR;
 
       if (larg.sort().is_signed())
-        m_expr = vc_sbvLtExpr(m_vc, lexpr, rexpr);
+        cache_expr(expr, vc_sbvLtExpr(m_vc, lexpr, rexpr));
       else
-        m_expr = vc_bvLtExpr(m_vc, lexpr, rexpr);
+        cache_expr(expr, vc_bvLtExpr(m_vc, lexpr, rexpr));
       
       break;
     case GTR:
@@ -330,9 +398,9 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
         return UNSUPPORT_ERROR;
 
       if (larg.sort().is_signed())
-        m_expr = vc_sbvGtExpr(m_vc, lexpr, rexpr);
+        cache_expr(expr, vc_sbvGtExpr(m_vc, lexpr, rexpr));
       else
-        m_expr = vc_bvGtExpr(m_vc, lexpr, rexpr);
+        cache_expr(expr, vc_bvGtExpr(m_vc, lexpr, rexpr));
       
       break;
     case NEQ:
@@ -342,7 +410,7 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
       else
         eq_expr = vc_eqExpr(m_vc, lexpr, rexpr);
 
-      m_expr = vc_notExpr(m_vc, eq_expr);
+      cache_expr(expr, vc_notExpr(m_vc, eq_expr));
 
       break;
     case LEQ:
@@ -350,9 +418,9 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
         return UNSUPPORT_ERROR;
 
       if (larg.sort().is_signed())
-        m_expr = vc_sbvLeExpr(m_vc, lexpr, rexpr);
+        cache_expr(expr, vc_sbvLeExpr(m_vc, lexpr, rexpr));
       else
-        m_expr = vc_bvLeExpr(m_vc, lexpr, rexpr);
+        cache_expr(expr, vc_bvLeExpr(m_vc, lexpr, rexpr));
       
       break;
     case GEQ:
@@ -360,9 +428,9 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
         return UNSUPPORT_ERROR;
 
       if (larg.sort().is_signed())
-        m_expr = vc_sbvGeExpr(m_vc, lexpr, rexpr);
+        cache_expr(expr, vc_sbvGeExpr(m_vc, lexpr, rexpr));
       else
-        m_expr = vc_bvGeExpr(m_vc, lexpr, rexpr);
+        cache_expr(expr, vc_bvGeExpr(m_vc, lexpr, rexpr));
       
       break;
     default:
@@ -373,10 +441,14 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_nary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerms& args) override
   {
+    if (find_expr(expr))
+      return OK;
+
     Error err;
 
     if (opcode == NEQ)
@@ -385,20 +457,31 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
       const Sort& bool_sort = internal::sort<Bool>();
       VCExpr distinct_expr = vc_trueExpr(m_vc);
       for (UnsafeTerms::const_iterator outer = args.cbegin();
-           outer != args.cend(); outer++)
+           outer != args.cend(); ++outer)
       {
-        for (UnsafeTerms::const_iterator inner = outer + 1;
-             inner != args.cend(); inner++)
-         {
-          err = encode_binary(NEQ, bool_sort, *outer, *inner);
-          if (err)
-            return err;
+        outer->encode(*this);
+        const VCExpr outer_expr = m_expr;
 
-          distinct_expr = vc_andExpr(m_vc, distinct_expr, m_expr);
+        for (UnsafeTerms::const_iterator inner = outer + 1;
+             inner != args.cend(); ++inner)
+        {
+          assert(outer->sort() == inner->sort());
+
+          inner->encode(*this);
+          const VCExpr inner_expr = m_expr;
+
+          VCExpr eq_expr;
+          if (outer->sort().is_bool())
+            eq_expr = vc_iffExpr(m_vc, outer_expr, inner_expr);
+          else
+            eq_expr = vc_eqExpr(m_vc, outer_expr, inner_expr);
+
+          distinct_expr = vc_andExpr(m_vc, distinct_expr,
+            vc_notExpr(m_vc, eq_expr));
         }
 
       }
-      m_expr = distinct_expr;
+      cache_expr(expr, distinct_expr);
       return OK;
     }
 
@@ -406,51 +489,77 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_bv_zero_extend(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned ext) override
   {
+    if (find_expr(expr))
+      return OK;
+
     const Error err = bv.encode(*this);
     if (err)
       return err;
 
     const VCExpr zero_expr = vc_bvConstExprFromInt(m_vc, ext, 0);
-    m_expr = vc_bvConcatExpr(m_vc, zero_expr, m_expr);
+    cache_expr(expr, vc_bvConcatExpr(m_vc, zero_expr, m_expr));
     return OK;
   }
 
   virtual Error __encode_bv_sign_extend(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned ext) override
   {
+    if (find_expr(expr))
+      return OK;
+
     const Error err = bv.encode(*this);
     if (err)
       return err;
 
     assert(sort.bv_size() == ext + bv.sort().bv_size());
-    m_expr = vc_bvSignExtend(m_vc, m_expr, sort.bv_size());
+    cache_expr(expr, vc_bvSignExtend(m_vc, m_expr, sort.bv_size()));
     return OK;
   }
 
   virtual Error __encode_bv_extract(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned high,
     const unsigned low) override
   {
+    if (find_expr(expr))
+      return OK;
+
     const Error err = bv.encode(*this);
     if (err)
       return err;
 
-    m_expr = vc_bvExtract(m_vc, m_expr, high, low);
+    cache_expr(expr, vc_bvExtract(m_vc, m_expr, high, low));
     return OK;
+  }
+
+  virtual void __notify_delete(const Expr* const expr) override
+  {
+    // Newer versions of STP delete expressions automatically.
+    // If we want to free VCExpr pointers ourselves, we would
+    // have to set EXPRDELETE to zero to avoid double-free errors.
+    // But experiments indicate that this is significantly slower
+    // (sometimes 30X) than letting STP manage its own memory.
+    //
+    // We still erase the entry from m_expr_map so a new
+    // expression at the same address is cached correctly.
+    m_expr_map.erase(reinterpret_cast<uintptr_t>(expr));
   }
 
   virtual void __reset() override
   {
     vc_Destroy(m_vc);
     m_vc = vc_createValidityChecker();
+    m_expr_map.clear();
   }
 
   virtual void __push() override
@@ -499,15 +608,23 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 public:
   /// Auto configure STP
   StpSolver()
-  : m_vc(vc_createValidityChecker()),
-    m_expr() {}
+  : Solver(),
+    m_vc(vc_createValidityChecker()),
+    m_expr(),
+    m_expr_map()
+  {
+    assert(m_vc && "unable to create validity checker");
+  }
 
   /// Only AF_ABV and QF_BV is supported
   StpSolver(Logic logic)
-  : m_vc(vc_createValidityChecker()),
-    m_expr()
+  : Solver(logic),
+    m_vc(vc_createValidityChecker()),
+    m_expr(),
+    m_expr_map()
   {
     assert(logic == QF_ABV_LOGIC || logic == QF_BV_LOGIC);
+    assert(m_vc && "unable to create validity checker");
   }
 
   ~StpSolver()

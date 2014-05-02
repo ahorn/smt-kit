@@ -22,6 +22,7 @@ private:
 
   template<typename T>
   Error nocast_encode_literal(
+     const Expr* const expr,
      const Sort& sort,
      T literal)
   {
@@ -42,31 +43,34 @@ private:
 
   template<typename T>
   Error cast_encode_literal(
+     const Expr* const expr,
      const Sort& sort,
      T literal)
   {
     if (std::is_signed<T>::value) {
-      return nocast_encode_literal<long long>(sort, literal);
+      return nocast_encode_literal<long long>(expr, sort, literal);
     } else {
-      return nocast_encode_literal<unsigned long long>(sort, literal);
+      return nocast_encode_literal<unsigned long long>(expr, sort, literal);
     }
   }
 
-#define SMT_Z3_NOCAST_ENCODE_BUILTIN_LITERAL(type)\
-  virtual Error __encode_literal(                 \
-     const Sort& sort,                            \
-     type literal) override                       \
-  {                                               \
-    return nocast_encode_literal(sort, literal);  \
-  }                                               \
+#define SMT_Z3_NOCAST_ENCODE_BUILTIN_LITERAL(type)      \
+  virtual Error __encode_literal(                       \
+     const Expr* const expr,                            \
+     const Sort& sort,                                  \
+     type literal) override                             \
+  {                                                     \
+    return nocast_encode_literal(expr, sort, literal);  \
+  }                                                     \
 
-#define SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(type)  \
-  virtual Error __encode_literal(                 \
-     const Sort& sort,                            \
-     type literal) override                       \
-  {                                               \
-    return cast_encode_literal(sort, literal);    \
-  }                                               \
+#define SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(type)        \
+  virtual Error __encode_literal(                       \
+    const Expr* const expr,                             \
+     const Sort& sort,                                  \
+     type literal) override                             \
+  {                                                     \
+    return cast_encode_literal(expr, sort, literal);    \
+  }                                                     \
 
 SMT_Z3_NOCAST_ENCODE_BUILTIN_LITERAL(bool)
 SMT_Z3_NOCAST_ENCODE_BUILTIN_LITERAL(int)
@@ -148,6 +152,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
   virtual Error __encode_constant(
+    const Expr* const expr,
     const UnsafeDecl& decl) override
   {
     z3::sort z3_sort(m_z3_context);
@@ -160,6 +165,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
   virtual Error __encode_func_app(
+    const Expr* const expr,
     const UnsafeDecl& func_decl,
     const size_t arity,
     const UnsafeTerm* const args) override
@@ -186,6 +192,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
   virtual Error __encode_const_array(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& init) override
   {
@@ -207,6 +214,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
   virtual Error __encode_array_select(
+    const Expr* const expr,
     const UnsafeTerm& array,
     const UnsafeTerm& index) override
   {
@@ -229,6 +237,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
   virtual Error __encode_array_store(
+    const Expr* const expr,
     const UnsafeTerm& array,
     const UnsafeTerm& index,
     const UnsafeTerm& value) override
@@ -258,6 +267,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
   virtual Error __encode_unary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& arg) override
@@ -284,6 +294,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
   virtual Error __encode_binary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& larg,
@@ -393,6 +404,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
   virtual Error __encode_nary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerms& args) override
@@ -429,6 +441,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
   virtual Error __encode_bv_zero_extend(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned ext) override
@@ -444,6 +457,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
   virtual Error __encode_bv_sign_extend(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned ext) override
@@ -459,6 +473,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   }
 
   virtual Error __encode_bv_extract(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned high,
@@ -472,6 +487,11 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     m_z3_expr = z3::expr(m_z3_context,
       Z3_mk_extract(m_z3_context, high, low, m_z3_expr));
     return OK;
+  }
+
+  virtual void __notify_delete(const Expr* const expr) override
+  {
+    // do nothing
   }
 
   virtual void __reset() override
@@ -519,12 +539,14 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 public:
   /// Auto configure Z3
   Z3Solver()
-  : m_z3_context(),
+  : Solver(),
+    m_z3_context(),
     m_z3_solver(m_z3_context),
     m_z3_expr(m_z3_context) {}
 
   Z3Solver(Logic logic)
-  : m_z3_context(),
+  : Solver(logic),
+    m_z3_context(),
     m_z3_solver(m_z3_context, Logics::acronyms[logic]),
     m_z3_expr(m_z3_context) {}
 

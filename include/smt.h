@@ -8,6 +8,7 @@
 #include <tuple>
 #include <array>
 #include <vector>
+#include <unordered_set>
 #include <string>
 #include <memory>
 #include <cstddef>
@@ -739,7 +740,22 @@ public:
 class UnsafeTerm;
 typedef std::vector<UnsafeTerm> UnsafeTerms;
 
-/// Note: subclasses usually provide pretty-printing functionality
+class Expr;
+
+/// Abstract base class of an SMT/SAT solver
+
+/// Memory management:
+///
+///   Let \c s be a Solver implementation and \c expr be an Expr.
+///   When \c expr is deleted (i.e. its destructor is invoked),
+///   \c s.notify_delete(expr) is called at which point every
+///   Solver subclass should free any solver-specific memory
+///   associated with \c expr without throwing an exception.
+///
+/// Optional features:
+///
+///   Subclasses are encouraged to provide pretty-printing and model
+///   extraction functionality.
 class Solver
 {
 public:
@@ -766,6 +782,7 @@ private:
 #define SMT_ENCODE_BUILTIN_LITERAL(type)                                       \
 private:                                                                       \
   virtual Error __encode_literal(                                              \
+    const Expr* const expr,                                                    \
     const Sort& sort,                                                          \
     type literal)                                                              \
   {                                                                            \
@@ -774,10 +791,11 @@ private:                                                                       \
                                                                                \
 public:                                                                        \
   Error encode_literal(                                                        \
+    const Expr* const expr,                                                    \
     const Sort& sort,                                                          \
     type literal)                                                              \
   {                                                                            \
-    return __encode_literal(sort, literal);                                    \
+    return __encode_literal(expr, sort, literal);                              \
   }                                                                            \
 
 SMT_ENCODE_BUILTIN_LITERAL(bool)
@@ -798,57 +816,70 @@ SMT_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
 private:
   virtual Error __encode_constant(
+    const Expr* const expr,
     const UnsafeDecl& decl) = 0;
 
   virtual Error __encode_func_app(
+    const Expr* const expr,
     const UnsafeDecl& func_decl,
     const size_t arity,
     const UnsafeTerm* const args) = 0;
 
   virtual Error __encode_const_array(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& init) = 0;
 
   virtual Error __encode_array_select(
+    const Expr* const expr,
     const UnsafeTerm& array,
     const UnsafeTerm& index) = 0;
 
   virtual Error __encode_array_store(
+    const Expr* const expr,
     const UnsafeTerm& array,
     const UnsafeTerm& index,
     const UnsafeTerm& value) = 0;
 
   virtual Error __encode_unary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& arg) = 0;
 
   virtual Error __encode_binary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& larg,
     const UnsafeTerm& rarg) = 0;
 
   virtual Error __encode_nary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerms& args) = 0;
 
   virtual Error __encode_bv_zero_extend(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned ext) = 0;
 
   virtual Error __encode_bv_sign_extend(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned ext) = 0;
 
   virtual Error __encode_bv_extract(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned high,
     const unsigned low) = 0;
+
+  virtual void __notify_delete(const Expr* const) = 0;
 
   virtual void __reset() = 0;
   virtual void __push() = 0;
@@ -858,59 +889,83 @@ private:
   virtual CheckResult __check() = 0;
 
 protected:
-  // Subclasses must have a constructor with a Logic enum value as argument
-  Solver()
-  : m_stats{0} {}
+  /// Registers solver
+  Solver();
+
+  /// Registers solver
+  Solver(Logic);
 
 public:
+  /// Unregisters solver
+  virtual ~Solver();
+
+  /// notifies solver that the given expression is being deleted
+
+  /// Frees any solver-specific resources associated with \c expr
+  void notify_delete(const Expr* const expr)
+  {
+    __notify_delete(expr);
+  }
+
   Error encode_constant(
+    const Expr* const expr,
     const UnsafeDecl& decl);
 
   Error encode_func_app(
+    const Expr* const expr,
     const UnsafeDecl& func_decl,
     const size_t arity,
     const UnsafeTerm* const args);
 
   Error encode_const_array(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& init);
 
   Error encode_array_select(
+    const Expr* const expr,
     const UnsafeTerm& array,
     const UnsafeTerm& index);
 
   Error encode_array_store(
+    const Expr* const expr,
     const UnsafeTerm& array,
     const UnsafeTerm& index,
     const UnsafeTerm& value);
 
   Error encode_unary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& arg);
 
   Error encode_binary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& larg,
     const UnsafeTerm& rarg);
 
   Error encode_nary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerms& args);
 
   Error encode_bv_zero_extend(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned ext);
 
   Error encode_bv_sign_extend(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned ext);
 
   Error encode_bv_extract(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned high,
@@ -932,13 +987,29 @@ public:
   void unsafe_add(const UnsafeTerm& condition);
 
   CheckResult check();
-
-  virtual ~Solver() {}
 };
 
 class Expr
 {
 private:
+  friend class Solver;
+
+  // allow Solver implementations to manage memory
+  typedef std::unordered_set<uintptr_t> SolverPtrs;
+  static SolverPtrs s_solver_ptrs;
+
+  static void register_solver(Solver* s_ptr)
+  {
+    bool ok = std::get<1>(s_solver_ptrs.insert(reinterpret_cast<uintptr_t>(s_ptr)));
+    assert(ok);
+  }
+
+  static void unregister_solver(Solver* s_ptr)
+  {
+    SolverPtrs::size_type count = s_solver_ptrs.erase(reinterpret_cast<uintptr_t>(s_ptr));
+    assert(count == 1);
+  }
+
   const ExprKind m_expr_kind;
   const Sort& m_sort;
 
@@ -947,11 +1018,17 @@ private:
 protected:
   // Allocate sort statically!
   Expr(ExprKind expr_kind, const Sort& sort)
-  : m_expr_kind(expr_kind), m_sort(sort) {}
+  : m_expr_kind(expr_kind),
+    m_sort(sort) {}
 
 public:
   Expr(const Expr&) = delete;
-  virtual ~Expr() {}
+
+  virtual ~Expr()
+  {
+    for (uintptr_t s_ptr : s_solver_ptrs)
+      reinterpret_cast<Solver*>(s_ptr)->notify_delete(this);
+  }
 
   ExprKind expr_kind() const
   {
@@ -1211,7 +1288,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_literal(Expr::sort(), m_literal);
+    return solver.encode_literal(this, Expr::sort(), m_literal);
   }
 
 public:
@@ -1233,7 +1310,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_constant(m_decl);
+    return solver.encode_constant(this, m_decl);
   }
 
 public:
@@ -1257,7 +1334,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_bv_zero_extend(Expr::sort(), m_bv, m_ext);
+    return solver.encode_bv_zero_extend(this, Expr::sort(), m_bv, m_ext);
   }
 
 public:
@@ -1286,7 +1363,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_bv_sign_extend(Expr::sort(), m_bv, m_ext);
+    return solver.encode_bv_sign_extend(this, Expr::sort(), m_bv, m_ext);
   }
 
 public:
@@ -1316,7 +1393,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_bv_extract(Expr::sort(), m_bv, m_high, m_low);
+    return solver.encode_bv_extract(this, Expr::sort(), m_bv, m_high, m_low);
   }
 
 public:
@@ -1449,7 +1526,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_func_app(m_func_decl, arity, m_args.data());
+    return solver.encode_func_app(this, m_func_decl, arity, m_args.data());
   }
 
 public:
@@ -1613,7 +1690,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_unary(opcode, Expr::sort(), m_operand);
+    return solver.encode_unary(this, opcode, Expr::sort(), m_operand);
   }
 
 public:
@@ -1643,8 +1720,8 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_binary(opcode, Expr::sort(),
-      m_loperand, m_roperand);
+    return solver.encode_binary(this, opcode,
+      Expr::sort(), m_loperand, m_roperand);
   }
 
 public:
@@ -1712,7 +1789,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_nary(opcode, Expr::sort(), m_operands);
+    return solver.encode_nary(this, opcode, Expr::sort(), m_operands);
   }
 
 protected:
@@ -1771,7 +1848,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_const_array(Expr::sort(), m_init);
+    return solver.encode_const_array(this, Expr::sort(), m_init);
   }
 
 public:
@@ -1798,7 +1875,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_array_select(m_array, m_index);
+    return solver.encode_array_select(this, m_array, m_index);
   }
 
 public:
@@ -1833,7 +1910,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_array_store(m_array, m_index, m_value);
+    return solver.encode_array_store(this, m_array, m_index, m_value);
   }
 
 public:

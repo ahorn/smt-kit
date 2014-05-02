@@ -75,7 +75,10 @@ private:
     return OK;
   }
 
-  virtual Error __encode_literal(const Sort& sort, bool literal) override
+  virtual Error __encode_literal(
+    const Expr* const expr,
+    const Sort& sort,
+    bool literal) override
   {
     assert(sort.is_bool());
 
@@ -84,13 +87,19 @@ private:
   }
 
 #define SMT_CVC4_NOSTRING_ENCODE_LITERAL(type)                            \
-  virtual Error __encode_literal(const Sort& sort, type literal) override \
+  virtual Error __encode_literal(                                         \
+    const Expr* const expr,                                               \
+    const Sort& sort,                                                     \
+    type literal) override                                                \
   {                                                                       \
     return nostring_encode_number<type>(sort, literal);                   \
   }                                                                       \
 
 #define SMT_CVC4_STRING_ENCODE_LITERAL(type)                              \
-  virtual Error __encode_literal(const Sort& sort, type literal) override \
+  virtual Error __encode_literal(                                         \
+    const Expr* const expr,                                               \
+    const Sort& sort,                                                     \
+    type literal) override                                                \
   {                                                                       \
     return string_encode_number(sort, std::to_string(literal));           \
   }                                                                       \
@@ -159,6 +168,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_constant(
+    const Expr* const expr,
     const UnsafeDecl& decl) override
   {
     Error err;
@@ -182,6 +192,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_func_app(
+    const Expr* const expr,
     const UnsafeDecl& decl,
     const size_t arity,
     const UnsafeTerm* const args) override
@@ -217,6 +228,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_const_array(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& init) override
   {
@@ -239,6 +251,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_array_select(
+    const Expr* const expr,
     const UnsafeTerm& array,
     const UnsafeTerm& index) override
   {
@@ -261,6 +274,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_array_store(
+    const Expr* const expr,
     const UnsafeTerm& array,
     const UnsafeTerm& index,
     const UnsafeTerm& value) override
@@ -290,6 +304,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_unary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& arg) override
@@ -323,6 +338,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_binary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& larg,
@@ -474,6 +490,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_nary(
+    const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerms& args) override
@@ -499,6 +516,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_bv_zero_extend(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned ext) override
@@ -514,6 +532,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_bv_sign_extend(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned ext) override
@@ -529,6 +548,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   }
 
   virtual Error __encode_bv_extract(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& bv,
     const unsigned high,
@@ -542,6 +562,11 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     set_expr(m_expr_manager.mkExpr(CVC4::kind::BITVECTOR_EXTRACT,
       m_expr_manager.mkConst(CVC4::BitVectorExtract(high, low)), m_expr));
     return OK;
+  }
+
+  virtual void __notify_delete(const Expr* const expr) override
+  {
+    // do nothing
   }
 
   virtual void __reset() override
@@ -591,7 +616,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
 public:
   /// Auto configure CVC4
   CVC4Solver()
-  : m_expr_manager(),
+  : Solver(),
+    m_expr_manager(),
     m_smt_engine(&m_expr_manager),
     m_expr(),
     m_expr_map()
@@ -601,7 +627,8 @@ public:
   }
 
   CVC4Solver(const CVC4::Options& options)
-  : m_expr_manager(options),
+  : Solver(),
+    m_expr_manager(options),
     m_smt_engine(&m_expr_manager),
     m_expr(),
     m_expr_map()
@@ -610,7 +637,8 @@ public:
   }
 
   CVC4Solver(Logic logic)
-  : m_expr_manager(),
+  : Solver(logic),
+    m_expr_manager(),
     m_smt_engine(&m_expr_manager),
     m_expr(),
     m_expr_map()
