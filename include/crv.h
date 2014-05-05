@@ -15,11 +15,11 @@
 #include <iostream>
 #endif
 
+#include "nse_sequential.h"
+
 #ifndef _BV_THEORY_
 #define _REAL_TIME_ 1
 #endif
-
-#include "nse_sequential.h"
 
 namespace crv
 {
