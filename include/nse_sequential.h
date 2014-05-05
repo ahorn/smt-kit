@@ -283,7 +283,7 @@ namespace internal
   class Inputs
   {
   private:
-    static const std::string s_prefix;
+    static constexpr char s_prefix[] = "x!";
 
     typedef unsigned long long Counter;
     static Counter s_counter;

@@ -3,7 +3,7 @@
 namespace crv
 {
 
-const std::string internal::Inputs::s_prefix = "x!";
+constexpr char internal::Inputs::s_prefix[];
 internal::Inputs::Counter internal::Inputs::s_counter = 0;
 
 void Checker::add_assertion(Internal<bool>&& assertion)
