@@ -9,6 +9,7 @@
 #include <list>
 #include <vector>
 #include <string>
+#include <limits>
 #include <cassert>
 #include <type_traits>
 
