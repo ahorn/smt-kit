@@ -7,91 +7,87 @@
 TEST(CrvFunctionalTest, SafeIf)
 {
   crv::tracer().reset();
-  crv::dfs_prune_checker().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   bool error = false;
   do
   {
     crv::External<char> x('A');
-    if (crv::dfs_prune_checker().branch(x == '?'))
+    if (crv::dfs_checker().branch(x == '?'))
       x = 'B';
     crv::Internal<char> a(x);
 
-    crv::dfs_prune_checker().add_error(!(a == 'B' || a == 'A'));
+    crv::dfs_checker().add_error(!(a == 'B' || a == 'A'));
 
-    if (!crv::dfs_prune_checker().errors().is_null() &&
-        smt::sat == encoder.check(crv::tracer(), crv::dfs_prune_checker()))
+    if (!crv::dfs_checker().errors().is_null() &&
+        smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()))
       error = true;
   }
-  while (crv::dfs_prune_checker().find_next_path());
+  while (crv::dfs_checker().find_next_path());
   EXPECT_FALSE(error);
 }
 
 TEST(CrvFunctionalTest, MultipathSafeIf)
 {
   crv::tracer().reset();
-  crv::dfs_prune_checker().reset();
+  crv::dfs_checker().reset();
   crv::Encoder encoder;
 
   crv::External<char> x('A');
-  crv::tracer().scope_then(x == '?');
+  crv::dfs_checker().scope_then(x == '?');
   x = 'B';
-  crv::tracer().scope_end();
+  crv::dfs_checker().scope_end();
   crv::Internal<char> a(x);
-  crv::dfs_prune_checker().add_error(!(a == 'B' || a == 'A'));
-  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_prune_checker()));
+  crv::dfs_checker().add_error(!(a == 'B' || a == 'A'));
+  EXPECT_EQ(smt::unsat, encoder.check(crv::tracer(), crv::dfs_checker()));
 }
 
 TEST(CrvFunctionalTest, SafeCounter)
 {
   constexpr unsigned N = 4;
-
-  crv::tracer().reset();
-  crv::dfs_prune_checker().reset();
+  crv::sequential_dfs_checker().reset();
 
   do
   {
     crv::Internal<int> n;
-    crv::dfs_prune_checker().add_assertion(0 <= n && n < N);
+    crv::sequential_dfs_checker().add_assertion(0 <= n && n < N);
 
     crv::Internal<int> x = n, y = 0;
 
-    while (crv::dfs_prune_checker().branch(x > 0)) {
+    while (crv::sequential_dfs_checker().branch(x > 0)) {
       x = x - 1;
       y = y + 1;
     }
 
-    crv::dfs_prune_checker().add_error(0 <= y && y != n);
-    EXPECT_EQ(smt::unsat, crv::dfs_prune_checker().check(crv::tracer()));
+    crv::sequential_dfs_checker().add_error(0 <= y && y != n);
+    EXPECT_EQ(smt::unsat, crv::sequential_dfs_checker().check());
   }
-  while (crv::dfs_prune_checker().find_next_path());
+  while (crv::sequential_dfs_checker().find_next_path());
 }
 
 TEST(CrvFunctionalTest, UnsafeCounter)
 {
   constexpr unsigned N = 4;
-
-  crv::tracer().reset();
-  crv::dfs_prune_checker().reset();
+  crv::sequential_dfs_checker().reset();
 
   bool error = false;
   do
   {
     crv::Internal<int> n;
-    crv::dfs_prune_checker().add_assertion(0 <= n && n < N);
+    crv::sequential_dfs_checker().add_assertion(0 <= n && n < N);
 
     crv::Internal<int> x = n, y = 0;
 
-    while (crv::dfs_prune_checker().branch(x > 0)) {
+    while (crv::sequential_dfs_checker().branch(x > 0)) {
       x = x - 1;
       y = y + 1;
     }
 
-    crv::dfs_prune_checker().add_error(0 <= y && y == n);
-    error |= smt::sat == crv::dfs_prune_checker().check(crv::tracer());
+    crv::sequential_dfs_checker().add_error(0 <= y && y == n);
+    error |= smt::sat == crv::sequential_dfs_checker().check();
   }
-  while (crv::dfs_prune_checker().find_next_path());
+  while (crv::sequential_dfs_checker().find_next_path());
   EXPECT_TRUE(error);
 }
 
@@ -107,7 +103,7 @@ typedef int Item;
 #define less(A, B) (key(A) < key(B))
 #define eq(A, B) (!less(A, B) && !less(B, A))
 #define exch(A, B) { crv::Internal<Item> t = A; A = B; B = t; }
-#define compexch(A, B) if (crv::dfs_prune_checker().branch(less(B, A))) exch(A, B)
+#define compexch(A, B) if (crv::sequential_dfs_checker().branch(less(B, A))) exch(A, B)
 #define NULLitem 0
 
 void safe_insertion_sort(
@@ -116,15 +112,15 @@ void safe_insertion_sort(
   crv::Internal<size_t> r)
 {
   crv::Internal<size_t> i = 0;
-  for (i = l+1; crv::dfs_prune_checker().branch(i <= r); i = i+1)
+  for (i = l+1; crv::sequential_dfs_checker().branch(i <= r); i = i+1)
     compexch(a[l], a[i]);
 
-  for (i = l+2; crv::dfs_prune_checker().branch(i <= r); i = i+1)
+  for (i = l+2; crv::sequential_dfs_checker().branch(i <= r); i = i+1)
   {
     crv::Internal<size_t> j = i;
     crv::Internal<Item> v = a[i];
-    while (crv::dfs_prune_checker().branch(0<j) &&
-      crv::dfs_prune_checker().branch(less(v, a[j-1])))
+    while (crv::sequential_dfs_checker().branch(0<j) &&
+      crv::sequential_dfs_checker().branch(less(v, a[j-1])))
     {
       a[j] = a[j-1];
       j = j-1;
@@ -136,9 +132,7 @@ void safe_insertion_sort(
 TEST(CrvFunctionalTest, SafeInsertionSort)
 {
   constexpr unsigned N = 4;
-
-  crv::tracer().reset();
-  crv::dfs_prune_checker().reset();
+  crv::sequential_dfs_checker().reset();
 
   do
   {
@@ -146,11 +140,11 @@ TEST(CrvFunctionalTest, SafeInsertionSort)
     safe_insertion_sort(a, 0, N-1);
 
     for (unsigned i = 0; i < N - 1; i++)
-      crv::dfs_prune_checker().add_error(!(a[i] <= a[i+1]));
+      crv::sequential_dfs_checker().add_error(!(a[i] <= a[i+1]));
 
-    EXPECT_EQ(smt::unsat, crv::dfs_prune_checker().check(crv::tracer()));
+    EXPECT_EQ(smt::unsat, crv::sequential_dfs_checker().check());
   }
-  while (crv::dfs_prune_checker().find_next_path());
+  while (crv::sequential_dfs_checker().find_next_path());
 }
 
 void unsafe_insertion_sort(
@@ -159,15 +153,15 @@ void unsafe_insertion_sort(
   crv::Internal<size_t> r)
 {
   crv::Internal<size_t> i = 0;
-  for (i = l+1; crv::dfs_prune_checker().branch(i <= r); i = i+1)
+  for (i = l+1; crv::sequential_dfs_checker().branch(i <= r); i = i+1)
     compexch(a[l], a[i]);
 
-  for (i = l+2; crv::dfs_prune_checker().branch(i <= r); i = i+1)
+  for (i = l+2; crv::sequential_dfs_checker().branch(i <= r); i = i+1)
   {
     crv::Internal<size_t> j = i;
     crv::Internal<Item> v = a[i];
-    while (crv::dfs_prune_checker().branch(0<j) &&
-      crv::dfs_prune_checker().branch(less(v, a[j-1])))
+    while (crv::sequential_dfs_checker().branch(0<j) &&
+      crv::sequential_dfs_checker().branch(less(v, a[j-1])))
     {
       a[j] = a[j];
       //       ^ bug due to wrong index (it should be j-1)
@@ -180,9 +174,7 @@ void unsafe_insertion_sort(
 TEST(CrvFunctionalTest, UnsafeInsertionSort)
 {
   constexpr unsigned N = 4;
-
-  crv::tracer().reset();
-  crv::dfs_prune_checker().reset();
+  crv::sequential_dfs_checker().reset();
 
   bool error = false;
   do
@@ -191,11 +183,11 @@ TEST(CrvFunctionalTest, UnsafeInsertionSort)
     unsafe_insertion_sort(a, 0, N-1);
 
     for (unsigned i = 0; i < N - 1; i++)
-      crv::dfs_prune_checker().add_error(!(a[i] <= a[i+1]));
+      crv::sequential_dfs_checker().add_error(!(a[i] <= a[i+1]));
 
-    error |= smt::sat == crv::dfs_prune_checker().check(crv::tracer());
+    error |= smt::sat == crv::sequential_dfs_checker().check();
   }
-  while (crv::dfs_prune_checker().find_next_path() && !error);
+  while (crv::sequential_dfs_checker().find_next_path() && !error);
   EXPECT_TRUE(error);
 }
 
@@ -207,15 +199,15 @@ void safe_merge(
   crv::Internal<size_t> r)
 {
   crv::Internal<size_t> i = 0, j = 0, k = 0;
-  for (i = m+1; crv::dfs_prune_checker().branch(i > l); i = i-1)
+  for (i = m+1; crv::sequential_dfs_checker().branch(i > l); i = i-1)
     aux[i-1] = a[i-1];
 
-  for (j = m; crv::dfs_prune_checker().branch(j < r); j = j+1)
+  for (j = m; crv::sequential_dfs_checker().branch(j < r); j = j+1)
     aux[r+m-j] = a[j+1];
 
-  for (k = l; crv::dfs_prune_checker().branch(k <= r); k = k+1)
+  for (k = l; crv::sequential_dfs_checker().branch(k <= r); k = k+1)
   {
-    if (crv::dfs_prune_checker().branch(less(aux[i], aux[j])))
+    if (crv::sequential_dfs_checker().branch(less(aux[i], aux[j])))
     {
       a[k] = aux[i];
       i = i+1;
@@ -235,7 +227,7 @@ void safe_merge_sort(
   crv::Internal<size_t> r)
 {
   crv::Internal<size_t> m = (r+l)/2;
-  if (crv::dfs_prune_checker().branch(r <= l)) return;
+  if (crv::sequential_dfs_checker().branch(r <= l)) return;
   safe_merge_sort(aux, a, l, m);
   safe_merge_sort(aux, a, m+1, r);
   safe_merge(aux, a, l, m, r);
@@ -244,9 +236,7 @@ void safe_merge_sort(
 TEST(CrvFunctionalTest, SafeMergeSort)
 {
   constexpr unsigned N = 4;
-
-  crv::tracer().reset();
-  crv::dfs_prune_checker().reset();
+  crv::sequential_dfs_checker().reset();
 
   do
   {
@@ -255,11 +245,11 @@ TEST(CrvFunctionalTest, SafeMergeSort)
     safe_merge_sort(aux, a, 0, N-1);
 
     for (unsigned i = 0; i < N - 1; i++)
-      crv::dfs_prune_checker().add_error(!(a[i] <= a[i+1]));
+      crv::sequential_dfs_checker().add_error(!(a[i] <= a[i+1]));
 
-    EXPECT_EQ(smt::unsat, crv::dfs_prune_checker().check(crv::tracer()));
+    EXPECT_EQ(smt::unsat, crv::sequential_dfs_checker().check());
   }
-  while (crv::dfs_prune_checker().find_next_path());
+  while (crv::sequential_dfs_checker().find_next_path());
 }
 
 void unsafe_merge(
@@ -270,15 +260,15 @@ void unsafe_merge(
   crv::Internal<size_t> r)
 {
   crv::Internal<size_t> i = 0, j = 0, k = 0;
-  for (i = m+1; crv::dfs_prune_checker().branch(i > l); i = i-1)
+  for (i = m+1; crv::sequential_dfs_checker().branch(i > l); i = i-1)
     aux[i-1] = a[i-1];
 
-  for (j = m; crv::dfs_prune_checker().branch(j < r); j = j+1)
+  for (j = m; crv::sequential_dfs_checker().branch(j < r); j = j+1)
     aux[r+m-j] = a[j];
     //             ^ bug due to wrong offset (it should be j+1)
 
-  for (k = l; crv::dfs_prune_checker().branch(k <= r); k = k+1)
-    if (crv::dfs_prune_checker().branch(less(aux[i], aux[j])))
+  for (k = l; crv::sequential_dfs_checker().branch(k <= r); k = k+1)
+    if (crv::sequential_dfs_checker().branch(less(aux[i], aux[j])))
     {
       a[k] = aux[i];
       i = i+1;
@@ -297,7 +287,7 @@ void unsafe_merge_sort(
   crv::Internal<size_t> r)
 {
   crv::Internal<size_t> m = (r+l)/2;
-  if (crv::dfs_prune_checker().branch(r <= l)) return;
+  if (crv::sequential_dfs_checker().branch(r <= l)) return;
   unsafe_merge_sort(aux, a, l, m);
   unsafe_merge_sort(aux, a, m+1, r);
   unsafe_merge(aux, a, l, m, r);
@@ -306,9 +296,7 @@ void unsafe_merge_sort(
 TEST(CrvFunctionalTest, UnsafeMergeSort)
 {
   constexpr unsigned N = 4;
-
-  crv::tracer().reset();
-  crv::dfs_prune_checker().reset();
+  crv::sequential_dfs_checker().reset();
 
   bool error = false;
   do
@@ -318,11 +306,11 @@ TEST(CrvFunctionalTest, UnsafeMergeSort)
     unsafe_merge_sort(aux, a, 0, N-1);
 
     for (unsigned i = 0; i < N - 1; i++)
-      crv::dfs_prune_checker().add_error(!(a[i] <= a[i+1]));
+      crv::sequential_dfs_checker().add_error(!(a[i] <= a[i+1]));
 
-    error |= smt::sat == crv::dfs_prune_checker().check(crv::tracer());
+    error |= smt::sat == crv::sequential_dfs_checker().check();
   }
-  while (crv::dfs_prune_checker().find_next_path() && !error);
+  while (crv::sequential_dfs_checker().find_next_path() && !error);
   EXPECT_TRUE(error);
 }
 
@@ -376,7 +364,7 @@ static bst_link safe_bst_insertR(bst_link h, crv::Internal<Item> item) {
   crv::Internal<Key> v = key(item), t = key(h->item);
   if (h == bst_z) return NEW(item, bst_z, bst_z, 1);
 
-  if (crv::dfs_prune_checker().branch(less(v, t)))
+  if (crv::sequential_dfs_checker().branch(less(v, t)))
     h->l = safe_bst_insertR(h->l, item);
   else
     h->r = safe_bst_insertR(h->r, item);
@@ -389,9 +377,7 @@ void STsafe_insert(crv::Internal<Item> item) { bst_head = safe_bst_insertR(bst_h
 TEST(CrvFunctionalTest, SafeBst)
 {
   constexpr unsigned N = 4;
-
-  crv::tracer().reset();
-  crv::dfs_prune_checker().reset();
+  crv::sequential_dfs_checker().reset();
 
   do
   {
@@ -404,20 +390,20 @@ TEST(CrvFunctionalTest, SafeBst)
     bst_a_size = 0;
     STsort(bst_sorter);
 
-    crv::dfs_prune_checker().add_error(!(bst_a_size == N));
+    crv::sequential_dfs_checker().add_error(!(bst_a_size == N));
     for (unsigned i = 0; i < N - 1; i++)
-      crv::dfs_prune_checker().add_error(!(bst_a[i] <= bst_a[i+1]));
+      crv::sequential_dfs_checker().add_error(!(bst_a[i] <= bst_a[i+1]));
 
-    EXPECT_EQ(smt::unsat, crv::dfs_prune_checker().check(crv::tracer()));
+    EXPECT_EQ(smt::unsat, crv::sequential_dfs_checker().check());
   }
-  while (crv::dfs_prune_checker().find_next_path());
+  while (crv::sequential_dfs_checker().find_next_path());
 }
 
 static bst_link unsafe_bst_insertR(bst_link h, crv::Internal<Item> item) {
   crv::Internal<Key> v = key(item), t = key(h->item);
   if (h == bst_z) return NEW(item, bst_z, bst_z, 1);
 
-  if (crv::dfs_prune_checker().branch(less(v, t)))
+  if (crv::sequential_dfs_checker().branch(less(v, t)))
     h->l = unsafe_bst_insertR(h->r, item);
     //                           ^ bug due to wrong variable (it should be l)
   else
@@ -445,9 +431,7 @@ void STunsafe_insert(crv::Internal<Item> item) {
 TEST(CrvFunctionalTest, UnsafeBst)
 {
   constexpr unsigned N = 4;
-
-  crv::tracer().reset();
-  crv::dfs_prune_checker().reset();
+  crv::sequential_dfs_checker().reset();
 
   bool error = false;
   do
@@ -461,13 +445,13 @@ TEST(CrvFunctionalTest, UnsafeBst)
     bst_a_size = 0;
     STsort(bst_sorter);
 
-    crv::dfs_prune_checker().add_error(!(bst_a_size == N));
+    crv::sequential_dfs_checker().add_error(!(bst_a_size == N));
     for (unsigned i = 0; i < N - 1; i++)
-      crv::dfs_prune_checker().add_error(!(bst_a[i] <= bst_a[i+1]));
+      crv::sequential_dfs_checker().add_error(!(bst_a[i] <= bst_a[i+1]));
 
-    error |= smt::sat == crv::dfs_prune_checker().check(crv::tracer());
+    error |= smt::sat == crv::sequential_dfs_checker().check();
   }
-  while (crv::dfs_prune_checker().find_next_path() && !error);
+  while (crv::sequential_dfs_checker().find_next_path() && !error);
   EXPECT_TRUE(error);
 }
 

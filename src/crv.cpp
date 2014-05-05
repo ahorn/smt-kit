@@ -38,7 +38,7 @@ void Tracer::append_message_send_event(
   append_event<MESSAGE_SEND_EVENT>(m_event_id_cnt++, address, sort, term);
 }
 
-void Tracer::scope_then(const Internal<bool>& g)
+smt::Bool Tracer::scope_then(const Internal<bool>& g)
 {
   assert(!g.is_literal());
   assert(m_block_id_cnt < std::numeric_limits<BlockIdentifier>::max());
@@ -50,9 +50,10 @@ void Tracer::scope_then(const Internal<bool>& g)
   m_scope_stack.emplace(guard(), Internal<bool>::term(g),
     m_scope_stack.top().level + 1);
   m_guard = m_guard and Internal<bool>::term(g);
+  return m_guard;
 }
 
-void Tracer::scope_else()
+smt::Bool Tracer::scope_else()
 {
   assert(m_block_id_cnt < std::numeric_limits<BlockIdentifier>::max());
   assert(!m_scope_stack.empty());
@@ -61,14 +62,16 @@ void Tracer::scope_else()
   ThreadLocalScope& scope = m_scope_stack.top();
   scope.guard_prime = not scope.guard_prime;
   m_guard = scope.guard and scope.guard_prime;
+  return m_guard;
 }
 
-void Tracer::scope_end()
+smt::Bool Tracer::scope_end()
 {
   assert(!m_scope_stack.empty());
 
   m_guard = m_scope_stack.top().guard;
   m_scope_stack.pop();
+  return m_guard;
 }
 
 void Tracer::add_guard(smt::Bool&& g)
@@ -93,43 +96,6 @@ DfsChecker& dfs_checker()
   return s_dfs_checker;
 }
 
-void Checker::add_assertion(Internal<bool>&& assertion)
-{
-  if (assertion.is_literal())
-    assert(assertion.literal());
-
-  if (m_assertions.is_null())
-    m_assertions = Internal<bool>::term(std::move(assertion));
-  else
-    m_assertions = m_assertions and Internal<bool>::term(std::move(assertion));
-}
-
-void Checker::add_error(Internal<bool>&& error)
-{
-  if (error.is_literal())
-  {
-    if (error.literal())
-    {
-      if (m_errors.is_null())
-        m_errors = tracer().guard();
-      else
-        m_errors = m_errors or tracer().guard();
-    }
-    else
-    {
-      if (m_errors.is_null())
-        m_errors = smt::literal<smt::Bool>(false);
-    }
-  }
-  else
-  {
-    if (m_errors.is_null())
-      m_errors = tracer().guard() and Internal<bool>::term(std::move(error));
-    else
-      m_errors = m_errors or (tracer().guard() and Internal<bool>::term(std::move(error)));
-  }
-}
-
 bool DfsChecker::branch(const Internal<bool>& g, const bool direction_hint)
 {
   if (g.is_literal())
@@ -143,72 +109,6 @@ bool DfsChecker::branch(const Internal<bool>& g, const bool direction_hint)
 
   force_branch(g, direction);
   return direction;
-}
-
-DfsPruneChecker& dfs_prune_checker()
-{
-  static DfsPruneChecker s_dfs_prune_checker;
-  return s_dfs_prune_checker;
-}
-
-// maintainer note: recall Dfs::find_next_path(). If the newly alternated
-// flip F causes the conjunction of guards to be unsatisfiable, then this
-// will be detected here as soon as another branch condition is conjoined.
-// In the case there is no such other branch condition, progress is still
-// guaranteed because F is frozen and therefore will be popped by Dfs.
-bool DfsPruneChecker::branch(const Internal<bool>& g, const bool direction_hint)
-{
-  if (g.is_literal())
-    return g.literal();
-
-  if (!m_is_feasible)
-    // exactly like NO_BRANCH
-    return false;
-
-  if (m_dfs.has_next())
-  {
-    const bool direction = m_dfs.next();
-    DfsChecker::force_branch(g, direction);
-    return direction;
-  }
-
-  const smt::Bool g_term = Internal<bool>::term(g);
-  if (direction_hint)
-    goto THEN_BRANCH;
-  else
-    goto ELSE_BRANCH;
-
-THEN_BRANCH:
-  if (smt::sat == check(tracer().guard() and g_term))
-  {
-    tracer().add_guard(g_term);
-    m_dfs.append_flip(true, !direction_hint);
-    return true;
-  }
-
-  // neither THEN_BRANCH nor ELSE_BRANCH is feasible
-  if (!direction_hint)
-    goto NO_BRANCH;
-
-// fall through THEN_BRANCH to try ELSE_BRANCH
-ELSE_BRANCH:
-  if (smt::sat == check(tracer().guard() and not g_term))
-  {
-    tracer().add_guard(not g_term);
-    m_dfs.append_flip(false, direction_hint);
-    return false;
-  }
-
-  if (!direction_hint)
-    // try the other branch
-    goto THEN_BRANCH;
-
-NO_BRANCH:
-  // both THEN_BRANCH and ELSE_BRANCH are infeasible
-  m_is_feasible = false;
-
-  // favour "else" branch, hoping for shorter infeasible path
-  return false;
 }
 
 namespace ThisThread

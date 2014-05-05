@@ -54,6 +54,7 @@ lib_LTLIBRARIES = lib/libsmt.la
 
 lib_libsmt_la_SOURCES = \
   src/smt.cpp \
+  src/nse_sequential.cpp \
   src/crv.cpp
 
 pkginclude_HEADERS = \
@@ -63,6 +64,7 @@ pkginclude_HEADERS = \
   include/smt_msat.h \
   include/smt_stp.h \
   include/smt_cvc4.h \
+  include/nse_sequential.h \
   include/crv.h
 
 # Build rules for functional and unit tests.
@@ -95,6 +97,7 @@ test_smt_SOURCES = \
   test/smt_stp_test.cpp \
   test/smt_cvc4_test.cpp \
   test/smt_functional_test.cpp \
+  test/nse_sequential_test.cpp \
   test/crv_test.cpp \
   test/crv_functional_test.cpp \
   test/crv_performance_test.cpp

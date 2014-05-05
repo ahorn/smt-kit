@@ -376,55 +376,6 @@ TEST(CrvTest, DfsChecker)
   EXPECT_FALSE(checker.find_next_path());
 }
 
-TEST(CrvTest, DfsPruneCheck)
-{
-  DfsPruneChecker checker;
-
-  // if (a < 7) { skip } ; if (a < 4)  { skip }
-  Internal<int> a;
-  EXPECT_FALSE(checker.branch(a < 7));
-  EXPECT_FALSE(checker.branch(a < 4));
-  EXPECT_TRUE(checker.find_next_path());
-
-  EXPECT_FALSE(checker.branch(a < 7));
-  EXPECT_TRUE(checker.branch(a < 4));
-
-  // ignored because "a >= 7 and a < 4" is unsat
-  EXPECT_FALSE(checker.branch(a < 1));
-  EXPECT_FALSE(checker.branch(a < 2));
-  EXPECT_FALSE(checker.branch(a < 3));
-  EXPECT_TRUE(checker.find_next_path());
-
-  EXPECT_TRUE(checker.branch(a < 7));
-  EXPECT_FALSE(checker.branch(a < 4));
-  EXPECT_TRUE(checker.find_next_path());
-
-  EXPECT_TRUE(checker.branch(a < 7));
-  EXPECT_TRUE(checker.branch(a < 4));
-  EXPECT_FALSE(checker.find_next_path());
-
-  checker.reset();
-
-  Internal<int> b;
-  checker.add_assertion(b < 7);
-  EXPECT_TRUE(checker.branch(b < 7));
-  EXPECT_FALSE(checker.branch(b < 4));
-  EXPECT_TRUE(checker.find_next_path());
-
-  checker.add_assertion(b < 7);
-  EXPECT_TRUE(checker.branch(b < 7));
-  EXPECT_TRUE(checker.branch(b < 4));
-  EXPECT_FALSE(checker.find_next_path());
-
-  checker.reset();
-
-  Internal<int> c;
-  checker.add_assertion(c < 4);
-  EXPECT_TRUE(checker.branch(c < 7));
-  EXPECT_TRUE(checker.branch(c < 4));
-  EXPECT_FALSE(checker.find_next_path());
-}
-
 TEST(CrvTest, Value)
 {
   tracer().reset();
@@ -1633,11 +1584,11 @@ TEST(CrvTest, SatScopeWithNondeterminsticGuardInSingleThread)
   Internal<char> a('\0');
 
   x = 'A';
-  tracer().scope_then(nondet_bool);
+  checker.scope_then(nondet_bool);
   x = 'B';
-  tracer().scope_else();
+  checker.scope_else();
   x = 'C';
-  tracer().scope_end();
+  checker.scope_end();
   a = x;
 
   EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer(), checker));
@@ -1658,11 +1609,11 @@ TEST(CrvTest, SatScopeWithNondeterminsticGuardAndArrayInSingleThread)
   Internal<char> a('\0');
 
   xs[2] = 'A';
-  tracer().scope_then(nondet_bool);
+  checker.scope_then(nondet_bool);
   xs[2] = 'B';
-  tracer().scope_else();
+  checker.scope_else();
   xs[2] = 'C';
-  tracer().scope_end();
+  checker.scope_end();
   a = xs[2];
 
   EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer(), checker));
@@ -1684,11 +1635,11 @@ TEST(CrvTest, SatScopeWithDeterminsticGuardAndArrayInSingleThread)
   
   p = '?';
   x[2] = 'A';
-  tracer().scope_then(p == '?');
+  checker.scope_then(p == '?');
   x[2] = 'B';
-  tracer().scope_else();
+  checker.scope_else();
   x[2] = 'C'; // unreachable
-  tracer().scope_end();
+  checker.scope_end();
   a = x[2];
 
   EXPECT_EQ(smt::sat, encoder.check(a == 'B', tracer(), checker));
@@ -1704,9 +1655,9 @@ TEST(CrvTest, UnsatScopeInSingleThread)
 
   External<int> var;
 
-  tracer().scope_then(0 < var);
+  checker.scope_then(0 < var);
   checker.add_error(var == 0);
-  tracer().scope_end();
+  checker.scope_end();
 
   EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
 }
@@ -1720,9 +1671,9 @@ TEST(CrvTest, UnsatScopeInMultipleThread)
   External<int> var;
 
   tracer().append_thread_begin_event();
-  tracer().scope_then(0 < var);
+  checker.scope_then(0 < var);
   checker.add_error(var == 0);
-  tracer().scope_end();
+  checker.scope_end();
   tracer().append_thread_end_event();
 
   EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
@@ -1736,9 +1687,9 @@ TEST(CrvTest, UnsatScopeErrorConditionDueToFalseGuard)
 
   External<bool> true_bool(true);
   External<bool> false_bool(false);
-  tracer().scope_then(false_bool);
+  checker.scope_then(false_bool);
   checker.add_error(true_bool);
-  tracer().scope_end();
+  checker.scope_end();
 
   EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
 }
@@ -2343,6 +2294,7 @@ TEST(CrvTest, MutexJoinMultipleWriters)
 TEST(CrvTest, ImmediateDominator)
 {
   Tracer tracer;
+  DfsChecker checker(tracer);
   EventIters e_iters;
   EventMap immediate_dominator_map;
 
@@ -2351,9 +2303,9 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_write_event(x); // 3
   tracer.append_write_event(x); // 4
   tracer.append_thread_end_event();
@@ -2371,11 +2323,11 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_else();
+  checker.scope_else();
   tracer.append_write_event(x); // 3
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_write_event(x); // 4
   tracer.append_write_event(x); // 5
   tracer.append_thread_end_event();
@@ -2394,11 +2346,11 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
-  tracer.scope_end();
+  checker.scope_end();
+  checker.scope_end();
   tracer.append_write_event(x); // 3
   tracer.append_thread_end_event();
 
@@ -2414,12 +2366,12 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
   tracer.append_write_event(x); // 3
-  tracer.scope_end();
-  tracer.scope_end();
+  checker.scope_end();
+  checker.scope_end();
   tracer.append_write_event(x); // 4
   tracer.append_thread_end_event();
 
@@ -2436,13 +2388,13 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
-  tracer.scope_else();
+  checker.scope_end();
+  checker.scope_else();
   tracer.append_write_event(x); // 3
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_write_event(x); // 4
   tracer.append_thread_end_event();
 
@@ -2459,13 +2411,13 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_else();
+  checker.scope_else();
   tracer.append_write_event(x); // 3
-  tracer.scope_end();
-  tracer.scope_end();
+  checker.scope_end();
+  checker.scope_end();
   tracer.append_write_event(x); // 4
   tracer.append_thread_end_event();
 
@@ -2482,12 +2434,12 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
-  tracer.scope_then(any_bool);
+  checker.scope_end();
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 3
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_thread_end_event();
 
   e_iters = tracer.per_thread_map().at(2);
@@ -2502,13 +2454,13 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_write_event(x); // 3
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 4
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_thread_end_event();
 
   e_iters = tracer.per_thread_map().at(2);
@@ -2524,15 +2476,15 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_else();
+  checker.scope_else();
   tracer.append_write_event(x); // 3
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_write_event(x); // 4
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 5
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_thread_end_event();
 
   e_iters = tracer.per_thread_map().at(2);
@@ -2549,15 +2501,15 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_write_event(x); // 3
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 4
-  tracer.scope_else();
+  checker.scope_else();
   tracer.append_write_event(x); // 5
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_thread_end_event();
 
   e_iters = tracer.per_thread_map().at(2);
@@ -2574,14 +2526,14 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_else();
-  tracer.scope_end();
+  checker.scope_else();
+  checker.scope_end();
   tracer.append_write_event(x); // 3
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 4
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_thread_end_event();
 
   e_iters = tracer.per_thread_map().at(2);
@@ -2597,14 +2549,14 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_write_event(x); // 3
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 4
-  tracer.scope_else();
-  tracer.scope_end();
+  checker.scope_else();
+  checker.scope_end();
   tracer.append_thread_end_event();
 
   e_iters = tracer.per_thread_map().at(2);
@@ -2620,14 +2572,14 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
-  tracer.scope_else();
+  checker.scope_then(any_bool);
+  checker.scope_else();
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_write_event(x); // 3
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 4
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_thread_end_event();
 
   e_iters = tracer.per_thread_map().at(2);
@@ -2643,14 +2595,14 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_write_event(x); // 3
-  tracer.scope_then(any_bool);
-  tracer.scope_else();
+  checker.scope_then(any_bool);
+  checker.scope_else();
   tracer.append_write_event(x); // 4
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_thread_end_event();
 
   e_iters = tracer.per_thread_map().at(2);
@@ -2666,13 +2618,13 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
-  tracer.scope_else();
+  checker.scope_then(any_bool);
+  checker.scope_else();
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
-  tracer.scope_then(any_bool);
+  checker.scope_end();
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 3
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_thread_end_event();
 
   e_iters = tracer.per_thread_map().at(2);
@@ -2687,13 +2639,13 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
-  tracer.scope_then(any_bool);
-  tracer.scope_else();
+  checker.scope_end();
+  checker.scope_then(any_bool);
+  checker.scope_else();
   tracer.append_write_event(x); // 3
-  tracer.scope_end();
+  checker.scope_end();
   tracer.append_thread_end_event();
 
   e_iters = tracer.per_thread_map().at(2);
@@ -2708,14 +2660,14 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
-  tracer.scope_then(any_bool);
+  checker.scope_end();
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 3
-  tracer.scope_end();
-  tracer.scope_end();
+  checker.scope_end();
+  checker.scope_end();
   tracer.append_thread_end_event();
 
   e_iters = tracer.per_thread_map().at(2);
@@ -2730,16 +2682,16 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
-  tracer.scope_then(any_bool);
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
+  checker.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
-  tracer.scope_then(any_bool);
+  checker.scope_end();
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 3
-  tracer.scope_end();
-  tracer.scope_end();
-  tracer.scope_end();
+  checker.scope_end();
+  checker.scope_end();
+  checker.scope_end();
   tracer.append_thread_end_event();
 
   e_iters = tracer.per_thread_map().at(2);
@@ -2754,14 +2706,14 @@ TEST(CrvTest, ImmediateDominator)
 
   tracer.append_thread_begin_event();
   tracer.append_write_event(x); // 1
-  tracer.scope_then(any_bool);
-  tracer.scope_then(any_bool);
+  checker.scope_then(any_bool);
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 2
-  tracer.scope_end();
-  tracer.scope_then(any_bool);
+  checker.scope_end();
+  checker.scope_then(any_bool);
   tracer.append_write_event(x); // 3
-  tracer.scope_end();
-  tracer.scope_end();
+  checker.scope_end();
+  checker.scope_end();
   tracer.append_write_event(x); // 4
   tracer.append_thread_end_event();
 
@@ -3076,11 +3028,11 @@ TEST(CrvTest, ScopeCommunicationWithElse)
 
   tracer().append_thread_begin_event();
   c.send(5);
-  tracer().scope_then(6 == c.recv());
+  checker.scope_then(6 == c.recv());
   c.send(7);
-  tracer().scope_else();
+  checker.scope_else();
   c.send(8);
-  tracer().scope_end();
+  checker.scope_end();
   tracer().append_thread_end_event();
 
   tracer().append_thread_begin_event();
@@ -3104,9 +3056,9 @@ TEST(CrvTest, ScopeCommunicationWithFalseThen)
 
   tracer().append_thread_begin_event();
   c.send(5);
-  tracer().scope_then(6 != c.recv());
+  checker.scope_then(6 != c.recv());
   c.send(7);
-  tracer().scope_end();
+  checker.scope_end();
   tracer().append_thread_end_event();
 
   tracer().append_thread_begin_event();
