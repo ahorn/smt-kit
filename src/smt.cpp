@@ -95,12 +95,18 @@ UnsafeTerm store(
 Solver::Solver()
 : m_stats{0}
 {
+  m_stats.encode_elapsed_time = ElapsedTime::zero();
+  m_stats.check_elapsed_time = ElapsedTime::zero();
+
   Expr::register_solver(this);
 }
 
 Solver::Solver(Logic logic)
 : m_stats{0}
 {
+  m_stats.encode_elapsed_time = ElapsedTime::zero();
+  m_stats.check_elapsed_time = ElapsedTime::zero();
+
   Expr::register_solver(this);
 }
 
@@ -113,6 +119,8 @@ Error Solver::encode_constant(
   const Expr* const expr,
   const UnsafeDecl& decl)
 {
+  ElapsedTimer timer(m_stats.encode_elapsed_time);
+
   m_stats.constants++;
   return __encode_constant(expr, decl);
 }
@@ -123,6 +131,8 @@ Error Solver::encode_func_app(
   const size_t arity,
   const UnsafeTerm* const args)
 {
+  ElapsedTimer timer(m_stats.encode_elapsed_time);
+
   assert(0 < arity);
   assert(args != nullptr);
 
@@ -135,6 +145,8 @@ Error Solver::encode_const_array(
   const Sort& sort,
   const UnsafeTerm& init)
 {
+  ElapsedTimer timer(m_stats.encode_elapsed_time);
+
   assert(!init.is_null());
 
   return __encode_const_array(expr, sort, init);
@@ -145,6 +157,8 @@ Error Solver::encode_array_select(
   const UnsafeTerm& array,
   const UnsafeTerm& index)
 {
+  ElapsedTimer timer(m_stats.encode_elapsed_time);
+
   assert(!array.is_null());
   assert(!index.is_null());
 
@@ -158,6 +172,8 @@ Error Solver::encode_array_store(
   const UnsafeTerm& index,
   const UnsafeTerm& value)
 {
+  ElapsedTimer timer(m_stats.encode_elapsed_time);
+
   assert(!array.is_null());
   assert(!index.is_null());
   assert(!value.is_null());
@@ -172,6 +188,8 @@ Error Solver::encode_unary(
   const Sort& sort,
   const UnsafeTerm& arg)
 {
+  ElapsedTimer timer(m_stats.encode_elapsed_time);
+
   assert(!arg.is_null());
 
   m_stats.unary_ops++;
@@ -185,6 +203,8 @@ Error Solver::encode_binary(
   const UnsafeTerm& larg,
   const UnsafeTerm& rarg)
 {
+  ElapsedTimer timer(m_stats.encode_elapsed_time);
+
   assert(!larg.is_null());
   assert(!rarg.is_null());
   assert(larg.sort() == rarg.sort());
@@ -225,6 +245,8 @@ Error Solver::encode_nary(
   const Sort& sort,
   const UnsafeTerms& args)
 {
+  ElapsedTimer timer(m_stats.encode_elapsed_time);
+
   assert(!args.empty());
 
   switch (opcode) {
@@ -254,6 +276,8 @@ Error Solver::encode_bv_zero_extend(
   const UnsafeTerm& bv,
   const unsigned ext)
 {
+  ElapsedTimer timer(m_stats.encode_elapsed_time);
+
   assert(bv.sort().is_bv());
   return __encode_bv_zero_extend(expr, sort, bv, ext);
 }
@@ -264,6 +288,8 @@ Error Solver::encode_bv_sign_extend(
   const UnsafeTerm& bv,
   const unsigned ext)
 {
+  ElapsedTimer timer(m_stats.encode_elapsed_time);
+
   assert(bv.sort().is_bv());
   return __encode_bv_sign_extend(expr, sort, bv, ext);
 }
@@ -275,6 +301,8 @@ Error Solver::encode_bv_extract(
   const unsigned high,
   const unsigned low)
 {
+  ElapsedTimer timer(m_stats.encode_elapsed_time);
+
   assert(bv.sort().is_bv());
   return __encode_bv_extract(expr, sort, bv, high, low);
 }
@@ -296,6 +324,8 @@ void Solver::pop()
 
 void Solver::unsafe_add(const UnsafeTerm& condition)
 {
+  ElapsedTimer timer(m_stats.encode_elapsed_time);
+
   assert(condition.sort().is_bool());
   const Error err = __unsafe_add(condition);
   assert(err == OK);
@@ -309,6 +339,8 @@ void Solver::add(const Bool& condition)
 
 CheckResult Solver::check()
 {
+  ElapsedTimer timer(m_stats.check_elapsed_time);
+
   return __check();
 }
 

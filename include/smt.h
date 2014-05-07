@@ -9,6 +9,7 @@
 #include <array>
 #include <vector>
 #include <unordered_set>
+#include <chrono>
 #include <string>
 #include <memory>
 #include <cstddef>
@@ -742,6 +743,32 @@ typedef std::vector<UnsafeTerm> UnsafeTerms;
 
 class Expr;
 
+namespace internal
+{
+  /// Measure elapsed time within a scope (e.g. function body)
+
+  /// Timers can be conveniently used to measure the time it takes to
+  /// execute an entire function because return values are constructed
+  /// before the local variables are destroyed.
+  template<typename T>
+  class Timer
+  {
+  private:
+    T& m_time_ref;
+    std::chrono::time_point<std::chrono::system_clock> m_start;
+  public:
+    Timer(T& time_ref)
+    : m_time_ref(time_ref),
+      m_start(std::chrono::system_clock::now()) {}
+
+    ~Timer()
+    {
+      auto stop = std::chrono::system_clock::now();
+      m_time_ref += std::chrono::duration_cast<T>(stop - m_start);
+    }
+  };
+}
+
 /// Abstract base class of an SMT/SAT solver
 
 /// Memory management:
@@ -759,6 +786,8 @@ class Expr;
 class Solver
 {
 public:
+  typedef std::chrono::milliseconds ElapsedTime;
+
   struct Stats
   {
     unsigned constants;
@@ -774,9 +803,17 @@ public:
     unsigned implications;
     unsigned conjunctions;
     unsigned disjunctions;
+
+    /// Total time it has taken up to now to build expressions
+    ElapsedTime encode_elapsed_time;
+
+    /// Total time it has taken up to now to compute SAT or UNSAT
+    ElapsedTime check_elapsed_time;
   };
 
 private:
+  typedef internal::Timer<ElapsedTime> ElapsedTimer;
+
   Stats m_stats;
 
 #define SMT_ENCODE_BUILTIN_LITERAL(type)                                       \
@@ -972,7 +1009,7 @@ public:
     const unsigned low);
 
   // Generic SMT formula statistics
-  const Stats& stats()
+  const Stats& stats() const
   {
     return m_stats;
   }

@@ -2,6 +2,8 @@
 
 #include "smt.h"
 
+#include <thread>
+
 using namespace smt;
 
 #define STATIC_EXPECT_TRUE(condition) static_assert((condition), "")
@@ -1153,4 +1155,18 @@ TEST(SmtTest, BvChangeSignedness)
   EXPECT_TRUE(d.sort().is_signed());
   EXPECT_TRUE(d.sort().is_bv());
   EXPECT_EQ(c.sort().bv_size(), d.sort().bv_size());
+}
+
+TEST(SmtTest, Timer)
+{
+  std::chrono::milliseconds watch(smt::Solver::ElapsedTime::zero());
+  {
+    internal::Timer<std::chrono::milliseconds> timer(watch);
+
+    // sleep at least 1000 milliseconds, possibly longer
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  }
+
+  EXPECT_TRUE(watch.count() <= 3000);
+  EXPECT_TRUE(500 <= watch.count());
 }
