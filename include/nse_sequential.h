@@ -1410,18 +1410,28 @@ class SequentialDfsChecker : public Checker
 public:
   typedef std::chrono::milliseconds ElapsedTime;
 
+  struct Stats
+  {
+    // time it has taken so far to explore new branches
+    ElapsedTime branch_time;
+
+    // time it has taken so far to restore earlier explored states
+    ElapsedTime replay_time;
+
+    // number of branch(c) calls
+    unsigned long long branch_cnt;
+
+    // number of branch(c) calls where c is a literal
+    unsigned long long branch_literal_cnt;
+  };
+
 private:
   typedef smt::NonReentrantTimer<ElapsedTime> Timer;
 
   smt::Z3Solver m_solver;
   bool m_is_feasible;
   Dfs m_dfs;
-
-  // duration to explore new branches
-  ElapsedTime m_branch_time;
-
-  // duration to get restore an earlier explored state
-  ElapsedTime m_replay_time;
+  Stats m_stats;
 
   smt::ManualTimer<ElapsedTime> m_replay_manual_timer;
 
@@ -1446,9 +1456,13 @@ protected:
     m_solver.reset();
   }
 
-  void reset_timer()
+  void reset_stats()
   {
-    m_replay_time = m_branch_time = ElapsedTime::zero();
+    m_stats.replay_time = m_stats.branch_time = ElapsedTime::zero();
+    m_stats.branch_cnt = m_stats.branch_literal_cnt = 0;
+
+    if (m_replay_manual_timer.is_active())
+      m_replay_manual_timer.stop();
   }
 
 public:
@@ -1462,15 +1476,17 @@ public:
 #endif
     m_is_feasible(true),
     m_dfs(),
-    m_branch_time(ElapsedTime::zero()),
-    m_replay_time(ElapsedTime::zero()),
-    m_replay_manual_timer(m_replay_time) {}
+    m_stats{},
+    m_replay_manual_timer(m_stats.replay_time)
+  {
+    reset_stats();
+  }
 
   void reset()
   {
     reset_dfs();
     reset_solver();
-    reset_timer();
+    reset_stats();
 
     Checker::reset();
     internal::Inputs::reset();
@@ -1481,14 +1497,9 @@ public:
     return m_solver;
   }
 
-  const ElapsedTime& branch_time() const
+  const Stats& stats() const
   {
-    return m_branch_time;
-  }
-
-  const ElapsedTime& replay_time() const
-  {
-    return m_replay_time;
+    return m_stats;
   }
 
   unsigned long long path_cnt() const

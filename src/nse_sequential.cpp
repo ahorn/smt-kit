@@ -60,8 +60,16 @@ SequentialDfsChecker& sequential_dfs_checker()
 // guaranteed because F is frozen and therefore will be popped by Dfs.
 bool SequentialDfsChecker::branch(const Internal<bool>& g, const bool direction_hint)
 {
+  m_stats.branch_cnt++;
+  assert(m_stats.branch_cnt != 0);
+
   if (g.is_literal())
+  {
+    m_stats.branch_literal_cnt++;
+    assert(m_stats.branch_literal_cnt != 0);
+
     return g.literal();
+  }
 
   if (!m_is_feasible)
     // exactly like NO_BRANCH
@@ -82,7 +90,7 @@ bool SequentialDfsChecker::branch(const Internal<bool>& g, const bool direction_
   if (m_replay_manual_timer.is_active())
     m_replay_manual_timer.stop();
 
-  Timer timer(m_branch_time);
+  Timer timer(m_stats.branch_time);
 
   if (direction_hint)
     goto THEN_BRANCH;
