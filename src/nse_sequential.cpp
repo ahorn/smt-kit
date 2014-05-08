@@ -79,6 +79,11 @@ bool SequentialDfsChecker::branch(const Internal<bool>& g, const bool direction_
     return direction;
   }
 
+  if (m_replay_manual_timer.is_active())
+    m_replay_manual_timer.stop();
+
+  Timer timer(m_branch_time);
+
   if (direction_hint)
     goto THEN_BRANCH;
   else

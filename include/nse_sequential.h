@@ -16,6 +16,8 @@
 namespace crv
 {
 
+#define _BV_THEORY_ 1
+
 namespace internal
 {
   /// Evaluate built-in arithmetic and boolean expressions
@@ -1405,10 +1407,23 @@ public:
 /// Depth-first search checker for sequential code
 class SequentialDfsChecker : public Checker
 {
+public:
+  typedef std::chrono::milliseconds ElapsedTime;
+
 private:
+  typedef smt::NonReentrantTimer<ElapsedTime> Timer;
+
   smt::Z3Solver m_solver;
   bool m_is_feasible;
   Dfs m_dfs;
+
+  // duration to explore new branches
+  ElapsedTime m_branch_time;
+
+  // duration to get restore an earlier explored state
+  ElapsedTime m_replay_time;
+
+  smt::ManualTimer<ElapsedTime> m_replay_manual_timer;
 
   smt::CheckResult check(const smt::Bool& condition)
   {
@@ -1431,6 +1446,11 @@ protected:
     m_solver.reset();
   }
 
+  void reset_timer()
+  {
+    m_replay_time = m_branch_time = ElapsedTime::zero();
+  }
+
 public:
 
   SequentialDfsChecker()
@@ -1441,15 +1461,43 @@ public:
     m_solver(smt::QF_AUFLIRA_LOGIC),
 #endif
     m_is_feasible(true),
-    m_dfs() {}
+    m_dfs(),
+    m_branch_time(ElapsedTime::zero()),
+    m_replay_time(ElapsedTime::zero()),
+    m_replay_manual_timer(m_replay_time) {}
 
   void reset()
   {
     reset_dfs();
     reset_solver();
+    reset_timer();
 
     Checker::reset();
     internal::Inputs::reset();
+  }
+
+  const smt::Solver& solver() const
+  {
+    return m_solver;
+  }
+
+  const ElapsedTime& branch_time() const
+  {
+    return m_branch_time;
+  }
+
+  const ElapsedTime& replay_time() const
+  {
+    return m_replay_time;
+  }
+
+  unsigned long long path_cnt() const
+  {
+    unsigned long long path_cnt = m_dfs.path_cnt() + 1;
+
+    // overflow?
+    assert(path_cnt != 0);
+    return path_cnt;
   }
 
   /// Follow a feasible control flow direction, i.e. prunes infeasible branches
@@ -1466,7 +1514,17 @@ public:
 
     const bool found_path = m_dfs.find_next_path();
     if (found_path)
+    {
       Checker::reset(); // do not reset m_dfs etc.
+
+      // in case all branches could be resolved
+      // with constant propagation and there is
+      // no SequentialDfsChecker::check() call
+      if (m_replay_manual_timer.is_active())
+         m_replay_manual_timer.stop();
+
+      m_replay_manual_timer.start();
+    }
 
     return found_path;
   }
@@ -1481,6 +1539,11 @@ public:
   smt::CheckResult check()
   {
     assert(!Checker::errors().is_null());
+
+    // in case all branches could be resolved
+    // with constant propagation
+    if (m_replay_manual_timer.is_active())
+       m_replay_manual_timer.stop();
 
     m_solver.push();
 
