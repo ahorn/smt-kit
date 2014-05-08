@@ -750,24 +750,65 @@ namespace internal
   /// Timers can be conveniently used to measure the time it takes to
   /// execute an entire function because return values are constructed
   /// before the local variables are destroyed.
-  template<typename T>
+  ///
+  /// Implementations should make clear whether timers can be used
+  /// in recursive functions or not.
+  template<typename T, typename Clock=std::chrono::system_clock>
   class Timer
   {
   private:
     T& m_time_ref;
-    std::chrono::time_point<std::chrono::system_clock> m_start;
-  public:
+    std::chrono::time_point<Clock> m_start;
+  protected:
     Timer(T& time_ref)
     : m_time_ref(time_ref),
-      m_start(std::chrono::system_clock::now()) {}
+      m_start(Clock::now()) {}
 
-    ~Timer()
+    void stop() noexcept
     {
-      auto stop = std::chrono::system_clock::now();
+      auto stop = Clock::now();
       m_time_ref += std::chrono::duration_cast<T>(stop - m_start);
     }
   };
 }
+
+/// Timer that can be used inside recursive functions
+template<typename T, typename Clock=std::chrono::system_clock>
+class ReentrantTimer : public internal::Timer<T, Clock>
+{
+private:
+  bool& m_is_active;
+
+public:
+  ReentrantTimer(T& time_ref, bool& is_active)
+  : internal::Timer<T, Clock>(time_ref),
+    m_is_active(is_active)
+  {
+    m_is_active = true;
+  }
+
+  ~ReentrantTimer()
+  {
+    if (m_is_active)
+      internal::Timer<T, Clock>::stop();
+
+    m_is_active = false;
+  }
+};
+
+/// Timer that must not be used inside recursive functions
+template<typename T, typename Clock=std::chrono::system_clock>
+class NonReentrantTimer : public internal::Timer<T, Clock>
+{
+public:
+  NonReentrantTimer(T& time_ref)
+  : internal::Timer<T, Clock>(time_ref) {}
+
+  ~NonReentrantTimer()
+  {
+    internal::Timer<T, Clock>::stop();
+  }
+};
 
 /// Abstract base class of an SMT/SAT solver
 
@@ -812,9 +853,10 @@ public:
   };
 
 private:
-  typedef internal::Timer<ElapsedTime> ElapsedTimer;
+  typedef ReentrantTimer<ElapsedTime> ElapsedTimer;
 
   Stats m_stats;
+  bool m_is_timer_on;
 
 #define SMT_ENCODE_BUILTIN_LITERAL(type)                                       \
 private:                                                                       \

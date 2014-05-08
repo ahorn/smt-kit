@@ -1159,14 +1159,32 @@ TEST(SmtTest, BvChangeSignedness)
 
 TEST(SmtTest, Timer)
 {
-  std::chrono::milliseconds watch(smt::Solver::ElapsedTime::zero());
+  std::chrono::milliseconds a(smt::Solver::ElapsedTime::zero());
+  std::chrono::milliseconds b(smt::Solver::ElapsedTime::zero());
   {
-    internal::Timer<std::chrono::milliseconds> timer(watch);
+    NonReentrantTimer<std::chrono::milliseconds> timer(a);
+
+    bool is_active;
+    ReentrantTimer<std::chrono::milliseconds> timer0(b, is_active);
+    ReentrantTimer<std::chrono::milliseconds> timer1(b, is_active);
 
     // sleep at least 1000 milliseconds, possibly longer
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
 
-  EXPECT_TRUE(watch.count() <= 3000);
-  EXPECT_TRUE(500 <= watch.count());
+#if __cplusplus > 201103L
+  using namespace std::literals::chrono_literals;
+
+  EXPECT_TRUE(a <= 3000ms);
+  EXPECT_TRUE(500ms <= a);
+
+  EXPECT_TRUE(b <= (a + 100ms));
+  EXPECT_TRUE((a - 100ms) <= b);
+#else
+  EXPECT_TRUE(a.count() <= 3000);
+  EXPECT_TRUE(500 <= a.count());
+
+  EXPECT_TRUE(b.count() <= (a.count() + 100));
+  EXPECT_TRUE((a.count() - 100) <= b.count());
+#endif
 }
