@@ -758,11 +758,22 @@ namespace internal
   {
   private:
     T& m_time_ref;
-    std::chrono::time_point<Clock> m_start;
+
   protected:
+    std::chrono::time_point<Clock> m_start;
+
     Timer(T& time_ref)
     : m_time_ref(time_ref),
       m_start(Clock::now()) {}
+
+    Timer(T& time_ref, const std::chrono::time_point<Clock>& start)
+    : m_time_ref(time_ref),
+      m_start(start) {}
+
+    void start() noexcept
+    {
+       m_start = Clock::now();
+    }
 
     void stop() noexcept
     {
@@ -807,6 +818,49 @@ public:
   ~NonReentrantTimer()
   {
     internal::Timer<T, Clock>::stop();
+  }
+};
+
+/// Timer that must be explicitly started and stopped
+template<typename T, typename Clock=std::chrono::system_clock>
+class ManualTimer : public internal::Timer<T, Clock>
+{
+private:
+  bool m_is_active;
+public:
+  /// Modifies time_ref argument on stop() calls
+  ManualTimer(T& time_ref)
+  : internal::Timer<T, Clock>(time_ref,
+      std::chrono::time_point<Clock>::min()),
+     m_is_active(false) {}
+
+  /// Is stop watch on?
+  bool is_active() const noexcept
+  {
+    return m_is_active;
+  }
+
+  /// Restarting an active timer is a programmer error.
+
+  /// \pre: not is_active() then \post: is_active()
+  void start() noexcept
+  {
+    assert(!m_is_active);
+    m_is_active = true;
+    internal::Timer<T, Clock>::start();
+  }
+
+  /// Adds the elapsed time to the time_ref constructor argument
+
+  /// Stopping a nonactive timer is a programmer error.
+  ///
+  /// \pre: is_active() then \post: not is_active()
+  void stop() noexcept
+  {
+    assert(m_is_active);
+
+    internal::Timer<T, Clock>::stop();
+    m_is_active = false;
   }
 };
 

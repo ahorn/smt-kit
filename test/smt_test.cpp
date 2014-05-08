@@ -1159,9 +1159,18 @@ TEST(SmtTest, BvChangeSignedness)
 
 TEST(SmtTest, Timer)
 {
+
   std::chrono::milliseconds a(smt::Solver::ElapsedTime::zero());
   std::chrono::milliseconds b(smt::Solver::ElapsedTime::zero());
+  std::chrono::milliseconds c(smt::Solver::ElapsedTime::zero());
+
+  ManualTimer<std::chrono::milliseconds> manual_timer(c);
+  EXPECT_FALSE(manual_timer.is_active());
+
   {
+    manual_timer.start();
+    EXPECT_TRUE(manual_timer.is_active());
+
     NonReentrantTimer<std::chrono::milliseconds> timer(a);
 
     bool is_active;
@@ -1170,6 +1179,9 @@ TEST(SmtTest, Timer)
 
     // sleep at least 1000 milliseconds, possibly longer
     std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    manual_timer.stop();
+    EXPECT_FALSE(manual_timer.is_active());
   }
 
 #if __cplusplus > 201103L
@@ -1180,11 +1192,17 @@ TEST(SmtTest, Timer)
 
   EXPECT_TRUE(b <= (a + 100ms));
   EXPECT_TRUE((a - 100ms) <= b);
+
+  EXPECT_TRUE(c <= (a + 100ms));
+  EXPECT_TRUE((a - 100ms) <= c);
 #else
   EXPECT_TRUE(a.count() <= 3000);
   EXPECT_TRUE(500 <= a.count());
 
   EXPECT_TRUE(b.count() <= (a.count() + 100));
   EXPECT_TRUE((a.count() - 100) <= b.count());
+
+  EXPECT_TRUE(c.count() <= (a.count() + 100));
+  EXPECT_TRUE((a.count() - 100) <= c.count());
 #endif
 }
