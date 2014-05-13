@@ -303,190 +303,350 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     return OK;
   }
 
-  virtual Error __encode_unary(
+  virtual Error __encode_unary_lnot(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& arg) override
+  {
+    const Error err = arg.encode(*this);
+    if (err)
+      return err;
+
+    set_expr(m_expr_manager.mkExpr(CVC4::kind::NOT, m_expr));
+    return OK;
+  }
+
+  virtual Error __encode_unary_not(
     const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& arg) override
   {
     const Error err = arg.encode(*this);
-    if (err) {
+    if (err)
       return err;
-    }
+
+    set_expr(m_expr_manager.mkExpr(CVC4::kind::BITVECTOR_NOT, m_expr));
+    return OK;
+  }
+
+  virtual Error __encode_unary_sub(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& arg) override
+  {
+    const Error err = arg.encode(*this);
+    if (err)
+      return err;
 
     CVC4::kind::Kind_t kind;
-    switch (opcode) {
-    case LNOT:
-      kind = CVC4::kind::NOT;
-      break;
-    case NOT:
-      kind = CVC4::kind::BITVECTOR_NOT;
-      break;
-    case SUB:
-      if (sort.is_bv()) {
-        kind = CVC4::kind::BITVECTOR_NEG;
-      } else {
-        kind = CVC4::kind::UMINUS;
-      }
-      break;
-    default:
-      return OPCODE_ERROR;
-    }
+    if (sort.is_bv())
+      kind = CVC4::kind::BITVECTOR_NEG;
+    else
+      kind = CVC4::kind::UMINUS;
 
     set_expr(m_expr_manager.mkExpr(kind, m_expr));
     return OK;
   }
 
-  virtual Error __encode_binary(
+  Error encode_binary(
     const Expr* const expr,
-    Opcode opcode,
+    const Sort& sort,
+    CVC4::kind::Kind_t kind,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg)
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const CVC4::Expr lexpr(m_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const CVC4::Expr rexpr(m_expr);
+
+    set_expr(m_expr_manager.mkExpr(kind, lexpr, rexpr));
+    return OK;
+  }
+
+  virtual Error __encode_binary_sub(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& larg,
     const UnsafeTerm& rarg) override
   {
-    Error err;
-    err = larg.encode(*this);
-    if (err) {
-      return err;
-    }
-    const CVC4::Expr lexpr(m_expr);
+    CVC4::kind::Kind_t kind = CVC4::kind::MINUS;
 
-    err = rarg.encode(*this);
-    if (err) {
-      return err;
-    }
-    const CVC4::Expr rexpr(m_expr);
+    if (sort.is_bv())
+      kind = CVC4::kind::BITVECTOR_SUB;
 
+    return encode_binary(expr, sort, kind, larg, rarg);
+  }
+
+  virtual Error __encode_binary_and(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    return encode_binary(expr, sort,
+      CVC4::kind::BITVECTOR_AND, larg, rarg);
+  }
+
+  virtual Error __encode_binary_or(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    return encode_binary(expr, sort,
+      CVC4::kind::BITVECTOR_OR, larg, rarg);
+  }
+
+  virtual Error __encode_binary_xor(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    return encode_binary(expr, sort,
+      CVC4::kind::BITVECTOR_XOR, larg, rarg);
+  }
+
+  virtual Error __encode_binary_land(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    return encode_binary(expr, sort,
+      CVC4::kind::AND, larg, rarg);
+  }
+
+  virtual Error __encode_binary_lor(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    return encode_binary(expr, sort,
+      CVC4::kind::OR, larg, rarg);
+  }
+
+  virtual Error __encode_binary_imp(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    return encode_binary(expr, sort,
+      CVC4::kind::IMPLIES, larg, rarg);
+  }
+
+  virtual Error __encode_binary_eql(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    CVC4::kind::Kind_t kind = CVC4::kind::EQUAL;
+
+    if (larg.sort().is_bool())
+      kind = CVC4::kind::IFF;
+
+    return encode_binary(expr, sort, kind, larg, rarg);
+  }
+
+  virtual Error __encode_binary_add(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    CVC4::kind::Kind_t kind = CVC4::kind::PLUS;
+
+    if (sort.is_bv())
+      kind = CVC4::kind::BITVECTOR_PLUS;
+
+    return encode_binary(expr, sort, kind, larg, rarg);
+  }
+
+  virtual Error __encode_binary_mul(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    CVC4::kind::Kind_t kind = CVC4::kind::MULT;
+
+    if (sort.is_bv())
+      kind = CVC4::kind::BITVECTOR_MULTBITVECTOR_MULT;
+
+    return encode_binary(expr, sort, kind, larg, rarg);
+  }
+
+  virtual Error __encode_binary_quo(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
     CVC4::kind::Kind_t kind;
-    switch (opcode) {
-    case SUB:
-      if (sort.is_bv()) {
-        kind = CVC4::kind::BITVECTOR_SUB;
-      } else {
-        kind = CVC4::kind::MINUS;
-      }
-      break;
-    case AND:
-      kind = CVC4::kind::BITVECTOR_AND;
-      break;
-    case OR:
-      kind = CVC4::kind::BITVECTOR_OR;
-      break;
-    case XOR:
-      kind = CVC4::kind::BITVECTOR_XOR;
-      break;
-    case LAND:
-      kind = CVC4::kind::AND;
-      break;
-    case LOR:
-      kind = CVC4::kind::OR;
-      break;
-    case IMP:
-      kind = CVC4::kind::IMPLIES;
-      break;
-    case EQL:
-      if (larg.sort().is_bool()) {
-        kind = CVC4::kind::IFF;
-      } else {
-        kind = CVC4::kind::EQUAL;
-      }
-      break;
-    case ADD:
-      if (sort.is_bv()) {
-        kind = CVC4::kind::BITVECTOR_PLUS;
-      } else {
-        kind = CVC4::kind::PLUS;
-      }
-      break;
-    case MUL:
-      if (sort.is_bv()) {
-        kind = CVC4::kind::BITVECTOR_MULT;
-      } else {
-        kind = CVC4::kind::MULT;
-      }
-      break;
-    case QUO:
-      if (sort.is_bv()) {
-        if (sort.is_signed()) {
-          kind = CVC4::kind::BITVECTOR_SDIV;
-        } else {
-          kind = CVC4::kind::BITVECTOR_UDIV;
-        }
-      } else if (sort.is_int()) {
-        kind = CVC4::kind::INTS_DIVISION;
-      } else if (sort.is_real()) {
-        kind = CVC4::kind::DIVISION;
-      } else {
-        return UNSUPPORT_ERROR;
-      }
-      break;
-    case REM:
-      if (sort.is_bv()) {
-        if (sort.is_signed()) {
-          kind = CVC4::kind::BITVECTOR_SREM;
-        } else {
-          kind = CVC4::kind::BITVECTOR_UREM;
-        }
-      } else if (sort.is_int()) {
-        kind = CVC4::kind::INTS_MODULUS;
-      } else {
-        return UNSUPPORT_ERROR;
-      }
-      break;
-    case LSS:
-      if (larg.sort().is_bv()) {
-        if (larg.sort().is_signed()) {
-          kind = CVC4::kind::BITVECTOR_SLT;
-        } else {
-          kind = CVC4::kind::BITVECTOR_ULT;
-        }
-      } else {
-        kind = CVC4::kind::LT;
-      }
-      break;
-    case GTR:
-      if (larg.sort().is_bv()) {
-        if (larg.sort().is_signed()) {
-          kind = CVC4::kind::BITVECTOR_SGT;
-        } else {
-          kind = CVC4::kind::BITVECTOR_UGT;
-        }
-      } else {
-        kind = CVC4::kind::GT;
-      }
-      break;
-    case NEQ:
-      kind = CVC4::kind::DISTINCT;
 
-      break;
-    case LEQ:
-      if (larg.sort().is_bv()) {
-        if (larg.sort().is_signed()) {
-          kind = CVC4::kind::BITVECTOR_SLE;
-        } else {
-          kind = CVC4::kind::BITVECTOR_ULE;
-        }
-      } else {
-        kind = CVC4::kind::LEQ;
-      }
-      break;
-    case GEQ:
-      if (larg.sort().is_bv()) {
-        if (larg.sort().is_signed()) {
-          kind = CVC4::kind::BITVECTOR_SGE;
-        } else {
-          kind = CVC4::kind::BITVECTOR_UGE;
-        }
-      } else {
-        kind = CVC4::kind::GEQ;
-      }
-      break;
-    default:
-      return OPCODE_ERROR;
+    if (sort.is_bv())
+    {
+      if (sort.is_signed())
+        kind = CVC4::kind::BITVECTOR_SDIV;
+      else
+        kind = CVC4::kind::BITVECTOR_UDIV;
+    }
+    else if (sort.is_int())
+    {
+      kind = CVC4::kind::INTS_DIVISION;
+    }
+    else if (sort.is_real())
+    {
+      kind = CVC4::kind::DIVISION;
+    }
+    else
+    {
+      return UNSUPPORT_ERROR;
     }
 
-    set_expr(m_expr_manager.mkExpr(kind, lexpr, rexpr));
-    return OK;
+    return encode_binary(expr, sort, kind, larg, rarg);
+  }
+
+  virtual Error __encode_binary_rem(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    CVC4::kind::Kind_t kind;
+
+    if (sort.is_bv())
+    {
+      if (sort.is_signed())
+        kind = CVC4::kind::BITVECTOR_SREM;
+      else
+        kind = CVC4::kind::BITVECTOR_UREM;
+    }
+    else if (sort.is_int())
+    {
+      kind = CVC4::kind::INTS_MODULUS;
+    }
+    else
+    {
+      return UNSUPPORT_ERROR;
+    }
+
+    return encode_binary(expr, sort, kind, larg, rarg);
+  }
+
+  virtual Error __encode_binary_lss(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    CVC4::kind::Kind_t kind;
+
+    if (larg.sort().is_bv())
+    {
+      if (larg.sort().is_signed())
+        kind = CVC4::kind::BITVECTOR_SLT;
+      else
+        kind = CVC4::kind::BITVECTOR_ULT;
+    }
+    else
+    {
+      kind = CVC4::kind::LT;
+    }
+
+    return encode_binary(expr, sort, kind, larg, rarg);
+  }
+
+  virtual Error __encode_binary_gtr(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    CVC4::kind::Kind_t kind;
+
+    if (larg.sort().is_bv())
+    {
+      if (larg.sort().is_signed())
+        kind = CVC4::kind::BITVECTOR_SGT;
+      else
+        kind = CVC4::kind::BITVECTOR_UGT;
+    }
+    else
+    {
+      kind = CVC4::kind::GT;
+    }
+
+    return encode_binary(expr, sort, kind, larg, rarg);
+  }
+
+  virtual Error __encode_binary_neq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    return encode_binary(expr, sort,
+      CVC4::kind::DISTINCT, larg, rarg);
+  }
+
+  virtual Error __encode_binary_leq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    CVC4::kind::Kind_t kind;
+
+    if (larg.sort().is_bv())
+    {
+      if (larg.sort().is_signed())
+        kind = CVC4::kind::BITVECTOR_SLE;
+      else
+        kind = CVC4::kind::BITVECTOR_ULE;
+    }
+    else
+    {
+      kind = CVC4::kind::LEQ;
+    }
+
+    return encode_binary(expr, sort, kind, larg, rarg);
+  }
+
+  virtual Error __encode_binary_geq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    CVC4::kind::Kind_t kind;
+
+    if (larg.sort().is_bv())
+    {
+      if (larg.sort().is_signed())
+        kind = CVC4::kind::BITVECTOR_SGE;
+      else
+        kind = CVC4::kind::BITVECTOR_UGE;
+    }
+    else
+    {
+      kind = CVC4::kind::GEQ;
+    }
+
+    return encode_binary(expr, sort, kind, larg, rarg);
   }
 
   virtual Error __encode_nary(

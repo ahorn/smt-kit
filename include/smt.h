@@ -379,7 +379,7 @@ enum Error : unsigned {
   // No error, OK equals zero
   OK = 0,
 
-  // Unexpected operator encountered
+  // Virtual call incorrectly implemented
   OPCODE_ERROR,
 
   // Unsupported SMT-LIB feature
@@ -864,6 +864,37 @@ public:
   }
 };
 
+class Solver;
+
+namespace internal
+{
+  /// Static dispatch to private virtual member functions in Solver
+  template<Opcode opcode>
+  struct EncodeDispatch
+  {
+    /// By default returns OPCODE_ERROR, an implementation error
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    /// By default returns OPCODE_ERROR, an implementation error
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      return OPCODE_ERROR;
+    }
+  };
+}
+
 /// Abstract base class of an SMT/SAT solver
 
 /// Memory management:
@@ -948,6 +979,9 @@ SMT_ENCODE_BUILTIN_LITERAL(long long)
 SMT_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
 private:
+  template<Opcode opcode>
+  friend class internal::EncodeDispatch;
+
   virtual Error __encode_constant(
     const Expr* const expr,
     const UnsafeDecl& decl) = 0;
@@ -974,15 +1008,119 @@ private:
     const UnsafeTerm& index,
     const UnsafeTerm& value) = 0;
 
-  virtual Error __encode_unary(
+  virtual Error __encode_unary_lnot(
     const Expr* const expr,
-    Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& arg) = 0;
 
-  virtual Error __encode_binary(
+  virtual Error __encode_unary_not(
     const Expr* const expr,
-    Opcode opcode,
+    const Sort& sort,
+    const UnsafeTerm& arg) = 0;
+
+  virtual Error __encode_unary_sub(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& arg) = 0;
+
+  virtual Error __encode_binary_sub(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_and(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_or(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_xor(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_land(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_lor(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_imp(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_eql(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_add(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_mul(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_quo(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_rem(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_lss(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_gtr(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_neq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_leq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) = 0;
+
+  virtual Error __encode_binary_geq(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& larg,
     const UnsafeTerm& rarg) = 0;
@@ -1066,15 +1204,15 @@ public:
     const UnsafeTerm& index,
     const UnsafeTerm& value);
 
+  template<Opcode opcode>
   Error encode_unary(
     const Expr* const expr,
-    Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& arg);
 
+  template<Opcode opcode>
   Error encode_binary(
     const Expr* const expr,
-    Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& larg,
     const UnsafeTerm& rarg);
@@ -1255,6 +1393,488 @@ public:
     return m_ptr->encode(solver);
   }
 };
+
+namespace internal
+{
+  template<>
+  struct EncodeDispatch<LNOT>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return solver->__encode_unary_lnot(expr, sort, arg);
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      return OPCODE_ERROR;
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<NOT>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return solver->__encode_unary_not(expr, sort, arg);
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      return OPCODE_ERROR;
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<SUB>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return solver->__encode_unary_sub(expr, sort, arg);
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      return solver->__encode_binary_sub(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<AND>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      return solver->__encode_binary_and(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<OR>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      return solver->__encode_binary_or(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<XOR>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      return solver->__encode_binary_xor(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<LAND>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      solver->m_stats.conjunctions++;
+      return solver->__encode_binary_land(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<LOR>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      solver->m_stats.disjunctions++;
+      return solver->__encode_binary_lor(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<IMP>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      solver->m_stats.implications++;
+      return solver->__encode_binary_imp(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<EQL>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      solver->m_stats.equalities++;
+      return solver->__encode_binary_eql(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<ADD>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      return solver->__encode_binary_add(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<MUL>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      return solver->__encode_binary_mul(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<QUO>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      return solver->__encode_binary_quo(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<REM>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      return solver->__encode_binary_rem(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<LSS>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      solver->m_stats.inequalities++;
+      return solver->__encode_binary_lss(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<GTR>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      solver->m_stats.inequalities++;
+      return solver->__encode_binary_gtr(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<NEQ>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      solver->m_stats.disequalities++;
+      return solver->__encode_binary_neq(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<LEQ>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      solver->m_stats.inequalities++;
+      return solver->__encode_binary_leq(expr, sort, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<GEQ>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const Sort& sort,
+      const UnsafeTerm& larg,
+      const UnsafeTerm& rarg)
+    {
+      solver->m_stats.inequalities++;
+      return solver->__encode_binary_geq(expr, sort, larg, rarg);
+    }
+  };
+}
+
+template<Opcode opcode>
+Error Solver::encode_unary(
+  const Expr* const expr,
+  const Sort& sort,
+  const UnsafeTerm& arg)
+{
+  ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
+
+  assert(!arg.is_null());
+
+  m_stats.unary_ops++;
+  return internal::EncodeDispatch<opcode>::encode_unary(
+    this, expr, sort, arg);
+}
+
+template<Opcode opcode>
+Error Solver::encode_binary(
+  const Expr* const expr,
+  const Sort& sort,
+  const UnsafeTerm& larg,
+  const UnsafeTerm& rarg)
+{
+  ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
+
+  assert(!larg.is_null());
+  assert(!rarg.is_null());
+  assert(larg.sort() == rarg.sort());
+
+  m_stats.binary_ops++;
+  return internal::EncodeDispatch<opcode>::encode_binary(
+    this, expr, sort, larg, rarg);
+}
 
 namespace internal
 {
@@ -1823,7 +2443,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_unary(this, opcode, Expr::sort(), m_operand);
+    return solver.encode_unary<opcode>(this, Expr::sort(), m_operand);
   }
 
 public:
@@ -1853,7 +2473,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_binary(this, opcode,
+    return solver.encode_binary<opcode>(this,
       Expr::sort(), m_loperand, m_roperand);
   }
 

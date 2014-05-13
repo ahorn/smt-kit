@@ -310,9 +310,8 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     return OK;
   }
 
-  virtual Error __encode_unary(
+  virtual Error __encode_unary_lnot(
     const Expr* const expr,
-    Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& arg) override
   {
@@ -320,34 +319,50 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       return OK;
 
     const Error err = arg.encode(*this);
-    if (err) {
+    if (err)
       return err;
-    }
 
-    switch (opcode) {
-    case LNOT:
-      cache_term(expr, msat_make_not(m_env, m_term));
-      break;
-    case NOT:
-      cache_term(expr, msat_make_bv_not(m_env, m_term));
-      break;
-    case SUB:
-      if (sort.is_bv()) {
-        cache_term(expr, msat_make_bv_neg(m_env, m_term));
-      } else {
-        return UNSUPPORT_ERROR;
-      }
-      break;
-    default:
-      return OPCODE_ERROR;
-    }
-
+    cache_term(expr, msat_make_not(m_env, m_term));
     return OK;
   }
 
-  virtual Error __encode_binary(
+  virtual Error __encode_unary_not(
     const Expr* const expr,
-    Opcode opcode,
+    const Sort& sort,
+    const UnsafeTerm& arg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    const Error err = arg.encode(*this);
+    if (err)
+      return err;
+
+    cache_term(expr, msat_make_bv_not(m_env, m_term));
+    return OK;
+  }
+
+  virtual Error __encode_unary_sub(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& arg) override
+  {
+    if (!sort.is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (find_term(expr))
+      return OK;
+
+    const Error err = arg.encode(*this);
+    if (err)
+      return err;
+
+    cache_term(expr, msat_make_bv_neg(m_env, m_term));
+    return OK;
+  }
+
+  virtual Error __encode_binary_sub(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& larg,
     const UnsafeTerm& rarg) override
@@ -357,160 +372,533 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
     Error err;
     err = larg.encode(*this);
-    if (err) {
+    if (err)
       return err;
-    }
+
     const msat_term lterm = m_term;
 
     err = rarg.encode(*this);
-    if (err) {
+    if (err)
       return err;
-    }
+
     const msat_term rterm = m_term;
 
-    switch (opcode) {
-    case SUB:
-      cache_term(expr, msat_make_bv_minus(m_env, lterm, rterm));
-      break;
-    case AND:
-      cache_term(expr, msat_make_bv_and(m_env, lterm, rterm));
-      break;
-    case OR:
-      cache_term(expr, msat_make_bv_or(m_env, lterm, rterm));
-      break;
-    case XOR:
-      cache_term(expr, msat_make_bv_xor(m_env, lterm, rterm));
-      break;
-    case LAND:
-      cache_term(expr, msat_make_and(m_env, lterm, rterm));
-      break;
-    case LOR:
-      cache_term(expr, msat_make_or(m_env, lterm, rterm));
-      break;
-    case IMP:
-      {
-        const msat_term not_lterm = msat_make_not(m_env, lterm);
-        assert(!MSAT_ERROR_TERM(not_lterm));
-        cache_term(expr, msat_make_or(m_env, not_lterm, rterm));
-      }
-      break;
-    case EQL:
-      if (larg.sort().is_bool()) {
-        cache_term(expr, msat_make_iff(m_env, lterm, rterm));
-      } else {
-        cache_term(expr, msat_make_equal(m_env, lterm, rterm));
-      }
-      break;
-    case ADD:
-      if (sort.is_bv()) {
-        cache_term(expr, msat_make_bv_plus(m_env, lterm, rterm));
-      } else if (sort.is_int()) {
-        cache_term(expr, msat_make_plus(m_env, lterm, rterm));
-      } else {
-        return UNSUPPORT_ERROR;
-      }
-      break;
-    case MUL:
-      if (sort.is_bv()) {
-        cache_term(expr, msat_make_bv_times(m_env, lterm, rterm));
-      } else if (sort.is_int()) {
-        cache_term(expr, msat_make_times(m_env, lterm, rterm));
-      } else {
-        return UNSUPPORT_ERROR;
-      }
-      break;
-    case QUO:
-      if (sort.is_bv()) {
-        if (sort.is_signed()) {
-          cache_term(expr, msat_make_bv_sdiv(m_env, lterm, rterm));
-        } else {
-          cache_term(expr, msat_make_bv_udiv(m_env, lterm, rterm));
-        }
-      } else {
-        return UNSUPPORT_ERROR;
-      }
-      break;
-    case REM:
-      if (sort.is_bv()) {
-        if (sort.is_signed()) {
-          cache_term(expr, msat_make_bv_srem(m_env, lterm, rterm));
-        } else {
-          cache_term(expr, msat_make_bv_urem(m_env, lterm, rterm));
-        }
-      } else {
-        return UNSUPPORT_ERROR;
-      }
-      break;
-    case LSS:
-      if (larg.sort().is_bv()) {
-        if (larg.sort().is_signed()) {
-          cache_term(expr, msat_make_bv_slt(m_env, lterm, rterm));
-        } else {
-          cache_term(expr, msat_make_bv_ult(m_env, lterm, rterm));
-        }
-      } else if (larg.sort().is_int()) {
-        const msat_term leq_term = msat_make_leq(m_env, lterm, rterm);
-        assert(!MSAT_ERROR_TERM(leq_term));
-        const msat_term eq_term = msat_make_equal(m_env, lterm, rterm);
-        assert(!MSAT_ERROR_TERM(eq_term));
-        const msat_term neq_term = msat_make_not(m_env, eq_term);
-        assert(!MSAT_ERROR_TERM(neq_term));
-        cache_term(expr, msat_make_and(m_env, leq_term, neq_term));
-      } else {
-        return UNSUPPORT_ERROR;
-      }
-      break;
-    case GTR:
-      if (larg.sort().is_bv()) {
-        if (larg.sort().is_signed()) {
-          cache_term(expr, msat_make_bv_slt(m_env, rterm, lterm));
-        } else {
-          cache_term(expr, msat_make_bv_ult(m_env, rterm, lterm));
-        }
-      } else if (larg.sort().is_int()) {
-        const msat_term geq_term = msat_make_leq(m_env, rterm, lterm);
-        assert(!MSAT_ERROR_TERM(geq_term));
-        const msat_term eq_term = msat_make_equal(m_env, lterm, rterm);
-        assert(!MSAT_ERROR_TERM(eq_term));
-        const msat_term neq_term = msat_make_not(m_env, eq_term);
-        assert(!MSAT_ERROR_TERM(neq_term));
-        cache_term(expr, msat_make_and(m_env, geq_term, neq_term));
-      }
-      break;
-    case NEQ:
-      msat_term eq_term;
-      if (larg.sort().is_bool()) {
-        eq_term = msat_make_iff(m_env, lterm, rterm);
-      } else {
-        eq_term = msat_make_equal(m_env, lterm, rterm);
-      }
+    cache_term(expr, msat_make_bv_minus(m_env, lterm, rterm));
+    return OK;
+  }
+
+  virtual Error __encode_binary_and(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    cache_term(expr, msat_make_bv_and(m_env, lterm, rterm));
+    return OK;
+  }
+
+  virtual Error __encode_binary_or(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    cache_term(expr, msat_make_bv_or(m_env, lterm, rterm));
+    return OK;
+  }
+
+  virtual Error __encode_binary_xor(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    cache_term(expr, msat_make_bv_xor(m_env, lterm, rterm));
+    return OK;
+  }
+
+  virtual Error __encode_binary_land(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    cache_term(expr, msat_make_and(m_env, lterm, rterm));
+    return OK;
+  }
+
+  virtual Error __encode_binary_lor(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    cache_term(expr, msat_make_or(m_env, lterm, rterm));
+    return OK;
+  }
+
+  virtual Error __encode_binary_imp(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    const msat_term not_lterm = msat_make_not(m_env, lterm);
+    assert(!MSAT_ERROR_TERM(not_lterm));
+    cache_term(expr, msat_make_or(m_env, not_lterm, rterm));
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_eql(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    if (larg.sort().is_bool())
+      cache_term(expr, msat_make_iff(m_env, lterm, rterm));
+    else
+      cache_term(expr, msat_make_equal(m_env, lterm, rterm));
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_add(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    if (sort.is_bv())
+      cache_term(expr, msat_make_bv_plus(m_env, lterm, rterm));
+    else if (sort.is_int())
+      cache_term(expr, msat_make_plus(m_env, lterm, rterm));
+    else
+      return UNSUPPORT_ERROR;
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_mul(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    if (sort.is_bv())
+      cache_term(expr, msat_make_bv_times(m_env, lterm, rterm));
+    else if (sort.is_int())
+      cache_term(expr, msat_make_times(m_env, lterm, rterm));
+    else
+      return UNSUPPORT_ERROR;
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_quo(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    if (!sort.is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (sort.is_signed())
+      cache_term(expr, msat_make_bv_sdiv(m_env, lterm, rterm));
+    else
+      cache_term(expr, msat_make_bv_udiv(m_env, lterm, rterm));
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_rem(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    if (!sort.is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (sort.is_signed())
+      cache_term(expr, msat_make_bv_srem(m_env, lterm, rterm));
+    else
+      cache_term(expr, msat_make_bv_urem(m_env, lterm, rterm));
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_lss(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    if (larg.sort().is_bv())
+    {
+      if (larg.sort().is_signed())
+        cache_term(expr, msat_make_bv_slt(m_env, lterm, rterm));
+      else
+        cache_term(expr, msat_make_bv_ult(m_env, lterm, rterm));
+    }
+    else if (larg.sort().is_int())
+    {
+      const msat_term leq_term = msat_make_leq(m_env, lterm, rterm);
+      assert(!MSAT_ERROR_TERM(leq_term));
+      const msat_term eq_term = msat_make_equal(m_env, lterm, rterm);
       assert(!MSAT_ERROR_TERM(eq_term));
-      cache_term(expr, msat_make_not(m_env, eq_term));
-      break;
-    case LEQ:
-      if (larg.sort().is_bv()) {
-        if (larg.sort().is_signed()) {
-          cache_term(expr, msat_make_bv_sleq(m_env, lterm, rterm));
-        } else {
-          cache_term(expr, msat_make_bv_uleq(m_env, lterm, rterm));
-        }
-      } else if (larg.sort().is_int()) {
-        cache_term(expr, msat_make_leq(m_env, lterm, rterm));
-      }
-      break;
-    case GEQ:
-      if (larg.sort().is_bv()) {
-        if (larg.sort().is_signed()) {
-          cache_term(expr, msat_make_bv_sleq(m_env, rterm, lterm));
-        } else {
-          cache_term(expr, msat_make_bv_uleq(m_env, rterm, lterm));
-        }
-      } else if (larg.sort().is_int()) {
-        cache_term(expr, msat_make_leq(m_env, rterm, lterm));
-      }
-      break;
-    default:
-      return OPCODE_ERROR;
+      const msat_term neq_term = msat_make_not(m_env, eq_term);
+      assert(!MSAT_ERROR_TERM(neq_term));
+      cache_term(expr, msat_make_and(m_env, leq_term, neq_term));
+    }
+    else
+    {
+      return UNSUPPORT_ERROR;
+    }
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_gtr(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    if (larg.sort().is_bv())
+    {
+      if (larg.sort().is_signed())
+        cache_term(expr, msat_make_bv_slt(m_env, rterm, lterm));
+      else
+        cache_term(expr, msat_make_bv_ult(m_env, rterm, lterm));
+    }
+    else if (larg.sort().is_int())
+    {
+      const msat_term geq_term = msat_make_leq(m_env, rterm, lterm);
+      assert(!MSAT_ERROR_TERM(geq_term));
+      const msat_term eq_term = msat_make_equal(m_env, lterm, rterm);
+      assert(!MSAT_ERROR_TERM(eq_term));
+      const msat_term neq_term = msat_make_not(m_env, eq_term);
+      assert(!MSAT_ERROR_TERM(neq_term));
+      cache_term(expr, msat_make_and(m_env, geq_term, neq_term));
+    }
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_neq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    msat_term eq_term;
+    if (larg.sort().is_bool())
+      eq_term = msat_make_iff(m_env, lterm, rterm);
+    else
+      eq_term = msat_make_equal(m_env, lterm, rterm);
+
+    assert(!MSAT_ERROR_TERM(eq_term));
+    cache_term(expr, msat_make_not(m_env, eq_term));
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_leq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    if (larg.sort().is_bv())
+    {
+      if (larg.sort().is_signed())
+        cache_term(expr, msat_make_bv_sleq(m_env, lterm, rterm));
+      else
+        cache_term(expr, msat_make_bv_uleq(m_env, lterm, rterm));
+    }
+    else if (larg.sort().is_int())
+    {
+      cache_term(expr, msat_make_leq(m_env, lterm, rterm));
+    }
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_geq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    if (larg.sort().is_bv())
+    {
+      if (larg.sort().is_signed())
+        cache_term(expr, msat_make_bv_sleq(m_env, rterm, lterm));
+      else
+        cache_term(expr, msat_make_bv_uleq(m_env, rterm, lterm));
+    }
+    else if (larg.sort().is_int())
+    {
+      cache_term(expr, msat_make_leq(m_env, rterm, lterm));
     }
 
     return OK;

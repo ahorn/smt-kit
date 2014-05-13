@@ -184,63 +184,6 @@ Error Solver::encode_array_store(
   return __encode_array_store(expr, array, index, value);
 }
 
-Error Solver::encode_unary(
-  const Expr* const expr,
-  Opcode opcode,
-  const Sort& sort,
-  const UnsafeTerm& arg)
-{
-  ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
-
-  assert(!arg.is_null());
-
-  m_stats.unary_ops++;
-  return __encode_unary(expr, opcode, sort, arg);
-}
-
-Error Solver::encode_binary(
-  const Expr* const expr,
-  Opcode opcode,
-  const Sort& sort,
-  const UnsafeTerm& larg,
-  const UnsafeTerm& rarg)
-{
-  ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
-
-  assert(!larg.is_null());
-  assert(!rarg.is_null());
-  assert(larg.sort() == rarg.sort());
-
-  switch (opcode) {
-  case EQL:
-    m_stats.equalities++;
-    break;
-  case NEQ:
-    m_stats.disequalities++;
-    break;
-  case LSS:
-  case GTR:
-  case LEQ:
-  case GEQ:
-    m_stats.inequalities++;
-    break;
-  case IMP:
-    m_stats.implications++;
-    break;
-  case LAND:
-    m_stats.conjunctions++;
-    break;
-  case LOR:
-    m_stats.disjunctions++;
-    break;
-   default:
-    ;
-  }
-
-  m_stats.binary_ops++;
-  return __encode_binary(expr, opcode, sort, larg, rarg);
-}
-
 Error Solver::encode_nary(
   const Expr* const expr,
   Opcode opcode,

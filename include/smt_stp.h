@@ -244,9 +244,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
     return OK;
   }
 
-  virtual Error __encode_unary(
+  virtual Error __encode_unary_lnot(
     const Expr* const expr,
-    Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& arg) override
   {
@@ -254,33 +253,253 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
       return OK;
 
     const Error err = arg.encode(*this);
-    if (err) {
+    if (err)
       return err;
-    }
 
-    switch (opcode) {
-    case LNOT:
-      cache_expr(expr, vc_notExpr(m_vc, m_expr));
-      break;
-    case NOT:
-      cache_expr(expr, vc_bvNotExpr(m_vc, m_expr));
-      break;
-    case SUB:
-      if (!sort.is_bv())
-        return UNSUPPORT_ERROR;
-
-      cache_expr(expr, vc_bvUMinusExpr(m_vc, m_expr));
-      break;
-    default:
-      return OPCODE_ERROR;
-    }
-
+    cache_expr(expr, vc_notExpr(m_vc, m_expr));
     return OK;
   }
 
-  virtual Error __encode_binary(
+  virtual Error __encode_unary_not(
     const Expr* const expr,
-    Opcode opcode,
+    const Sort& sort,
+    const UnsafeTerm& arg) override
+  {
+    if (find_expr(expr))
+      return OK;
+
+    const Error err = arg.encode(*this);
+    if (err)
+      return err;
+
+    cache_expr(expr, vc_bvNotExpr(m_vc, m_expr));
+    return OK;
+  }
+
+  virtual Error __encode_unary_sub(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& arg) override
+  {
+    if (!sort.is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    const Error err = arg.encode(*this);
+    if (err)
+      return err;
+
+    cache_expr(expr, vc_bvUMinusExpr(m_vc, m_expr));
+    return OK;
+  }
+
+  virtual Error __encode_binary_sub(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!sort.is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    cache_expr(expr, vc_bvMinusExpr(m_vc, sort.bv_size(), lexpr, rexpr));
+    return OK;
+  }
+
+  virtual Error __encode_binary_and(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!larg.sort().is_bv() || !rarg.sort().is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    cache_expr(expr, vc_bvAndExpr(m_vc, lexpr, rexpr));
+    return OK;
+  }
+
+  virtual Error __encode_binary_or(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!larg.sort().is_bv() || !rarg.sort().is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    cache_expr(expr, vc_bvOrExpr(m_vc, lexpr, rexpr));
+    return OK;
+  }
+
+  virtual Error __encode_binary_xor(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!larg.sort().is_bv() || !rarg.sort().is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    cache_expr(expr, vc_bvXorExpr(m_vc, lexpr, rexpr));
+    return OK;
+  }
+
+  virtual Error __encode_binary_land(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!larg.sort().is_bool() || !rarg.sort().is_bool())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    cache_expr(expr, vc_andExpr(m_vc, lexpr, rexpr));
+    return OK;
+  }
+
+  virtual Error __encode_binary_lor(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!larg.sort().is_bool() || !rarg.sort().is_bool())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    cache_expr(expr, vc_orExpr(m_vc, lexpr, rexpr));
+    return OK;
+  }
+
+  virtual Error __encode_binary_imp(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!larg.sort().is_bool() || !rarg.sort().is_bool())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    cache_expr(expr, vc_impliesExpr(m_vc, lexpr, rexpr));
+    return OK;
+  }
+
+  virtual Error __encode_binary_eql(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& larg,
     const UnsafeTerm& rarg) override
@@ -301,141 +520,298 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
     const VCExpr rexpr = m_expr;
 
-    switch (opcode) {
-    case SUB:
-      if (!sort.is_bv())
-        return UNSUPPORT_ERROR;
+    if (larg.sort().is_bool())
+      cache_expr(expr, vc_iffExpr(m_vc, lexpr, rexpr));
+    else
+      cache_expr(expr, vc_eqExpr(m_vc, lexpr, rexpr));
 
-      cache_expr(expr, vc_bvMinusExpr(m_vc, sort.bv_size(), lexpr, rexpr));
-      break;
-    case AND:
-      if (!larg.sort().is_bv() || !rarg.sort().is_bv())
-        return OPCODE_ERROR;
+    return OK;
+  }
 
-      cache_expr(expr, vc_bvAndExpr(m_vc, lexpr, rexpr));
-      break;
-    case OR:
-      if (!larg.sort().is_bv() || !rarg.sort().is_bv())
-        return OPCODE_ERROR;
+  virtual Error __encode_binary_add(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!sort.is_bv())
+      return UNSUPPORT_ERROR;
 
-      cache_expr(expr, vc_bvOrExpr(m_vc, lexpr, rexpr));
-      break;
-    case XOR:
-      if (!larg.sort().is_bv() || !rarg.sort().is_bv())
-        return OPCODE_ERROR;
+    if (find_expr(expr))
+      return OK;
 
-      cache_expr(expr, vc_bvXorExpr(m_vc, lexpr, rexpr));
-      break;
-    case LAND:
-      if (!larg.sort().is_bool() || !rarg.sort().is_bool())
-        return OPCODE_ERROR;
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
 
-      cache_expr(expr, vc_andExpr(m_vc, lexpr, rexpr));
-      break;
-    case LOR:
-      if (!larg.sort().is_bool() || !rarg.sort().is_bool())
-        return OPCODE_ERROR;
+    const VCExpr lexpr = m_expr;
 
-      cache_expr(expr, vc_orExpr(m_vc, lexpr, rexpr));
-      break;
-    case IMP:
-      if (!larg.sort().is_bool() || !rarg.sort().is_bool())
-        return OPCODE_ERROR;
+    err = rarg.encode(*this);
+    if (err)
+      return err;
 
-      cache_expr(expr, vc_impliesExpr(m_vc, lexpr, rexpr));
-      break;
-    case EQL:
-      if (larg.sort().is_bool())
-        cache_expr(expr, vc_iffExpr(m_vc, lexpr, rexpr));
-      else
-        cache_expr(expr, vc_eqExpr(m_vc, lexpr, rexpr));
+    const VCExpr rexpr = m_expr;
 
-      break;
-    case ADD:
-      if (!sort.is_bv())
-        return UNSUPPORT_ERROR;
+    cache_expr(expr, vc_bvPlusExpr(m_vc, sort.bv_size(), lexpr, rexpr));
+    return OK;
+  }
 
-      cache_expr(expr, vc_bvPlusExpr(m_vc, sort.bv_size(), lexpr, rexpr));
-      break;
-    case MUL:
-      if (!sort.is_bv())
-        return UNSUPPORT_ERROR;
+  virtual Error __encode_binary_mul(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!sort.is_bv())
+      return UNSUPPORT_ERROR;
 
-      cache_expr(expr, vc_bvMultExpr(m_vc, sort.bv_size(), lexpr, rexpr));
-      break;
-    case QUO:
-      if (!sort.is_bv())
-        return UNSUPPORT_ERROR;
+    if (find_expr(expr))
+      return OK;
 
-      if (sort.is_signed())
-        cache_expr(expr, vc_sbvDivExpr(m_vc, sort.bv_size(), lexpr, rexpr));
-      else
-        cache_expr(expr, vc_bvDivExpr(m_vc, sort.bv_size(), lexpr, rexpr));
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
 
-      break;
-    case REM:
-      if (!sort.is_bv())
-        return UNSUPPORT_ERROR;
+    const VCExpr lexpr = m_expr;
 
-      if (sort.is_signed())
-        cache_expr(expr, vc_sbvModExpr(m_vc, sort.bv_size(), lexpr, rexpr));
-      else
-        cache_expr(expr, vc_bvModExpr(m_vc, sort.bv_size(), lexpr, rexpr));
+    err = rarg.encode(*this);
+    if (err)
+      return err;
 
-      break;
-    case LSS:
-      if (!larg.sort().is_bv() || !rarg.sort().is_bv())
-        return UNSUPPORT_ERROR;
+    const VCExpr rexpr = m_expr;
 
-      if (larg.sort().is_signed())
-        cache_expr(expr, vc_sbvLtExpr(m_vc, lexpr, rexpr));
-      else
-        cache_expr(expr, vc_bvLtExpr(m_vc, lexpr, rexpr));
-      
-      break;
-    case GTR:
-      if (!larg.sort().is_bv() || !rarg.sort().is_bv())
-        return UNSUPPORT_ERROR;
+    cache_expr(expr, vc_bvMultExpr(m_vc, sort.bv_size(), lexpr, rexpr));
+    return OK;
+  }
 
-      if (larg.sort().is_signed())
-        cache_expr(expr, vc_sbvGtExpr(m_vc, lexpr, rexpr));
-      else
-        cache_expr(expr, vc_bvGtExpr(m_vc, lexpr, rexpr));
-      
-      break;
-    case NEQ:
-      VCExpr eq_expr;
-      if (larg.sort().is_bool())
-        eq_expr = vc_iffExpr(m_vc, lexpr, rexpr);
-      else
-        eq_expr = vc_eqExpr(m_vc, lexpr, rexpr);
+  virtual Error __encode_binary_quo(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!sort.is_bv())
+      return UNSUPPORT_ERROR;
 
-      cache_expr(expr, vc_notExpr(m_vc, eq_expr));
+    if (find_expr(expr))
+      return OK;
 
-      break;
-    case LEQ:
-      if (!larg.sort().is_bv() || !rarg.sort().is_bv())
-        return UNSUPPORT_ERROR;
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
 
-      if (larg.sort().is_signed())
-        cache_expr(expr, vc_sbvLeExpr(m_vc, lexpr, rexpr));
-      else
-        cache_expr(expr, vc_bvLeExpr(m_vc, lexpr, rexpr));
-      
-      break;
-    case GEQ:
-      if (!larg.sort().is_bv() || !rarg.sort().is_bv())
-        return UNSUPPORT_ERROR;
+    const VCExpr lexpr = m_expr;
 
-      if (larg.sort().is_signed())
-        cache_expr(expr, vc_sbvGeExpr(m_vc, lexpr, rexpr));
-      else
-        cache_expr(expr, vc_bvGeExpr(m_vc, lexpr, rexpr));
-      
-      break;
-    default:
-      return OPCODE_ERROR;
-    }
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    if (sort.is_signed())
+      cache_expr(expr, vc_sbvDivExpr(m_vc, sort.bv_size(), lexpr, rexpr));
+    else
+      cache_expr(expr, vc_bvDivExpr(m_vc, sort.bv_size(), lexpr, rexpr));
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_rem(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!sort.is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    if (sort.is_signed())
+      cache_expr(expr, vc_sbvModExpr(m_vc, sort.bv_size(), lexpr, rexpr));
+    else
+      cache_expr(expr, vc_bvModExpr(m_vc, sort.bv_size(), lexpr, rexpr));
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_lss(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!larg.sort().is_bv() || !rarg.sort().is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    if (larg.sort().is_signed())
+      cache_expr(expr, vc_sbvLtExpr(m_vc, lexpr, rexpr));
+    else
+      cache_expr(expr, vc_bvLtExpr(m_vc, lexpr, rexpr));
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_gtr(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!larg.sort().is_bv() || !rarg.sort().is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    if (larg.sort().is_signed())
+      cache_expr(expr, vc_sbvGtExpr(m_vc, lexpr, rexpr));
+    else
+      cache_expr(expr, vc_bvGtExpr(m_vc, lexpr, rexpr));
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_neq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    VCExpr eq_expr;
+    if (larg.sort().is_bool())
+      eq_expr = vc_iffExpr(m_vc, lexpr, rexpr);
+    else
+      eq_expr = vc_eqExpr(m_vc, lexpr, rexpr);
+
+    cache_expr(expr, vc_notExpr(m_vc, eq_expr));
+    return OK;
+  }
+
+  virtual Error __encode_binary_leq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!larg.sort().is_bv() || !rarg.sort().is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    if (larg.sort().is_signed())
+      cache_expr(expr, vc_sbvLeExpr(m_vc, lexpr, rexpr));
+    else
+      cache_expr(expr, vc_bvLeExpr(m_vc, lexpr, rexpr));
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_geq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    if (!larg.sort().is_bv() || !rarg.sort().is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    if (larg.sort().is_signed())
+      cache_expr(expr, vc_sbvGeExpr(m_vc, lexpr, rexpr));
+    else
+      cache_expr(expr, vc_bvGeExpr(m_vc, lexpr, rexpr));
 
     return OK;
   }

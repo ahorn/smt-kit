@@ -266,139 +266,442 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     return OK;
   }
 
-  virtual Error __encode_unary(
+  virtual Error __encode_unary_lnot(
     const Expr* const expr,
-    Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& arg) override
   {
     const Error err = arg.encode(*this);
-    if (err) {
+    if (err)
       return err;
-    }
-    switch (opcode) {
-    case LNOT:
-      m_z3_expr = !m_z3_expr;
-      break;
-    case NOT:
-      m_z3_expr = ~m_z3_expr;
-      break;
-    case SUB:
-      m_z3_expr = -m_z3_expr;
-      break;
-    default:
-      return OPCODE_ERROR;
-    }
 
+    m_z3_expr = !m_z3_expr;
     return OK;
   }
 
-  virtual Error __encode_binary(
+  virtual Error __encode_unary_not(
     const Expr* const expr,
-    Opcode opcode,
+    const Sort& sort,
+    const UnsafeTerm& arg) override
+  {
+    const Error err = arg.encode(*this);
+    if (err)
+      return err;
+
+    m_z3_expr = ~m_z3_expr;
+    return OK;
+  }
+
+  virtual Error __encode_unary_sub(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& arg) override
+  {
+    const Error err = arg.encode(*this);
+    if (err)
+      return err;
+
+    m_z3_expr = -m_z3_expr;
+    return OK;
+  }
+
+  virtual Error __encode_binary_sub(
+    const Expr* const expr,
     const Sort& sort,
     const UnsafeTerm& larg,
     const UnsafeTerm& rarg) override
   {
     Error err;
     err = larg.encode(*this);
-    if (err) {
+    if (err)
       return err;
-    }
+
     const z3::expr lexpr(m_z3_expr);
 
     err = rarg.encode(*this);
-    if (err) {
+    if (err)
       return err;
-    }
+
     const z3::expr rexpr(m_z3_expr);
 
-    switch (opcode) {
-    case SUB:
-      m_z3_expr = lexpr - rexpr;
-      break;
-    case AND:
-      m_z3_expr = lexpr & rexpr;
-      break;
-    case OR:
-      m_z3_expr = lexpr | rexpr;
-      break;
-    case XOR:
-      m_z3_expr = lexpr ^ rexpr;
-      break;
-    case LAND:
-      m_z3_expr = lexpr && rexpr;
-      break;
-    case LOR:
-      m_z3_expr = lexpr || rexpr;
-      break;
-    case IMP:
-      m_z3_expr = implies(lexpr, rexpr);
-      break;
-    case EQL:
-      m_z3_expr = lexpr == rexpr;
-      break;
-    case ADD:
-      m_z3_expr = lexpr + rexpr;
-      break;
-    case MUL:
-      m_z3_expr = lexpr * rexpr;
-      break;
-    case QUO:
-      if (sort.is_bv() && !sort.is_signed()) {
-        m_z3_expr = udiv(lexpr, rexpr);
-      } else {
-        m_z3_expr = lexpr / rexpr;
-      }
-      break;
-    case REM:
-      return UNSUPPORT_ERROR;
-    case LSS:
-      {
-        const Sort& larg_sort = larg.sort();
-        if (larg_sort.is_bv() && !larg_sort.is_signed()) {
-          m_z3_expr = ult(lexpr, rexpr);
-        } else {
-          m_z3_expr = lexpr < rexpr;
-        }
-      }
-      break;
-    case GTR:
-      {
-        const Sort& larg_sort = larg.sort();
-        if (larg_sort.is_bv() && !larg_sort.is_signed()) {
-          m_z3_expr = ugt(lexpr, rexpr);
-        } else {
-          m_z3_expr = lexpr > rexpr;
-        }
-      }
-      break;
-    case NEQ:
-      m_z3_expr = lexpr != rexpr;
-      break;
-    case LEQ:
-      {
-        const Sort& larg_sort = larg.sort();
-        if (larg_sort.is_bv() && !larg_sort.is_signed()) {
-          m_z3_expr = ule(lexpr, rexpr);
-        } else {
-          m_z3_expr = lexpr <= rexpr;
-        }
-      }
-      break;
-    case GEQ:
-      {
-        const Sort& larg_sort = larg.sort();
-        if (larg_sort.is_bv() && !larg_sort.is_signed()) {
-          m_z3_expr = uge(lexpr, rexpr);
-        } else {
-          m_z3_expr = lexpr >= rexpr;
-        }
-      }
-      break;
-    default:
-      return OPCODE_ERROR;
-    }
+    m_z3_expr = lexpr - rexpr;
+    return OK;
+  }
+
+  virtual Error __encode_binary_and(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    m_z3_expr = lexpr & rexpr;
+    return OK;
+  }
+
+  virtual Error __encode_binary_or(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    m_z3_expr = lexpr | rexpr;
+    return OK;
+  }
+
+  virtual Error __encode_binary_xor(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    m_z3_expr = lexpr ^ rexpr;
+    return OK;
+  }
+
+  virtual Error __encode_binary_land(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    m_z3_expr = lexpr && rexpr;
+    return OK;
+  }
+
+  virtual Error __encode_binary_lor(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    m_z3_expr = lexpr || rexpr;
+    return OK;
+  }
+
+  virtual Error __encode_binary_imp(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    m_z3_expr = implies(lexpr, rexpr);
+    return OK;
+  }
+
+  virtual Error __encode_binary_eql(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    m_z3_expr = lexpr == rexpr;
+    return OK;
+  }
+
+  virtual Error __encode_binary_add(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    m_z3_expr = lexpr + rexpr;
+    return OK;
+  }
+
+  virtual Error __encode_binary_mul(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    m_z3_expr = lexpr * rexpr;
+    return OK;
+  }
+
+  virtual Error __encode_binary_quo(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    if (sort.is_bv() && !sort.is_signed())
+      m_z3_expr = udiv(lexpr, rexpr);
+    else
+      m_z3_expr = lexpr / rexpr;
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_rem(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    return UNSUPPORT_ERROR;
+  }
+
+  virtual Error __encode_binary_lss(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    const Sort& larg_sort = larg.sort();
+    if (larg_sort.is_bv() && !larg_sort.is_signed())
+      m_z3_expr = ult(lexpr, rexpr);
+    else
+      m_z3_expr = lexpr < rexpr;
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_gtr(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    const Sort& larg_sort = larg.sort();
+    if (larg_sort.is_bv() && !larg_sort.is_signed())
+      m_z3_expr = ugt(lexpr, rexpr);
+    else
+      m_z3_expr = lexpr > rexpr;
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_neq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    m_z3_expr = lexpr != rexpr;
+    return OK;
+  }
+
+  virtual Error __encode_binary_leq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    const Sort& larg_sort = larg.sort();
+    if (larg_sort.is_bv() && !larg_sort.is_signed())
+      m_z3_expr = ule(lexpr, rexpr);
+    else
+      m_z3_expr = lexpr <= rexpr;
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_geq(
+    const Expr* const expr,
+    const Sort& sort,
+    const UnsafeTerm& larg,
+    const UnsafeTerm& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+    const Sort& larg_sort = larg.sort();
+    if (larg_sort.is_bv() && !larg_sort.is_signed())
+      m_z3_expr = uge(lexpr, rexpr);
+    else
+      m_z3_expr = lexpr >= rexpr;
 
     return OK;
   }
