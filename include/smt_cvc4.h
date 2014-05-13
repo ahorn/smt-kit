@@ -318,7 +318,6 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
 
   virtual Error __encode_unary_not(
     const Expr* const expr,
-    Opcode opcode,
     const Sort& sort,
     const UnsafeTerm& arg) override
   {
@@ -484,7 +483,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     CVC4::kind::Kind_t kind = CVC4::kind::MULT;
 
     if (sort.is_bv())
-      kind = CVC4::kind::BITVECTOR_MULTBITVECTOR_MULT;
+      kind = CVC4::kind::BITVECTOR_MULT;
 
     return encode_binary(expr, sort, kind, larg, rarg);
   }
