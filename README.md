@@ -81,9 +81,9 @@ find concurrency bugs and this sets CRV apart from say [KLEE][klee].
 Furthermore, unlike tools such as [KLEE][klee] or [CBMC][cbmc], CRV
 is designed to be a library that must be first linked with a given
 program under scrutiny. This design allows CRV to leverage advanced C++11
-template and meta-programming features to speed things up including
-constant propagation. The resulting [performance gains][performance-tests]
-can be of several orders of magnitude (e.g. up to a million times faster).
+template and meta-programming features to extract accurate
+compile-time information about types as well as achieve good
+runtime performance during symbolic execution.
 
 But currently not all programming constructs are supported. For example,
 pointer arithmetic is still unsupported. If you are nevertheless
