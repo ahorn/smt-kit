@@ -1516,6 +1516,34 @@ public:
   /// The second direction argument is only a suggestion that may be ignored.
   bool branch(const Internal<bool>&, const bool direction_hint = false);
 
+  /// Follow both control flow directions regardless of their feasibility
+  bool force_branch(const Internal<bool>& g)
+  {
+    if (g.is_literal())
+      return g.literal();
+
+    bool direction = false;
+    if (m_dfs.has_next())
+    {
+      direction = m_dfs.next();
+    }
+    else
+    {
+      if (m_replay_manual_timer.is_active())
+        m_replay_manual_timer.stop();
+
+      m_dfs.append_flip(direction);
+    }
+
+    smt::Bool g_term = Internal<bool>::term(g);
+    if (direction)
+      Checker::add_guard(g_term);
+    else
+      Checker::add_guard(not g_term);
+
+    return direction;
+  }
+
   /// Use DFS to find an unexplored path, if any
 
   /// \return is there another path to explore?
