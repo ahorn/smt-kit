@@ -671,36 +671,73 @@ const Sort& bv_sort(bool is_signed, size_t size);
 class UnsafeDecl
 {
 private:
-  const std::string m_symbol;
+  const char* const m_prefix;
+  const unsigned m_counter;
   const Sort& m_sort;
 
-public:
-  // Allocate sort statically and use globally unique symbol names!
-  UnsafeDecl(
-    const std::string& symbol,
-    const Sort& sort)
-  : m_symbol(symbol),
-    m_sort(sort) {}
+  // constructed lazily by symbol()
+  mutable std::string m_symbol;
 
-  // Allocate sort statically and use globally unique symbol names!
+public:
+  /// Allocate sort statically, positive counters must be globally unique
   UnsafeDecl(
-    std::string&& symbol,
+    const char* const prefix,
+    const unsigned counter,
     const Sort& sort)
-  : m_symbol(std::move(symbol)),
-    m_sort(sort) {}
+  : m_prefix(prefix),
+    m_counter(counter),
+    m_sort(sort),
+    m_symbol() {}
+
+  /// Allocate sort statically!
+
+  /// \pre: name must be nonempty
+  UnsafeDecl(
+    std::string&& symbol_name,
+    const Sort& sort)
+  : m_prefix(),
+    m_counter(0),
+    m_sort(sort),
+    m_symbol(std::move(symbol_name))
+  {
+    assert(!m_symbol.empty());
+  }
 
   UnsafeDecl(const UnsafeDecl& other)
-  : m_symbol(other.m_symbol),
-    m_sort(other.m_sort) {}
+  : m_prefix(other.m_prefix),
+    m_counter(other.m_counter),
+    m_sort(other.m_sort),
+    m_symbol(other.m_symbol) {}
 
   UnsafeDecl(UnsafeDecl&& other)
-  : m_symbol(std::move(other.m_symbol)),
-    m_sort(other.m_sort) {}
+  : m_prefix(other.m_prefix),
+    m_counter(other.m_counter),
+    m_sort(other.m_sort),
+    m_symbol(std::move(other.m_symbol)) {}
 
   virtual ~UnsafeDecl() {}
 
+  const char* prefix() const
+  {
+    return m_prefix;
+  }
+
+  unsigned counter() const
+  {
+    return m_counter;
+  }
+
   const std::string& symbol() const
   {
+    if (m_symbol.empty())
+    {
+      if (m_counter != 0)
+        m_symbol = m_prefix + std::to_string(m_counter);
+      else
+        m_symbol = m_prefix;
+    }
+
+    assert(!m_symbol.empty());
     return m_symbol;
   }
 
@@ -723,19 +760,18 @@ template<typename T>
 class Decl : public UnsafeDecl 
 {
 public:
-  // Use globally unique symbol names!
-  Decl(const std::string& symbol)
-  : UnsafeDecl(symbol, internal::sort<T>()) {}
+  /// If counter is positive, it must be globally unique
 
-  // Use globally unique symbol names!
-  Decl(std::string&& symbol)
-  : UnsafeDecl(std::move(symbol), internal::sort<T>()) {}
+  /// Prefix won't be freed; so it is (preferably) statically allocated
+  Decl(const char* const prefix, const unsigned counter)
+  : UnsafeDecl(prefix, counter, internal::sort<T>()) {}
+
+  /// Symbol name must be globally unique and nonempty
+  Decl(std::string&& symbol_name)
+  : UnsafeDecl(std::move(symbol_name), internal::sort<T>()) {}
 
   Decl(const Decl& other)
   : UnsafeDecl(other) {}
-
-  Decl(Decl&& other)
-  : UnsafeDecl(std::move(other)) {}
 };
 
 class SharedExpr;
@@ -2502,11 +2538,21 @@ typename Func<T...>::Range apply(
     internal::to_array<SharedExpr, typename Func<T...>::Args>(args)));
 }
 
-// Use globally unique symbol names!
+/// If counter is positive, it must be globally unique
+
+/// Prefix won't be freed by the constructed object.
+/// Callers are encouraged to statically allocate prefix.
 template<typename T>
-T any(const std::string& symbol)
+T any(const char * const prefix, const unsigned counter = 0)
 {
-  return constant(Decl<T>(symbol));
+  return constant(Decl<T>(prefix, counter));
+}
+
+/// Symbol name must be globally unique and nonempty
+template<typename T>
+T any(std::string&& symbol_name)
+{
+  return constant(Decl<T>(std::move(symbol_name)));
 }
 
 template<Opcode opcode>

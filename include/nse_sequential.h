@@ -302,7 +302,7 @@ namespace internal
     static typename Smt<T>::Sort make_symbol()
     {
       assert(s_counter < std::numeric_limits<Counter>::max());
-      return smt::any<typename Smt<T>::Sort>(s_prefix + std::to_string(s_counter++));
+      return smt::any<typename Smt<T>::Sort>(s_prefix, ++s_counter);
     }
   };
 }

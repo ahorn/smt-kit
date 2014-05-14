@@ -345,7 +345,7 @@ public:
     std::numeric_limits<Address>::max() / 2;
 
 private:
-  static const std::string s_value_prefix;
+  static constexpr char s_value_prefix[] = "v!";
 
   EventIdentifier m_event_id_cnt;
   ThreadIdentifier m_thread_id_cnt;
@@ -384,8 +384,7 @@ private:
   typename Smt<T>::Sort make_value_symbol()
   {
     assert(m_event_id_cnt < std::numeric_limits<EventIdentifier>::max());
-    return smt::any<typename Smt<T>::Sort>(s_value_prefix +
-      std::to_string(m_event_id_cnt++));
+    return smt::any<typename Smt<T>::Sort>(s_value_prefix, ++m_event_id_cnt);
   }
 
   template<EventKind kind>
@@ -1131,25 +1130,18 @@ public:
     std::numeric_limits<Address>::max();
 
 private:
-  static const std::string s_time_prefix;
+  static constexpr char s_time_prefix[] = "t!";
 #ifdef _SUP_READ_FROM_
-  static const std::string s_sup_time_prefix;
+  static constexpr char s_sup_time_prefix[] = "s!";
 #endif
 
-  static const std::string s_rf_prefix;
-  static const std::string s_pf_prefix;
-  static const std::string s_ldf_prefix;
-
-  static std::string prefix_event_id(
-    const std::string& prefix,
-    const Event& e)
-  {
-    return prefix + std::to_string(e.event_id);
-  }
+  static constexpr char s_rf_prefix[] = "rf!";
+  static constexpr char s_pf_prefix[] = "pf!";
+  static constexpr char s_ldf_prefix[] = "ldf!";
 
   // Returns `x == prefix!y`, e.g. `y` reads from `x`
   static smt::Bool flow_bool(
-    const std::string& prefix,
+    const char* const prefix,
     const Event& x,
     const Event& y)
   {
@@ -1157,8 +1149,7 @@ private:
     // assuming data flow from x to y.
     assert(x.kind - 1 == y.kind);
 
-    const TimeSort app(smt::any<TimeSort>(
-      prefix_event_id(prefix, y)));
+    const TimeSort app(smt::any<TimeSort>(prefix, y.event_id));
     return x.event_id == app;
   }
 
@@ -1177,7 +1168,7 @@ public:
   {
     if (m_time_map.find(e.event_id) == m_time_map.cend())
     {
-      Time time(smt::any<TimeSort>(prefix_event_id(s_time_prefix, e)));
+      Time time(smt::any<TimeSort>(s_time_prefix, e.event_id));
       m_solver.add(m_epoch.happens_before(time));
       m_time_map.insert(std::make_pair(e.event_id, time));
     }
@@ -1202,7 +1193,7 @@ public:
 
     if (m_sup_time_map.find(e.event_id) == m_sup_time_map.cend())
     {
-      Time time(smt::any<TimeSort>(prefix_event_id(s_sup_time_prefix, e)));
+      Time time(smt::any<TimeSort>(s_sup_time_prefix, e.event_id));
       m_solver.add(m_epoch.happens_before(time));
       m_sup_time_map.insert(std::make_pair(e.event_id, time));
     }
@@ -1396,8 +1387,7 @@ public:
       for (const EventIter pop_iter : a.pops())
       {
         const Event& pop = *pop_iter;
-        terms.push_back(
-          smt::any<TimeSort>(prefix_event_id(s_pf_prefix, pop)));
+        terms.push_back(smt::any<TimeSort>(s_pf_prefix, pop.event_id));
       }
 
       and_pop_excl = and_pop_excl and smt::distinct(std::move(terms));

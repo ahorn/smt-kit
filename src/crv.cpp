@@ -3,16 +3,16 @@
 namespace crv
 {
 
-const std::string Tracer::s_value_prefix = "v!";
+constexpr char Tracer::s_value_prefix[];
 
-const std::string Encoder::s_time_prefix = "t!";
+constexpr char Encoder::s_time_prefix[];
 #ifdef _SUP_READ_FROM_
-const std::string Encoder::s_sup_time_prefix = "s!";
+constexpr char Encoder::s_sup_time_prefix[];
 #endif
 
-const std::string Encoder::s_rf_prefix = "rf!";
-const std::string Encoder::s_pf_prefix = "pf!";
-const std::string Encoder::s_ldf_prefix = "ldf!";
+constexpr char Encoder::s_rf_prefix[];
+constexpr char Encoder::s_pf_prefix[];
+constexpr char Encoder::s_ldf_prefix[];
 
 Tracer& tracer()
 {
