@@ -1211,35 +1211,38 @@ struct Flip
   /// freezing means that we won't try the other direction
   bool is_frozen;
 
-  Flip(const Flip&) = delete;
+  ~Flip() noexcept
+  {}
 
-  Flip(const bool direction_arg, const bool is_frozen_arg)
+  Flip(const bool direction_arg, const bool is_frozen_arg) noexcept
   : direction(direction_arg),
     is_frozen(is_frozen_arg) {}
 };
 
-typedef std::list<Flip> Flips;
-typedef std::list<Flip>::iterator FlipIter;
+/// Iterators into Flips are not stable
+typedef std::vector<Flip> Flips;
 
 // Explore execution paths in a program using depth-first search
 class Dfs
 {
 private:
+  typedef Flips::size_type FlipIndex;
+
   unsigned long long m_path_cnt;
   Flips m_flips;
-  FlipIter m_flip_iter;
+  FlipIndex m_flip_index;
 
 public:
   Dfs()
   : m_path_cnt(0),
     m_flips(),
-    m_flip_iter(m_flips.begin()) {}
+    m_flip_index(0) {}
 
   void reset()
   {
     m_path_cnt = 0;
     m_flips.clear();
-    m_flip_iter = m_flips.begin();
+    m_flip_index = 0;
   }
 
   unsigned long long path_cnt() const
@@ -1262,7 +1265,7 @@ public:
   /// \return is there more to explore?
   bool find_next_path()
   {
-    m_flip_iter = m_flips.begin();
+    m_flip_index = 0;
 
     while (!m_flips.empty() && m_flips.back().is_frozen)
     {
@@ -1285,7 +1288,7 @@ public:
 
   bool has_next() const
   {
-    return m_flip_iter != m_flips.end();
+    return m_flip_index < m_flips.size();
   }
 
   void append_flip(const bool direction = false, const bool is_frozen = false)
@@ -1294,6 +1297,8 @@ public:
 
     assert(m_flips.back().direction == direction);
     assert(m_flips.back().is_frozen == is_frozen);
+
+    ++m_flip_index;
   }
 
   /// \pre: has_next()
@@ -1303,8 +1308,8 @@ public:
   {
     assert(has_next());
 
-    // increment after returning m_flip_iter->direction
-    return (m_flip_iter++)->direction;
+    // increment index after returning flip at m_flip_index
+    return m_flips[m_flip_index++].direction;
   }
 
   /// \pre: has_next()
@@ -1312,7 +1317,7 @@ public:
   {
     assert(has_next());
 
-    return *m_flip_iter;
+    return m_flips[m_flip_index];
   }
 };
 

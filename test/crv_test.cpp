@@ -302,6 +302,53 @@ TEST(CrvTest, Barrier)
   EXPECT_TRUE(tracer.per_thread_map().at(tid2).at(4)->is_barrier());
 }
 
+TEST(CrvTest, Dfs)
+{
+  Dfs dfs;
+
+  EXPECT_FALSE(dfs.has_next());
+  dfs.append_flip();
+
+  EXPECT_EQ(1, dfs.flips().size());
+  EXPECT_FALSE(dfs.flips().back().direction);
+  EXPECT_FALSE(dfs.flips().back().is_frozen);
+
+  EXPECT_FALSE(dfs.has_next());
+  dfs.append_flip();
+
+  EXPECT_EQ(2, dfs.flips().size());
+  EXPECT_FALSE(dfs.flips().back().direction);
+  EXPECT_FALSE(dfs.flips().back().is_frozen);
+
+  EXPECT_TRUE(dfs.find_next_path());
+
+  EXPECT_TRUE(dfs.has_next());
+  EXPECT_FALSE(dfs.next());
+
+  EXPECT_TRUE(dfs.has_next());
+  EXPECT_TRUE(dfs.next());
+
+  EXPECT_FALSE(dfs.has_next());
+
+  EXPECT_EQ(2, dfs.flips().size());
+  EXPECT_TRUE(dfs.flips().back().direction);
+  EXPECT_TRUE(dfs.flips().back().is_frozen);
+
+  EXPECT_TRUE(dfs.find_next_path());
+
+  EXPECT_TRUE(dfs.has_next());
+  EXPECT_TRUE(dfs.next());
+
+  EXPECT_FALSE(dfs.has_next());
+
+  EXPECT_EQ(1, dfs.flips().size());
+  EXPECT_TRUE(dfs.flips().back().direction);
+  EXPECT_TRUE(dfs.flips().back().is_frozen);
+
+  EXPECT_FALSE(dfs.find_next_path());
+  EXPECT_TRUE(dfs.flips().empty());
+}
+
 TEST(CrvTest, DfsChecker)
 {
   DfsChecker checker;
