@@ -168,7 +168,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     const Expr* const expr,
     const UnsafeDecl& func_decl,
     const size_t arity,
-    const UnsafeTerm* const args) override
+    const SharedExpr* const args) override
   {
     Error err;
     z3::func_decl z3_func_decl(m_z3_context);
@@ -194,7 +194,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_const_array(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& init) override
+    const SharedExpr& init) override
   {
     assert(sort.is_array());
 
@@ -215,8 +215,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_array_select(
     const Expr* const expr,
-    const UnsafeTerm& array,
-    const UnsafeTerm& index) override
+    const SharedExpr& array,
+    const SharedExpr& index) override
   {
     Error err;
 
@@ -238,9 +238,9 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_array_store(
     const Expr* const expr,
-    const UnsafeTerm& array,
-    const UnsafeTerm& index,
-    const UnsafeTerm& value) override
+    const SharedExpr& array,
+    const SharedExpr& index,
+    const SharedExpr& value) override
   {
     Error err;
 
@@ -269,7 +269,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_unary_lnot(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& arg) override
+    const SharedExpr& arg) override
   {
     const Error err = arg.encode(*this);
     if (err)
@@ -282,7 +282,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_unary_not(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& arg) override
+    const SharedExpr& arg) override
   {
     const Error err = arg.encode(*this);
     if (err)
@@ -295,7 +295,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_unary_sub(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& arg) override
+    const SharedExpr& arg) override
   {
     const Error err = arg.encode(*this);
     if (err)
@@ -308,8 +308,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_sub(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -331,8 +331,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_and(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -354,8 +354,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_or(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -377,8 +377,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_xor(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -400,8 +400,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_land(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -423,8 +423,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_lor(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -446,8 +446,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_imp(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -469,8 +469,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_eql(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -492,8 +492,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_add(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -515,8 +515,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_mul(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -538,8 +538,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_quo(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -565,8 +565,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_rem(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     return UNSUPPORT_ERROR;
   }
@@ -574,8 +574,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_lss(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -602,8 +602,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_gtr(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -630,8 +630,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_neq(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -653,8 +653,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_leq(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -681,8 +681,8 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_binary_geq(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     Error err;
     err = larg.encode(*this);
@@ -710,7 +710,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
-    const UnsafeTerms& args) override
+    const SharedExprs& args) override
   {
     Error err;
 
@@ -718,7 +718,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
       // SMT-LIB 2.0 distinct variadic function, formula size O(N)
       size_t i = 0, args_size = args.size();
       Z3_ast asts[args_size];
-      for (const UnsafeTerm& arg : args) {
+      for (const SharedExpr& arg : args) {
         err = arg.encode(*this);
         if (err) {
           return err;
@@ -746,7 +746,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_bv_zero_extend(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& bv,
+    const SharedExpr& bv,
     const unsigned ext) override
   {
     const Error err = bv.encode(*this);
@@ -762,7 +762,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_bv_sign_extend(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& bv,
+    const SharedExpr& bv,
     const unsigned ext) override
   {
     const Error err = bv.encode(*this);
@@ -778,7 +778,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_bv_extract(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& bv,
+    const SharedExpr& bv,
     const unsigned high,
     const unsigned low) override
   {
@@ -812,7 +812,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     m_z3_solver.pop();
   }
 
-  virtual Error __unsafe_add(const UnsafeTerm& condition) override
+  virtual Error __unsafe_add(const SharedExpr& condition) override
   {
     const Error err = condition.encode(*this);
     if (err) {

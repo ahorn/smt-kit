@@ -92,8 +92,8 @@ public:
   const Address address;
   const smt::Sort& reflect;
   const smt::Bool guard;
-  const smt::UnsafeTerm term;
-  const smt::UnsafeTerm offset_term;
+  const smt::SharedExpr term;
+  const smt::SharedExpr offset_term;
 
   Event(const Event&) = delete;
 
@@ -106,8 +106,8 @@ public:
     const Address address_arg,
     const smt::Sort& reflect_arg,
     const smt::Bool guard_arg,
-    const smt::UnsafeTerm& term_arg,
-    const smt::UnsafeTerm& offset_term_arg)
+    const smt::SharedExpr& term_arg,
+    const smt::SharedExpr& offset_term_arg)
   : kind(kind_arg),
     event_id(event_id_arg),
     thread_id(thread_id_arg),
@@ -393,8 +393,8 @@ private:
     const EventIdentifier event_id,
     const Address address,
     const smt::Sort& reflect,
-    const smt::UnsafeTerm& term,
-    const smt::UnsafeTerm& offset_term = smt::UnsafeTerm())
+    const smt::SharedExpr& term,
+    const smt::SharedExpr& offset_term = smt::SharedExpr())
   {
     assert(!m_scope_stack.empty());
 
@@ -565,7 +565,7 @@ public:
   {
     const EventIdentifier event_id(m_event_id_cnt++);
     append_event<THREAD_BEGIN_EVENT>(event_id, 0,
-      smt::internal::sort<smt::Int>(), smt::UnsafeTerm());
+      smt::internal::sort<smt::Int>(), smt::SharedExpr());
 
     ThreadIdentifier parent_thread_id(current_thread_id());
     push_next_thread_id();
@@ -574,7 +574,7 @@ public:
     m_scope_stack.emplace(m_guard);
 
     append_event<THREAD_BEGIN_EVENT>(event_id, 0,
-      smt::internal::sort<smt::Int>(), smt::UnsafeTerm());
+      smt::internal::sort<smt::Int>(), smt::SharedExpr());
     return parent_thread_id;
   }
 
@@ -582,7 +582,7 @@ public:
   ThreadIdentifier append_thread_end_event()
   {
     append_event<THREAD_END_EVENT>(m_event_id_cnt++, 0,
-      smt::internal::sort<smt::Int>(), smt::UnsafeTerm());
+      smt::internal::sort<smt::Int>(), smt::SharedExpr());
 
     ThreadIdentifier child_thread_id(current_thread_id());
     m_thread_id_stack.pop();
@@ -608,7 +608,7 @@ public:
   void append_barrier_event(const EventIdentifier event_id)
   {
     append_event<BARRIER_EVENT>(event_id, 0,
-      smt::internal::sort<smt::Int>(), smt::UnsafeTerm());
+      smt::internal::sort<smt::Int>(), smt::SharedExpr());
   }
 
   void append_join_event(const ThreadIdentifier thread_id)
@@ -617,7 +617,7 @@ public:
     assert(e_iter->thread_id != current_thread_id());
 
     append_event<THREAD_END_EVENT>(e_iter->event_id, 0,
-      smt::internal::sort<smt::Int>(), smt::UnsafeTerm());
+      smt::internal::sort<smt::Int>(), smt::SharedExpr());
   }
 
   /// Creates a new term for the read event
@@ -653,14 +653,14 @@ public:
   typename Smt<T>::Sort append_channel_recv_event(const Address);
 
   /// Outgoing channel communication
-  void append_channel_send_event(const Address, const smt::Sort&, const smt::UnsafeTerm&);
+  void append_channel_send_event(const Address, const smt::Sort&, const smt::SharedExpr&);
 
   /// Incoming message
   template<typename T>
   typename Smt<T>::Sort append_message_recv_event(const Address);
 
   /// Outgoing message
-  void append_message_send_event(const Address, const smt::Sort&, const smt::UnsafeTerm&);
+  void append_message_send_event(const Address, const smt::Sort&, const smt::SharedExpr&);
 
   void add_guard(smt::Bool&&);
   void add_guard(const smt::Bool&);
@@ -783,7 +783,7 @@ public:
 
 template<typename T>
 Internal<T>::Internal(const External<T>& other)
-: m_term(nullptr),
+: m_term(),
   m_v(),
   m_op(nullptr)
 {
@@ -1185,7 +1185,7 @@ public:
     return m_time_map.at(e.event_id);
   }
 
-  void unsafe_add(const smt::UnsafeTerm& term)
+  void unsafe_add(const smt::SharedExpr& term)
   {
     m_solver.unsafe_add(term);
 #ifdef __CRV_DEBUG__
@@ -1213,7 +1213,7 @@ public:
   // Unpublished quadratic-size encoding
   void encode_read_from(const PerAddressIndex& per_address_index)
   {
-    smt::UnsafeTerm and_rf(smt::literal<smt::Bool>(true));
+    smt::SharedExpr and_rf(smt::literal<smt::Bool>(true));
     for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
@@ -1223,7 +1223,7 @@ public:
         const Time& r_time = time(r);
         const Time& r_sup_time = sup_time(r);
 
-        smt::UnsafeTerm or_rf(smt::literal<smt::Bool>(false));
+        smt::SharedExpr or_rf(smt::literal<smt::Bool>(false));
         for (const EventIter w_iter : a.writes())
         {
           const Event& w = *w_iter;
@@ -1231,7 +1231,7 @@ public:
           const smt::Bool wr_order(time(w).simultaneous_or_happens_before(r_time));
           const smt::Bool wr_sup(r_sup_time.simultaneous(time(w)));
           const smt::Bool rf_bool(flow_bool(s_rf_prefix, w, r));
-          const smt::UnsafeTerm wr_equality(w.term == r.term);
+          const smt::SharedExpr wr_equality(w.term == r.term);
 
           or_rf = rf_bool or or_rf;
           and_rf = and_rf and
@@ -1254,7 +1254,7 @@ public:
   // CAV'13 cubic-size encoding
   void encode_read_from(const PerAddressIndex& per_address_index)
   {
-    smt::UnsafeTerm and_rf(smt::literal<smt::Bool>(true));
+    smt::SharedExpr and_rf(smt::literal<smt::Bool>(true));
     for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
@@ -1263,14 +1263,14 @@ public:
         const Event& r = *r_iter;
         const Time& r_time = time(r);
 
-        smt::UnsafeTerm or_rf(smt::literal<smt::Bool>(false));
+        smt::SharedExpr or_rf(smt::literal<smt::Bool>(false));
         for (const EventIter w_iter : a.writes())
         {
           const Event& w = *w_iter;
 
           const smt::Bool wr_order(time(w).happens_before(r_time));
           const smt::Bool rf_bool(flow_bool(s_rf_prefix, w, r));
-          const smt::UnsafeTerm wr_equality(w.term == r.term);
+          const smt::SharedExpr wr_equality(w.term == r.term);
 
           or_rf = rf_bool or or_rf;
           and_rf = and_rf and
@@ -1288,7 +1288,7 @@ public:
   // CAV'13 cubic-size encoding
   void encode_from_read(const PerAddressIndex& per_address_index)
   {
-    smt::UnsafeTerm and_fr(smt::literal<smt::Bool>(true));
+    smt::SharedExpr and_fr(smt::literal<smt::Bool>(true));
     for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
@@ -1323,14 +1323,14 @@ public:
 
   void encode_write_serialization(const PerAddressIndex& per_address_index)
   {
-    smt::UnsafeTerm and_ws(smt::literal<smt::Bool>(true));
+    smt::SharedExpr and_ws(smt::literal<smt::Bool>(true));
     for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
       if (a.writes().size() < 2)
         continue;
 
-      smt::UnsafeTerms terms;
+      smt::SharedExprs terms;
       terms.reserve(a.writes().size());
       for (const EventIter w_iter : a.writes())
       {
@@ -1355,7 +1355,7 @@ public:
 
   void encode_pop_from(const PerAddressIndex& per_address_index)
   {
-    smt::UnsafeTerm and_pf(smt::literal<smt::Bool>(true));
+    smt::SharedExpr and_pf(smt::literal<smt::Bool>(true));
     for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
@@ -1363,7 +1363,7 @@ public:
       {
         const Event& pop = *pop_iter;
 
-        smt::UnsafeTerm or_pf(smt::literal<smt::Bool>(false));
+        smt::SharedExpr or_pf(smt::literal<smt::Bool>(false));
         for (const EventIter push_iter : a.pushes())
         {
           const Event& push = *push_iter;
@@ -1385,7 +1385,7 @@ public:
   // Make sure "pop-from" is like an injective function
   void encode_pop_from_injectivity(const PerAddressIndex& per_address_index)
   {
-    smt::UnsafeTerm and_pop_excl(smt::literal<smt::Bool>(true));
+    smt::SharedExpr and_pop_excl(smt::literal<smt::Bool>(true));
     for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
@@ -1407,7 +1407,7 @@ public:
 
   void encode_stack_lifo_order(const PerAddressIndex& per_address_index)
   {
-    smt::UnsafeTerm and_stack(smt::literal<smt::Bool>(true));
+    smt::SharedExpr and_stack(smt::literal<smt::Bool>(true));
     for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
@@ -1428,7 +1428,7 @@ public:
             const smt::Bool push_prime_pop_order(
               time(push_prime).happens_before(time(pop)));
 
-            smt::UnsafeTerm or_pp(smt::literal<smt::Bool>(false));
+            smt::SharedExpr or_pp(smt::literal<smt::Bool>(false));
             for (const EventIter pop_prime_iter : a.pops())
             {
               const Event& pop_prime = *pop_prime_iter;
@@ -1474,7 +1474,7 @@ public:
   // loads from initial array return zero
   void encode_load_from(const PerAddressIndex& per_address_index)
   {
-    smt::UnsafeTerm and_ldf(smt::literal<smt::Bool>(true));
+    smt::SharedExpr and_ldf(smt::literal<smt::Bool>(true));
     for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
@@ -1483,15 +1483,15 @@ public:
         const Event& ld = *ld_iter;
         const Time& ld_time = time(ld);
 
-        smt::UnsafeTerm and_lds(smt::literal<smt::Bool>(true));
-        smt::UnsafeTerm or_ldf(smt::literal<smt::Bool>(false));
+        smt::SharedExpr and_lds(smt::literal<smt::Bool>(true));
+        smt::SharedExpr or_ldf(smt::literal<smt::Bool>(false));
         for (const EventIter s_iter : a.stores())
         {
           const Event& s = *s_iter;
 
           const smt::Bool sld_order(time(s).happens_before(ld_time));
           const smt::Bool ldf_bool(flow_bool(s_ldf_prefix, s, ld));
-          const smt::UnsafeTerm sld_equality(s.term == ld.term);
+          const smt::SharedExpr sld_equality(s.term == ld.term);
 
           // part of the initial zero array axiom:
           // for every store s, if ld and s access the same array
@@ -1510,7 +1510,7 @@ public:
         }
 
         /* initial array elements are zero, cf. CrvTest::InitialArray */
-        smt::UnsafeTerm ld_zero(smt::literal(ld.term.sort(), 0));
+        smt::SharedExpr ld_zero(smt::literal(ld.term.sort(), 0));
         and_ldf = and_ldf and smt::implies(
           /* if */ not or_ldf,
           /* then */ ld.guard and and_lds and
@@ -1523,7 +1523,7 @@ public:
   // Similar to "from-read" axiom except that offsets must be equal
   void encode_from_load(const PerAddressIndex& per_address_index)
   {
-    smt::UnsafeTerm and_fld(smt::literal<smt::Bool>(true));
+    smt::SharedExpr and_fld(smt::literal<smt::Bool>(true));
     for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
@@ -1557,14 +1557,14 @@ public:
   // Serialize every store regardless of array offset
   void encode_store_serialization(const PerAddressIndex& per_address_index)
   {
-    smt::UnsafeTerm and_ss(smt::literal<smt::Bool>(true));
+    smt::SharedExpr and_ss(smt::literal<smt::Bool>(true));
     for (const PerAddressIndex::value_type& pair : per_address_index)
     {
       const EventKinds& a = pair.second;
       if (a.stores().size() < 2)
         continue;
 
-      smt::UnsafeTerms terms;
+      smt::SharedExprs terms;
       terms.reserve(a.stores().size());
       for (const EventIter s_iter : a.stores())
       {
@@ -1841,7 +1841,7 @@ private:
     auto cidom_map(Encoder::communication_immediate_dominator_map(tracer));
 
     Bools inits;
-    smt::UnsafeTerm ext_match(smt::literal<smt::Bool>(true));
+    smt::SharedExpr ext_match(smt::literal<smt::Bool>(true));
     for (const MatchBoolMap::value_type& triple : match_bool_map)
     {
       const MatchBoolMap::key_type& key = triple.first;
@@ -1853,7 +1853,7 @@ private:
       const Event& s = *s_iter;
       const smt::Bool& match_bool = triple.second;
 
-      smt::UnsafeTerm rs_value(smt::implies(
+      smt::SharedExpr rs_value(smt::implies(
         /* if */ match_bool,
         /* then */ r.term == s.term));
 
@@ -1864,7 +1864,7 @@ private:
       if (cidom_map.find(s_iter) != cidom_map.cend())
         cidoms.push_back(cidom_map.at(s_iter));
 
-      smt::UnsafeTerm rs_ext(match_bool ==
+      smt::SharedExpr rs_ext(match_bool ==
         (communication_match_conjunction(per_event_map,
            match_bool_map, cidoms) and
          communication_excl(per_event_map,
@@ -2339,7 +2339,7 @@ public:
 
   void send(const External<T>& data)
   {
-    smt::UnsafeTerm term = append_input_event(data);
+    smt::SharedExpr term = append_input_event(data);
     tracer().append_channel_send_event(
       m_address, reflect<T>(), std::move(term));
   }
@@ -2389,7 +2389,7 @@ public:
   static void send(const ThreadIdentifier thread_id,
     const External<T>& data)
   {
-    smt::UnsafeTerm term = append_input_event(data);
+    smt::SharedExpr term = append_input_event(data);
     tracer().append_message_send_event(to_address(thread_id),
       reflect<T>(), std::move(term));
   }

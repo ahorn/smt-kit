@@ -173,7 +173,7 @@ TEST(SmtZ3Test, Decl)
 
   const Decl<Bv<long>> d0("x");
   Bv<long> e0_term = constant(d0);
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0_term).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0_term).encode(s));
 
   const z3::expr expr(s.expr());
   EXPECT_TRUE(expr.is_bv());
@@ -210,7 +210,7 @@ TEST(SmtZ3Test, UnaryExpr)
 {
   Z3Solver s;
 
-  const Bv<int> e0_term(std::make_shared<LiteralExpr<int>>(
+  const Bv<int> e0_term(make_shared_expr<LiteralExpr<int>>(
     internal::sort<Bv<int>>(), 42));
   const UnaryExpr<SUB> e1(internal::sort<Bv<int>>(), e0_term);
 
@@ -243,8 +243,8 @@ TEST(SmtZ3Test, BinaryExpr)
   Z3Solver s;
   z3::expr expr(s.context());
 
-  const Bv<long> e0_term(std::make_shared<LiteralExpr<long>>(internal::sort<Bv<long>>(), 42L));
-  const Bv<long> e1_term(std::make_shared<LiteralExpr<long>>(internal::sort<Bv<long>>(), 7L));
+  const Bv<long> e0_term(make_shared_expr<LiteralExpr<long>>(internal::sort<Bv<long>>(), 42L));
+  const Bv<long> e1_term(make_shared_expr<LiteralExpr<long>>(internal::sort<Bv<long>>(), 7L));
   const BinaryExpr<ADD> e2(internal::sort<Bv<long>>(), e0_term, e1_term);
 
   EXPECT_EQ(OK, e2.encode(s));
@@ -317,7 +317,7 @@ TEST(SmtZ3Test, Distinct)
 
   Bool d(distinct(std::move(operand_terms)));
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(d).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(d).encode(s));
   std::stringstream out;
   out << s.expr();
   EXPECT_EQ("(distinct x y z)", out.str());
@@ -410,7 +410,7 @@ TEST(SmtZ3Test, UnaryFuncAppExpr)
   Z3Solver s;
 
   Decl<Func<Int, Bv<long>>> d0("f");
-  const Int e1_term(std::make_shared<LiteralExpr<int>>(
+  const Int e1_term(make_shared_expr<LiteralExpr<int>>(
     internal::sort<Int>(), 7));
   const FuncAppExpr<1> e2(d0, { e1_term });
 
@@ -458,7 +458,7 @@ TEST(SmtZ3Test, BinaryFuncAppExpr)
 
   const Decl<Func<Int, Bv<bool>, Bv<long>>> d0("f");
   const Decl<Bv<bool>> d2("x");
-  const Int e1_term(std::make_shared<LiteralExpr<int>>(internal::sort<Int>(), 7));
+  const Int e1_term(make_shared_expr<LiteralExpr<int>>(internal::sort<Int>(), 7));
   const Bv<bool> e2_term = constant(d2);
   const FuncAppExpr<2> e3(d0, { e1_term, e2_term });
 
@@ -507,7 +507,7 @@ TEST(SmtZ3Test, ConstArrayExpr)
 {
   Z3Solver s;
 
-  const Int init_term(std::make_shared<LiteralExpr<int>>(
+  const Int init_term(make_shared_expr<LiteralExpr<int>>(
     internal::sort<Int>(), 7));
   const ConstArrayExpr e0(internal::sort<Array<Int, Int>>(), init_term);
 
@@ -588,7 +588,7 @@ TEST(SmtZ3Test, ArrayStoreExpr)
   const Decl<Int> index_decl("i");
   const Array<Int, Int> array_term = constant(array_decl);
   const Int index_term = constant(index_decl);
-  const Int value_term(std::make_shared<LiteralExpr<int>>(
+  const Int value_term(make_shared_expr<LiteralExpr<int>>(
     internal::sort<Int>(), 7));
   const ArrayStoreExpr e0(array_term, index_term, value_term);
 
@@ -987,28 +987,28 @@ TEST(SmtZ3Test, UnsafeAdd)
   const Sort& func_sort = internal::sort<Func<Bv<int64_t>, Bv<int64_t>>>();
   const UnsafeDecl const_decl("x", bv_sort);
   const UnsafeDecl func_decl("f", func_sort);
-  const UnsafeTerm seven_term(literal(bv_sort, 7));
-  const UnsafeTerm x_term(constant(const_decl));
-  const UnsafeTerm app_term(apply(func_decl, seven_term));
+  const SharedExpr seven_term(literal(bv_sort, 7));
+  const SharedExpr x_term(constant(const_decl));
+  const SharedExpr app_term(apply(func_decl, seven_term));
 
-  UnsafeTerms terms;
+  SharedExprs terms;
   terms.push_back(seven_term);
   terms.push_back(x_term);
   terms.push_back(app_term);
 
-  const UnsafeTerm distinct_term(distinct(std::move(terms)));
+  const SharedExpr distinct_term(distinct(std::move(terms)));
 
   const Sort& array_sort = internal::sort<Array<Bv<uint32_t>, Bv<int64_t>>>();
   const Sort& index_sort = internal::sort<Bv<uint32_t>>();
   const UnsafeDecl array_decl("array", array_sort);
   const UnsafeDecl index_decl("index", index_sort);
-  const UnsafeTerm array_term(constant(array_decl));
-  const UnsafeTerm index_term(constant(index_decl));
-  const UnsafeTerm store_term(store(array_term, index_term, app_term));
-  const UnsafeTerm select_term(select(store_term, index_term));
+  const SharedExpr array_term(constant(array_decl));
+  const SharedExpr index_term(constant(index_decl));
+  const SharedExpr store_term(store(array_term, index_term, app_term));
+  const SharedExpr select_term(select(store_term, index_term));
 
-  const UnsafeTerm eq_term(select_term == x_term);
-  const UnsafeTerm and_term(eq_term && distinct_term);
+  const SharedExpr eq_term(select_term == x_term);
+  const SharedExpr and_term(eq_term && distinct_term);
 
   s.push();
   {

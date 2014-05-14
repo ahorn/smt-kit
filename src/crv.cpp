@@ -23,7 +23,7 @@ Tracer& tracer()
 void Tracer::append_channel_send_event(
   const Address address,
   const smt::Sort& sort,
-  const smt::UnsafeTerm& term)
+  const smt::SharedExpr& term)
 {
   assert(!term.is_null());
   append_event<CHANNEL_SEND_EVENT>(m_event_id_cnt++, address, sort, term);
@@ -32,7 +32,7 @@ void Tracer::append_channel_send_event(
 void Tracer::append_message_send_event(
   const Address address,
   const smt::Sort& sort,
-  const smt::UnsafeTerm& term)
+  const smt::SharedExpr& term)
 {
   assert(!term.is_null());
   append_event<MESSAGE_SEND_EVENT>(m_event_id_cnt++, address, sort, term);

@@ -195,7 +195,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     const Expr* const expr,
     const UnsafeDecl& decl,
     const size_t arity,
-    const UnsafeTerm* const args) override
+    const SharedExpr* const args) override
   {
     Error err;
     CVC4::Expr func_expr;
@@ -230,7 +230,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_const_array(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& init) override
+    const SharedExpr& init) override
   {
     Error err;
 
@@ -252,8 +252,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
 
   virtual Error __encode_array_select(
     const Expr* const expr,
-    const UnsafeTerm& array,
-    const UnsafeTerm& index) override
+    const SharedExpr& array,
+    const SharedExpr& index) override
   {
     Error err;
     err = array.encode(*this);
@@ -275,9 +275,9 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
 
   virtual Error __encode_array_store(
     const Expr* const expr,
-    const UnsafeTerm& array,
-    const UnsafeTerm& index,
-    const UnsafeTerm& value) override
+    const SharedExpr& array,
+    const SharedExpr& index,
+    const SharedExpr& value) override
   {
     Error err;
     err = array.encode(*this);
@@ -306,7 +306,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_unary_lnot(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& arg) override
+    const SharedExpr& arg) override
   {
     const Error err = arg.encode(*this);
     if (err)
@@ -319,7 +319,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_unary_not(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& arg) override
+    const SharedExpr& arg) override
   {
     const Error err = arg.encode(*this);
     if (err)
@@ -332,7 +332,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_unary_sub(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& arg) override
+    const SharedExpr& arg) override
   {
     const Error err = arg.encode(*this);
     if (err)
@@ -352,8 +352,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     const Expr* const expr,
     const Sort& sort,
     CVC4::kind::Kind_t kind,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg)
+    const SharedExpr& larg,
+    const SharedExpr& rarg)
   {
     Error err;
     err = larg.encode(*this);
@@ -375,8 +375,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_sub(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     CVC4::kind::Kind_t kind = CVC4::kind::MINUS;
 
@@ -389,8 +389,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_and(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     return encode_binary(expr, sort,
       CVC4::kind::BITVECTOR_AND, larg, rarg);
@@ -399,8 +399,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_or(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     return encode_binary(expr, sort,
       CVC4::kind::BITVECTOR_OR, larg, rarg);
@@ -409,8 +409,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_xor(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     return encode_binary(expr, sort,
       CVC4::kind::BITVECTOR_XOR, larg, rarg);
@@ -419,8 +419,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_land(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     return encode_binary(expr, sort,
       CVC4::kind::AND, larg, rarg);
@@ -429,8 +429,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_lor(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     return encode_binary(expr, sort,
       CVC4::kind::OR, larg, rarg);
@@ -439,8 +439,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_imp(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     return encode_binary(expr, sort,
       CVC4::kind::IMPLIES, larg, rarg);
@@ -449,8 +449,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_eql(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     CVC4::kind::Kind_t kind = CVC4::kind::EQUAL;
 
@@ -463,8 +463,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_add(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     CVC4::kind::Kind_t kind = CVC4::kind::PLUS;
 
@@ -477,8 +477,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_mul(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     CVC4::kind::Kind_t kind = CVC4::kind::MULT;
 
@@ -491,8 +491,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_quo(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     CVC4::kind::Kind_t kind;
 
@@ -522,8 +522,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_rem(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     CVC4::kind::Kind_t kind;
 
@@ -549,8 +549,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_lss(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     CVC4::kind::Kind_t kind;
 
@@ -572,8 +572,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_gtr(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     CVC4::kind::Kind_t kind;
 
@@ -595,8 +595,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_neq(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     return encode_binary(expr, sort,
       CVC4::kind::DISTINCT, larg, rarg);
@@ -605,8 +605,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_leq(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     CVC4::kind::Kind_t kind;
 
@@ -628,8 +628,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_binary_geq(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     CVC4::kind::Kind_t kind;
 
@@ -652,14 +652,14 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
-    const UnsafeTerms& args) override
+    const SharedExprs& args) override
   {
     Error err;
 
     if (opcode == NEQ) {
       std::vector<CVC4::Expr> exprs;
       exprs.reserve(args.size());
-      for (UnsafeTerms::const_reference arg : args) {
+      for (SharedExprs::const_reference arg : args) {
         err = arg.encode(*this);
         if (err) {
           return err;
@@ -677,7 +677,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_bv_zero_extend(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& bv,
+    const SharedExpr& bv,
     const unsigned ext) override
   {
     const Error err = bv.encode(*this);
@@ -693,7 +693,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_bv_sign_extend(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& bv,
+    const SharedExpr& bv,
     const unsigned ext) override
   {
     const Error err = bv.encode(*this);
@@ -709,7 +709,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   virtual Error __encode_bv_extract(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& bv,
+    const SharedExpr& bv,
     const unsigned high,
     const unsigned low) override
   {
@@ -744,7 +744,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     m_smt_engine.pop();
   }
 
-  virtual Error __unsafe_add(const UnsafeTerm& condition) override
+  virtual Error __unsafe_add(const SharedExpr& condition) override
   {
     const Error err = condition.encode(*this);
     if (err) {

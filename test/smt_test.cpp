@@ -75,8 +75,8 @@ TEST(SmtTest, RemoveLast)
   STATIC_EXPECT_TRUE((std::is_same<internal::RemoveLast<Bv<long>, Int, Real>::Type,
     std::tuple<Bv<long>, Int>>::value));
 
-  internal::RemoveLast<Bv<long>, Int>::Type(
-    std::make_tuple(Bv<long>(nullptr)));
+  //internal::RemoveLast<Bv<long>, Int>::Type(
+  //  std::make_tuple(Bv<long>(nullptr)));
 }
 
 struct SomethingElse {};
@@ -290,7 +290,7 @@ TEST(SmtTest, FuncDecl)
 TEST(SmtTest, UnaryFuncAppExpr)
 {
   const Decl<Func<Bv<long>, Int>> func_decl("f");
-  const Bv<long> arg_term(std::make_shared<LiteralExpr<long>>(
+  const Bv<long> arg_term(make_shared_expr<LiteralExpr<long>>(
     internal::sort<Bv<long>>(), 7L));
 
   const FuncAppExpr<1> app(func_decl, { arg_term });
@@ -300,7 +300,7 @@ TEST(SmtTest, UnaryFuncAppExpr)
   EXPECT_EQ(app.func_decl(), func_decl);
 
   STATIC_EXPECT_TRUE((std::tuple_size<Func<Bv<long>, Int>::Args>::value == 1));
-  const std::array<UnsafeTerm, 1>& arg_terms = app.args();
+  const std::array<SharedExpr, 1>& arg_terms = app.args();
   Bv<long> get0_arg_term(std::get<0>(arg_terms));
   EXPECT_EQ(LITERAL_EXPR_KIND, get0_arg_term.expr_kind());
 
@@ -315,7 +315,7 @@ TEST(SmtTest, UnaryFuncAppExpr)
 TEST(SmtTest, BinaryFuncAppExpr)
 {
   const Decl<Func<Bv<long>, Int, Real>> func_decl("g");
-  const Bv<long> larg_term(std::make_shared<LiteralExpr<long>>(
+  const Bv<long> larg_term(make_shared_expr<LiteralExpr<long>>(
     internal::sort<Bv<long>>(), 7L));
   const Int rarg_term(any<Int>("x"));
 
@@ -326,7 +326,7 @@ TEST(SmtTest, BinaryFuncAppExpr)
   EXPECT_EQ(app.func_decl(), func_decl);
 
   STATIC_EXPECT_TRUE((std::tuple_size<Func<Bv<long>, Int, Real>::Args>::value == 2));
-  const std::array<UnsafeTerm, 2>& arg_terms = app.args();
+  const std::array<SharedExpr, 2>& arg_terms = app.args();
   Bv<long> get0_arg_term(std::get<0>(arg_terms));
   EXPECT_EQ(LITERAL_EXPR_KIND, get0_arg_term.expr_kind());
   Int get1_arg_term(std::get<1>(arg_terms));
@@ -345,7 +345,7 @@ TEST(SmtTest, Apply)
   const Decl<Func<Bv<long>, Real>> bv_unary_func_decl("f");
   const Decl<Func<Int, Real>> math_unary_func_decl("g");
   const Decl<Func<Bv<long>, Int, Real>> binary_func_decl("h");
-  const Bv<long> larg_term(std::make_shared<LiteralExpr<long>>(
+  const Bv<long> larg_term(make_shared_expr<LiteralExpr<long>>(
     internal::sort<Bv<long>>(), 7L));
   const Int rarg_term(any<Int>("x"));
 
@@ -493,7 +493,7 @@ TEST(SmtTest, UnaryExpr)
 {
   const Bv<long> e0_term(literal<Bv<long>>(42L));
   const UnaryExpr<NOT> e1(internal::sort<Bv<long>>(), e0_term);
-  const UnsafeTerm& operand = e1.operand();
+  const SharedExpr& operand = e1.operand();
 
   EXPECT_EQ(UNARY_EXPR_KIND, e1.expr_kind());
   EXPECT_FALSE(e1.sort().is_bool());
@@ -995,85 +995,85 @@ TEST(SmtTest, UnsafeExpr)
   const UnsafeDecl const_decl("x", bv_sort);
   const UnsafeDecl func_decl("f", func_sort);
 
-  const UnsafeTerm seven_term(literal(bv_sort, 7));
+  const SharedExpr seven_term(literal(bv_sort, 7));
   EXPECT_TRUE(seven_term.sort().is_bv());
   EXPECT_EQ(bv_long_size, seven_term.sort().bv_size());
 
-  const UnsafeTerm x_term(constant(const_decl));
+  const SharedExpr x_term(constant(const_decl));
   EXPECT_TRUE(x_term.sort().is_bv());
   EXPECT_EQ(bv_long_size, x_term.sort().bv_size());
 
-  const UnsafeTerm app_term(apply(func_decl, seven_term));
+  const SharedExpr app_term(apply(func_decl, seven_term));
   EXPECT_TRUE(app_term.sort().is_bv());
   EXPECT_EQ(bv_long_size, app_term.sort().bv_size());
 
-  UnsafeTerms terms;
+  SharedExprs terms;
   terms.push_back(seven_term);
   terms.push_back(x_term);
   terms.push_back(app_term);
 
-  const UnsafeTerm distinct_term(distinct(std::move(terms)));
+  const SharedExpr distinct_term(distinct(std::move(terms)));
   EXPECT_TRUE(distinct_term.sort().is_bool());
 
   const Sort& array_sort = internal::sort<Array<Bv<size_t>, Bv<long>>>();
   const Sort& index_sort = internal::sort<Bv<size_t>>();
   const UnsafeDecl array_decl("array", array_sort);
   const UnsafeDecl index_decl("index", index_sort);
-  const UnsafeTerm array_term(constant(array_decl));
+  const SharedExpr array_term(constant(array_decl));
   EXPECT_TRUE(array_term.sort().is_array());
   EXPECT_TRUE(array_term.sort().sorts(0).is_bv());
   EXPECT_TRUE(array_term.sort().sorts(1).is_bv());
   EXPECT_EQ(sizeof(size_t) * 8, array_term.sort().sorts(0).bv_size());
   EXPECT_EQ(bv_long_size, array_term.sort().sorts(1).bv_size());
 
-  const UnsafeTerm index_term(constant(index_decl));
+  const SharedExpr index_term(constant(index_decl));
   EXPECT_TRUE(index_term.sort().is_bv());
   EXPECT_EQ(sizeof(size_t) * 8, index_term.sort().bv_size());
 
-  const UnsafeTerm store_term(store(array_term, index_term, app_term));
+  const SharedExpr store_term(store(array_term, index_term, app_term));
   EXPECT_TRUE(store_term.sort().is_array());
   EXPECT_TRUE(store_term.sort().sorts(0).is_bv());
   EXPECT_TRUE(store_term.sort().sorts(1).is_bv());
   EXPECT_EQ(sizeof(size_t) * 8, store_term.sort().sorts(0).bv_size());
   EXPECT_EQ(bv_long_size, store_term.sort().sorts(1).bv_size());
 
-  const UnsafeTerm select_term(select(store_term, index_term));
+  const SharedExpr select_term(select(store_term, index_term));
   EXPECT_TRUE(select_term.sort().is_bv());
   EXPECT_EQ(bv_long_size, select_term.sort().bv_size());
 
-  const UnsafeTerm eq_term(select_term == x_term);
+  const SharedExpr eq_term(select_term == x_term);
   EXPECT_TRUE(eq_term.sort().is_bool());
 
-  const UnsafeTerm and_term(eq_term && distinct_term);
+  const SharedExpr and_term(eq_term && distinct_term);
   EXPECT_TRUE(and_term.sort().is_bool());
 
-  const UnsafeTerm ladd_term(7 + x_term);
+  const SharedExpr ladd_term(7 + x_term);
   EXPECT_TRUE(ladd_term.sort().is_bv());
   EXPECT_EQ(bv_long_size, ladd_term.sort().bv_size());
 
-  const UnsafeTerm radd_term(x_term + 8);
+  const SharedExpr radd_term(x_term + 8);
   EXPECT_TRUE(radd_term.sort().is_bv());
   EXPECT_EQ(bv_long_size, radd_term.sort().bv_size());
 
-  const UnsafeTerm llss_term(7 < x_term);
+  const SharedExpr llss_term(7 < x_term);
   EXPECT_TRUE(llss_term.sort().is_bool());
 
-  const UnsafeTerm rlss_term(x_term < 8);
+  const SharedExpr rlss_term(x_term < 8);
   EXPECT_TRUE(rlss_term.sort().is_bool());
 }
 
-// UnsafeTerm to internal::Term<T> conversion calls the
-// UnsafeTerm::T() operator. Failed casts are detected by
+// SharedExpr to internal::Term<T> conversion calls the
+// SharedExpr::T() operator. Failed casts are detected by
 // a runtime assertion that checks for an empty pointer.
 TEST(SmtTest, Implies)
 {
   const smt::Bool a(smt::literal<smt::Bool>(true));
-  const smt::UnsafeTerm b(smt::literal<smt::Bool>(true));
+  const smt::SharedExpr b(smt::literal<smt::Bool>(true));
 
-  smt::UnsafeTerm c(smt::implies(a, b));
-  smt::UnsafeTerm d(smt::implies(b, a));
+  smt::SharedExpr c(smt::implies(a, b));
+  smt::SharedExpr d(smt::implies(b, a));
   smt::Bool e(smt::implies(a, a));
-  smt::UnsafeTerm f(smt::implies(b, b));
+  smt::SharedExpr f(smt::implies(b, b));
 
   EXPECT_FALSE(c.is_null());
   EXPECT_FALSE(d.is_null());

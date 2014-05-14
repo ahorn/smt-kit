@@ -14,7 +14,7 @@ TEST(SmtMsatTest, PositiveBvLiteral)
   constexpr size_t long_bv_size = sizeof(long) * 8;
   const Bv<long> e0 = literal<Bv<long>>(42);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -71,7 +71,7 @@ TEST(SmtMsatTest, NegativeBvLiteral)
   constexpr size_t long_bv_size = sizeof(long) * 8;
   const Bv<long> e0 = literal<Bv<long>>(-42);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -158,7 +158,7 @@ TEST(SmtMsatTest, PositiveIntLiteral)
 
   const Int e0 = literal<Int>(42L);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -179,7 +179,7 @@ TEST(SmtMsatTest, NegativeIntLiteral)
 
   const Int e0 = literal<Int>(-42L);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -200,7 +200,7 @@ TEST(SmtMsatTest, BoolFalseLiteral)
 
   const Bool e0 = literal<Bool>(false);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -221,7 +221,7 @@ TEST(SmtMsatTest, BoolTrueLiteral)
 
   const Bool e0 = literal<Bool>(true);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -242,7 +242,7 @@ TEST(SmtMsatTest, BvDeclExpr)
 
   const Bv<long> e0 = any<Bv<long>>("x");
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -319,7 +319,7 @@ TEST(SmtMsatTest, IntDeclExpr)
 
   const Int e0 = any<Int>("x");
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -395,7 +395,7 @@ TEST(SmtMsatTest, ArrayDecl)
 
   const Array<Bv<size_t>, Bv<int>> e0 = any<Array<Bv<size_t>, Bv<int>>>("array");
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -421,7 +421,7 @@ TEST(SmtMsatTest, UnaryFuncAppExpr)
   const Int e0 = any<Int>("x");
   const Bool e1 = apply(func_decl, e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -443,7 +443,7 @@ TEST(SmtMsatTest, BinaryFuncAppExpr)
   const Bv<long> e1 = any<Bv<long>>("y");
   const Bool e2 = apply(func_decl, e0, e1);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -464,7 +464,7 @@ TEST(SmtMsatTest, ArraySelectExpr)
   const Bv<uint64_t> e1 = any<Bv<uint64_t>>("x");
   const Int e2 = select(e0, e1);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -486,7 +486,7 @@ TEST(SmtMsatTest, ArrayStoreExpr)
   const Int e2 = any<Int>("y");
   const Array<Bv<uint64_t>, Int> e3 = store(e0, e1, e2);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e3).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e3).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -513,7 +513,7 @@ TEST(SmtMsatTest, BvSignedOperatorNOT)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bv<int64_t> e1(~e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -536,7 +536,7 @@ TEST(SmtMsatTest, BvUnsignedOperatorNOT)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bv<uint64_t> e1(~e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -559,7 +559,7 @@ TEST(SmtMsatTest, BvUnsignedOperatorNOT)
     const Bv<sign long> e0 = any<Bv<sign long>>("x");                   \
     const Bv<sign long> e1(literal op e0);                              \
                                                                         \
-    EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));               \
+    EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));               \
                                                                         \
     const msat_env env = s.env();                                       \
     const msat_term t0 = s.term();                                      \
@@ -587,7 +587,7 @@ TEST(SmtMsatTest, BvSignedOperatorSUB)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bv<int64_t> e1(42L - e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -617,7 +617,7 @@ TEST(SmtMsatTest, BvUnsignedOperatorSUB)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bv<uint64_t> e1(42L - e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -646,7 +646,7 @@ TEST(SmtMsatTest, BvSignedBinaryOperatorEQL)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bool e1(42 == e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -666,7 +666,7 @@ TEST(SmtMsatTest, BvSignedBinaryOperatorLSS)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bool e1(42 < e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -686,7 +686,7 @@ TEST(SmtMsatTest, BvSignedBinaryOperatorGTR)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bool e1(42 > e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -706,7 +706,7 @@ TEST(SmtMsatTest, BvSignedBinaryOperatorNEQ)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bool e1(42 != e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -726,7 +726,7 @@ TEST(SmtMsatTest, BvSignedBinaryOperatorLEQ)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bool e1(42 <= e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -746,7 +746,7 @@ TEST(SmtMsatTest, BvSignedBinaryOperatorGEQ)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bool e1(42 >= e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -766,7 +766,7 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorEQL)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bool e1(42 == e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -786,7 +786,7 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorLSS)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bool e1(42 < e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -806,7 +806,7 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorGTR)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bool e1(42 > e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -826,7 +826,7 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorNEQ)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bool e1(42 != e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -846,7 +846,7 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorLEQ)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bool e1(42 <= e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -866,7 +866,7 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorGEQ)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bool e1(42 >= e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -887,7 +887,7 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorGEQ)
     const Int e0 = any<Int>("x");                                       \
     const Int e1(42 op e0);                                             \
                                                                         \
-    EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));               \
+    EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));               \
                                                                         \
     const msat_env env = s.env();                                       \
     const msat_term t0 = s.term();                                      \
@@ -911,7 +911,7 @@ TEST(SmtMsatTest, MathBinaryOperatorEQL)
   const Int e0 = any<Int>("x");
   const Bool e1(42 == e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -931,7 +931,7 @@ TEST(SmtMsatTest, MathBinaryOperatorLSS)
   const Int e0 = any<Int>("x");
   const Bool e1(42 < e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -951,7 +951,7 @@ TEST(SmtMsatTest, MathBinaryOperatorGTR)
   const Int e0 = any<Int>("x");
   const Bool e1(42 > e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -971,7 +971,7 @@ TEST(SmtMsatTest, MathBinaryOperatorNEQ)
   const Int e0 = any<Int>("x");
   const Bool e1(42 != e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -991,7 +991,7 @@ TEST(SmtMsatTest, MathBinaryOperatorLEQ)
   const Int e0 = any<Int>("x");
   const Bool e1(42 <= e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -1011,7 +1011,7 @@ TEST(SmtMsatTest, MathBinaryOperatorGEQ)
   const Int e0 = any<Int>("x");
   const Bool e1(42 >= e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -1031,7 +1031,7 @@ TEST(SmtMsatTest, BoolUnaryOperatorLNOT)
   const Bool e0 = any<Bool>("x");
   const Bool e1(!e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -1053,7 +1053,7 @@ TEST(SmtMsatTest, BoolUnaryOperatorLNOT)
     const Bool e1 = any<Bool>("y");                                     \
     const Bool e2(e0 op e1);                                            \
                                                                         \
-    EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));               \
+    EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));               \
                                                                         \
     const msat_env env = s.env();                                       \
     const msat_term t0 = s.term();                                      \
@@ -1078,7 +1078,7 @@ TEST(SmtMsatTest, LogicalImplication)
   const Bool e1 = any<Bool>("y");
   const Bool e2(implies(e0, e1));
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));
 
   const msat_env env = s.env();
   const msat_term t0 = s.term();
@@ -1118,7 +1118,7 @@ TEST(SmtMsatTest, Distinct)
 
   Bool d(distinct(std::move(operand_terms)));
 
-  static_cast<UnsafeTerm>(d).encode(s);
+  static_cast<SharedExpr>(d).encode(s);
   char *str = msat_term_repr(s.term());
   EXPECT_EQ("(`and` (`and` (`not` (`=_<BitVec, 64, >` x y))"
             " (`not` (`=_<BitVec, 64, >` x z)))"
@@ -1179,28 +1179,28 @@ TEST(SmtMsatTest, UnsafeAdd)
   const Sort& func_sort = internal::sort<Func<Bv<int64_t>, Bv<int64_t>>>();
   const UnsafeDecl const_decl("x", bv_sort);
   const UnsafeDecl func_decl("f", func_sort);
-  const UnsafeTerm seven_term(literal(bv_sort, 7));
-  const UnsafeTerm x_term(constant(const_decl));
-  const UnsafeTerm app_term(apply(func_decl, seven_term));
+  const SharedExpr seven_term(literal(bv_sort, 7));
+  const SharedExpr x_term(constant(const_decl));
+  const SharedExpr app_term(apply(func_decl, seven_term));
 
-  UnsafeTerms terms;
+  SharedExprs terms;
   terms.push_back(seven_term);
   terms.push_back(x_term);
   terms.push_back(app_term);
 
-  const UnsafeTerm distinct_term(distinct(std::move(terms)));
+  const SharedExpr distinct_term(distinct(std::move(terms)));
 
   const Sort& array_sort = internal::sort<Array<Bv<uint32_t>, Bv<int64_t>>>();
   const Sort& index_sort = internal::sort<Bv<uint32_t>>();
   const UnsafeDecl array_decl("array", array_sort);
   const UnsafeDecl index_decl("index", index_sort);
-  const UnsafeTerm array_term(constant(array_decl));
-  const UnsafeTerm index_term(constant(index_decl));
-  const UnsafeTerm store_term(store(array_term, index_term, app_term));
-  const UnsafeTerm select_term(select(store_term, index_term));
+  const SharedExpr array_term(constant(array_decl));
+  const SharedExpr index_term(constant(index_decl));
+  const SharedExpr store_term(store(array_term, index_term, app_term));
+  const SharedExpr select_term(select(store_term, index_term));
 
-  const UnsafeTerm eq_term(select_term == x_term);
-  const UnsafeTerm and_term(eq_term && distinct_term);
+  const SharedExpr eq_term(select_term == x_term);
+  const SharedExpr and_term(eq_term && distinct_term);
 
   char *str;
   s.push();

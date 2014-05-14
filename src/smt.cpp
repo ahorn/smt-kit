@@ -27,69 +27,85 @@ const Sort& bv_sort(bool is_signed, size_t size)
   return *bv_sorts[is_signed][size];
 }
 
-UnsafeTerm constant(const UnsafeDecl& decl)
+SharedExpr constant(const UnsafeDecl& decl)
 {
-  return UnsafeTerm(std::make_shared<ConstantExpr>(decl));
+  return make_shared_expr<ConstantExpr>(decl);
 }
 
-UnsafeTerm apply(
+SharedExpr apply(
   const UnsafeDecl& func_decl,
-  const UnsafeTerm& arg)
+  const SharedExpr& arg)
 {
   constexpr size_t arity = 1;
-  std::array<UnsafeTerm, arity> args = { arg };
-  return UnsafeTerm(std::make_shared<FuncAppExpr<arity>>(
-    func_decl, std::move(args)));
+  std::array<SharedExpr, arity> args = { arg };
+  return make_shared_expr<FuncAppExpr<arity>>(
+    func_decl, std::move(args));
 }
 
-UnsafeTerm apply(
+SharedExpr apply(
   const UnsafeDecl& func_decl,
-  const UnsafeTerm& larg,
-  const UnsafeTerm& rarg)
+  const SharedExpr& larg,
+  const SharedExpr& rarg)
 {
   constexpr size_t arity = 2;
-  std::array<UnsafeTerm, arity> args = { larg, rarg };
-  return UnsafeTerm(std::make_shared<FuncAppExpr<arity>>(
-    func_decl, std::move(args)));
+  std::array<SharedExpr, arity> args = { larg, rarg };
+  return make_shared_expr<FuncAppExpr<arity>>(
+    func_decl, std::move(args));
 }
 
-UnsafeTerm distinct(UnsafeTerms&& terms)
+SharedExpr distinct(SharedExprs&& terms)
 {
-  return UnsafeTerm(std::make_shared<NaryExpr<NEQ>>(
-    internal::sort<Bool>(), std::move(terms)));
+  return make_shared_expr<NaryExpr<NEQ>>(
+    internal::sort<Bool>(), std::move(terms));
 }
 
-UnsafeTerm select(
-  const UnsafeTerm& array,
-  const UnsafeTerm& index)
+SharedExpr select(
+  const SharedExpr& array,
+  const SharedExpr& index)
 {
-  return UnsafeTerm(std::make_shared<ArraySelectExpr>(
-    array, index));
+  return make_shared_expr<ArraySelectExpr>(
+    array, index);
 }
 
-UnsafeTerm implies(
-  const UnsafeTerm& larg,
-  const UnsafeTerm& rarg)
+SharedExpr implies(
+  const SharedExpr& larg,
+  const SharedExpr& rarg)
 {
-  return UnsafeTerm(std::make_shared<BinaryExpr<IMP>>(
-    internal::sort<Bool>(), larg, rarg));
+  return make_shared_expr<BinaryExpr<IMP>>(
+    internal::sort<Bool>(), larg, rarg);
+}
+
+SharedExpr implies(
+  const Bool& larg,
+  const SharedExpr& rarg)
+{
+  return make_shared_expr<BinaryExpr<IMP>>(
+    internal::sort<Bool>(), larg, rarg);
+}
+
+SharedExpr implies(
+  const SharedExpr& larg,
+  const Bool& rarg)
+{
+  return make_shared_expr<BinaryExpr<IMP>>(
+    internal::sort<Bool>(), larg, rarg);
 }
 
 Bool implies(
   const Bool& larg,
   const Bool& rarg)
 {
-  return Bool(std::make_shared<BinaryExpr<IMP>>(
+  return Bool(make_shared_expr<BinaryExpr<IMP>>(
     internal::sort<Bool>(), larg, rarg));
 }
 
-UnsafeTerm store(
-  const UnsafeTerm& array,
-  const UnsafeTerm& index,
-  const UnsafeTerm& value)
+SharedExpr store(
+  const SharedExpr& array,
+  const SharedExpr& index,
+  const SharedExpr& value)
 {
-  return UnsafeTerm(std::make_shared<ArrayStoreExpr>(
-    array, index, value));
+  return make_shared_expr<ArrayStoreExpr>(
+    array, index, value);
 }
 
 Solver::Solver()
@@ -131,7 +147,7 @@ Error Solver::encode_func_app(
   const Expr* const expr,
   const UnsafeDecl& func_decl,
   const size_t arity,
-  const UnsafeTerm* const args)
+  const SharedExpr* const args)
 {
   ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
 
@@ -145,7 +161,7 @@ Error Solver::encode_func_app(
 Error Solver::encode_const_array(
   const Expr* const expr,
   const Sort& sort,
-  const UnsafeTerm& init)
+  const SharedExpr& init)
 {
   ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
 
@@ -156,8 +172,8 @@ Error Solver::encode_const_array(
 
 Error Solver::encode_array_select(
   const Expr* const expr,
-  const UnsafeTerm& array,
-  const UnsafeTerm& index)
+  const SharedExpr& array,
+  const SharedExpr& index)
 {
   ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
 
@@ -170,9 +186,9 @@ Error Solver::encode_array_select(
 
 Error Solver::encode_array_store(
   const Expr* const expr,
-  const UnsafeTerm& array,
-  const UnsafeTerm& index,
-  const UnsafeTerm& value)
+  const SharedExpr& array,
+  const SharedExpr& index,
+  const SharedExpr& value)
 {
   ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
 
@@ -188,7 +204,7 @@ Error Solver::encode_nary(
   const Expr* const expr,
   Opcode opcode,
   const Sort& sort,
-  const UnsafeTerms& args)
+  const SharedExprs& args)
 {
   ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
 
@@ -218,7 +234,7 @@ Error Solver::encode_nary(
 Error Solver::encode_bv_zero_extend(
   const Expr* const expr,
   const Sort& sort,
-  const UnsafeTerm& bv,
+  const SharedExpr& bv,
   const unsigned ext)
 {
   ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
@@ -230,7 +246,7 @@ Error Solver::encode_bv_zero_extend(
 Error Solver::encode_bv_sign_extend(
   const Expr* const expr,
   const Sort& sort,
-  const UnsafeTerm& bv,
+  const SharedExpr& bv,
   const unsigned ext)
 {
   ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
@@ -242,7 +258,7 @@ Error Solver::encode_bv_sign_extend(
 Error Solver::encode_bv_extract(
   const Expr* const expr,
   const Sort& sort,
-  const UnsafeTerm& bv,
+  const SharedExpr& bv,
   const unsigned high,
   const unsigned low)
 {
@@ -267,7 +283,7 @@ void Solver::pop()
   return __pop();
 }
 
-void Solver::unsafe_add(const UnsafeTerm& condition)
+void Solver::unsafe_add(const SharedExpr& condition)
 {
   NonReentrantTimer<ElapsedTime> timer(m_stats.encode_elapsed_time);
 

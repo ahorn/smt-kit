@@ -191,7 +191,7 @@ assert(smt::sat == solver.check());</pre>
       <article>
         <h3>Unsafe API subset</h3>
         <p>
-          Sometimes, templates are inconvenient or cannot be used at all. In those cases, we can fall back to the <code>UnsafeTerm</code> API. It mostly integrates with the type-safe subset of SMT Kit.
+          Sometimes, templates are inconvenient or cannot be used at all. In those cases, we can fall back to the <code>SharedExpr</code> API.
         </p>
         <p>
           Example:
@@ -201,7 +201,7 @@ assert(smt::sat == solver.check());</pre>
 
 int main()
 {
-  UnsafeTerm x = smt::any&lt;smt::Bool&gt;("x");
+  SharedExpr x = smt::any&lt;smt::Bool&gt;("x");
 
   smt::Z3Solver z3_solver;
   z3_solver.unsafe_add(x != !!x);

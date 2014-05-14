@@ -409,7 +409,7 @@ public:
 #endif
 
   Internal(T v)
-  : m_term(nullptr),
+  : m_term(),
     m_v(v),
     m_op(nullptr) {}
 

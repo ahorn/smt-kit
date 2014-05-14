@@ -33,42 +33,42 @@ TEST(SmtStpTest, BvLiteral)
   unsigned long len;
 
   const Bv<int> l0 = literal<Bv<int>>(0x15);
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(l0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(l0).encode(s));
   print(vc, s.expr(), len);
   EXPECT_EQ(buf_size(int_bv_size), len);
   EXPECT_EQ("00015 ", std::string(buf).substr(len-7));
   EXPECT_EQ(int_bv_size, vc_getBVLength(vc, s.expr()));
 
   const Bv<unsigned> l1 = literal<Bv<unsigned>>(0x17);
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(l1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(l1).encode(s));
   print(vc, s.expr(), len);
   EXPECT_EQ(buf_size(int_bv_size), len);
   EXPECT_EQ("00017 ", std::string(buf).substr(len-7));
   EXPECT_EQ(int_bv_size, vc_getBVLength(vc, s.expr()));
 
   const Bv<long> l2 = literal<Bv<long>>(0x2A);
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(l2).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(l2).encode(s));
   print(vc, s.expr(), len);
   EXPECT_EQ(buf_size(long_bv_size), len);
   EXPECT_EQ("0002A ", std::string(buf).substr(len-7));
   EXPECT_EQ(long_bv_size, vc_getBVLength(vc, s.expr()));
 
   const Bv<unsigned long> l3 = literal<Bv<unsigned long>>(0x2B);
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(l3).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(l3).encode(s));
   print(vc, s.expr(), len);
   EXPECT_EQ(buf_size(long_bv_size), len);
   EXPECT_EQ("0002B ", std::string(buf).substr(len-7));
   EXPECT_EQ(long_bv_size, vc_getBVLength(vc, s.expr()));
 
   const Bv<long long> l4 = literal<Bv<long long>>(0x2C);
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(l4).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(l4).encode(s));
   print(vc, s.expr(), len);
   EXPECT_EQ(buf_size(long_long_bv_size), len);
   EXPECT_EQ("0002C ", std::string(buf).substr(len-7));
   EXPECT_EQ(long_long_bv_size, vc_getBVLength(vc, s.expr()));
 
   const Bv<unsigned long long> l5 = literal<Bv<unsigned long long>>(0x2D);
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(l5).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(l5).encode(s));
   print(vc, s.expr(), len);
   EXPECT_EQ(buf_size(long_long_bv_size), len);
   EXPECT_EQ("0002D ", std::string(buf).substr(len-7));
@@ -83,9 +83,9 @@ TEST(SmtStpTest, NonBvLiteral)
   const Int e1 = literal<Int>(-42L);
   const Real e2 = literal<Real>(-42L);
 
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(e0).encode(s));
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(e1).encode(s));
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(e2).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(e0).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(e1).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(e2).encode(s));
 }
 
 TEST(SmtStpTest, BoolLiteral)
@@ -96,13 +96,13 @@ TEST(SmtStpTest, BoolLiteral)
   unsigned long len;
 
   const Bool e0 = literal<Bool>(false);
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
   print(vc, s.expr(), len);
   EXPECT_EQ(7, len);
   EXPECT_EQ("FALSE ", std::string(buf));
 
   const Bool e1 = literal<Bool>(true);
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   print(vc, s.expr(), len);
   EXPECT_EQ(6, len);
   EXPECT_EQ("TRUE ", std::string(buf));
@@ -118,7 +118,7 @@ TEST(SmtStpTest, BvDeclExpr)
   unsigned long len;
 
   const Bv<long> e0 = any<Bv<long>>("x");
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
   print(vc, s.expr(), len);
   EXPECT_EQ(3, len);
   EXPECT_EQ("x ", std::string(buf));
@@ -132,8 +132,8 @@ TEST(SmtStpTest, IntAndRealDeclExpr)
   const Int e0 = any<Int>("x");
   const Real e1 = any<Real>("y");
 
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(e0).encode(s));
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(e0).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(e1).encode(s));
 }
 
 TEST(SmtStpTest, ArrayDecl)
@@ -145,12 +145,12 @@ TEST(SmtStpTest, ArrayDecl)
   const VC vc = s.vc();
 
   const Array<Bv<size_t>, Bv<short>> e0 = any<Array<Bv<size_t>, Bv<short>>>("array");
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
   EXPECT_EQ(size_t_bv_size, getIWidth(s.expr()));
   EXPECT_EQ(short_bv_size, getVWidth(s.expr()));
 
   const Array<Bv<short>, Bv<size_t>> e1 = any<Array<Bv<short>, Bv<size_t>>>("rev_array");
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   EXPECT_EQ(short_bv_size, getIWidth(s.expr()));
   EXPECT_EQ(size_t_bv_size, getVWidth(s.expr()));
 }
@@ -164,7 +164,7 @@ TEST(SmtStpTest, UnaryFuncAppExpr)
   const Int e0 = any<Int>("x");
   const Bool e1 = apply(func_decl, e0);
 
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(e1).encode(s));
 }
 
 TEST(SmtStpTest, BinaryFuncAppExpr)
@@ -176,7 +176,7 @@ TEST(SmtStpTest, BinaryFuncAppExpr)
   const Bv<long> e1 = any<Bv<long>>("y");
   const Bool e2 = apply(func_decl, e0, e1);
 
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(e2).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(e2).encode(s));
 }
 
 TEST(SmtStpTest, ArraySelectExpr)
@@ -187,7 +187,7 @@ TEST(SmtStpTest, ArraySelectExpr)
   const Bv<uint64_t> e1 = any<Bv<uint64_t>>("x");
   const Bv<uint16_t> e2 = select(e0, e1);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));
   EXPECT_EQ(16, vc_getBVLength(s.vc(), s.expr()));
 
   unsigned long len;
@@ -206,7 +206,7 @@ TEST(SmtStpTest, ArrayStoreExpr)
   const Bv<uint16_t> e2 = any<Bv<uint16_t>>("y");
   const Array<Bv<uint64_t>, Bv<uint16_t>> e3 = store(e0, e1, e2);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e3).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e3).encode(s));
 
   EXPECT_EQ(64, getIWidth(s.expr()));
   EXPECT_EQ(16, getVWidth(s.expr()));
@@ -224,7 +224,7 @@ TEST(SmtStpTest, BvSignedOperatorNOT)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bv<int64_t> e1(~e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   EXPECT_EQ(64, vc_getBVLength(s.vc(), s.expr()));
 
   unsigned long len;
@@ -240,7 +240,7 @@ TEST(SmtStpTest, BvUnsignedOperatorNOT)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bv<uint64_t> e1(~e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   EXPECT_EQ(64, vc_getBVLength(s.vc(), s.expr()));
 
   unsigned long len;
@@ -256,7 +256,7 @@ TEST(SmtStpTest, BvSignedUnaryOperatorSUB)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bv<int64_t> e1(-e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   EXPECT_EQ(64, vc_getBVLength(s.vc(), s.expr()));
 
   unsigned long len;
@@ -272,7 +272,7 @@ TEST(SmtStpTest, BvUnsignedUnaryOperatorSUB)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bv<uint64_t> e1(-e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   EXPECT_EQ(64, vc_getBVLength(s.vc(), s.expr()));
 
   unsigned long len;
@@ -289,7 +289,7 @@ TEST(SmtStpTest, BvUnsignedUnaryOperatorSUB)
     const Bv<type> e0 = any<Bv<type>>("x");                             \
     const Bv<type> e1(static_cast<type>(hex) op e0);                    \
                                                                         \
-    EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));               \
+    EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));               \
     EXPECT_EQ(16, vc_getBVLength(s.vc(), s.expr()));                    \
                                                                         \
     unsigned long len;                                                  \
@@ -313,7 +313,7 @@ TEST(SmtStpTest, BvSignedOperatorSUB)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bv<int64_t> e1(0x2AL - e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   EXPECT_EQ(64, vc_getBVLength(s.vc(), s.expr()));
 
   unsigned long len;
@@ -330,7 +330,7 @@ TEST(SmtStpTest, BvSignedOperatorAND)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bv<int64_t> e1(0x2AL & e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   EXPECT_EQ(64, vc_getBVLength(s.vc(), s.expr()));
 
   unsigned long len;
@@ -347,7 +347,7 @@ TEST(SmtStpTest, BvSignedOperatorOR)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bv<int64_t> e1(0x2AL | e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   EXPECT_EQ(64, vc_getBVLength(s.vc(), s.expr()));
 
   unsigned long len;
@@ -364,7 +364,7 @@ TEST(SmtStpTest, BvSignedOperatorXOR)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bv<int64_t> e1(0x2AL ^ e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   EXPECT_EQ(64, vc_getBVLength(s.vc(), s.expr()));
 
   unsigned long len;
@@ -386,7 +386,7 @@ TEST(SmtStpTest, BvUnsignedOperatorSUB)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bv<uint64_t> e1(0x2ALU - e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   EXPECT_EQ(64, vc_getBVLength(s.vc(), s.expr()));
 
   unsigned long len;
@@ -403,7 +403,7 @@ TEST(SmtStpTest, BvUnsignedOperatorAND)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bv<uint64_t> e1(0x2ALU & e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   EXPECT_EQ(64, vc_getBVLength(s.vc(), s.expr()));
 
   unsigned long len;
@@ -420,7 +420,7 @@ TEST(SmtStpTest, BvUnsignedOperatorOR)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bv<uint64_t> e1(0x2ALU | e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   EXPECT_EQ(64, vc_getBVLength(s.vc(), s.expr()));
 
   unsigned long len;
@@ -437,7 +437,7 @@ TEST(SmtStpTest, BvUnsignedOperatorXOR)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bv<uint64_t> e1(0x2ALU ^ e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
   EXPECT_EQ(64, vc_getBVLength(s.vc(), s.expr()));
 
   unsigned long len;
@@ -458,7 +458,7 @@ TEST(SmtStpTest, BvSignedBinaryOperatorEQL)
   const Bv<int64_t> e0 = any<Bv<int64_t>>("x");
   const Bool e1(42 == e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   unsigned long len;
   print(s.vc(), s.expr(), len);
@@ -473,7 +473,7 @@ TEST(SmtStpTest, BvUnsignedBinaryOperatorEQL)
   const Bv<uint64_t> e0 = any<Bv<uint64_t>>("x");
   const Bool e1(42 == e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   unsigned long len;
   print(s.vc(), s.expr(), len);
@@ -488,7 +488,7 @@ TEST(SmtStpTest, BvUnsignedBinaryOperatorEQL)
   const Bv<type> e0 = any<Bv<type>>("x");                               \
   const Bool e1(static_cast<type>(hex) op e0);                          \
                                                                         \
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));                 \
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));                 \
                                                                         \
   unsigned long len;                                                    \
   print(s.vc(), s.expr(), len);                                         \
@@ -558,17 +558,17 @@ TEST(SmtStpTest, MathBinaryOperators)
   StpSolver s;
 
   const Int e0 = any<Int>("x");
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(42 - e0).encode(s));
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(42 + e0).encode(s));
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(42 * e0).encode(s));
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(42 == e0).encode(s));
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(42 / e0).encode(s));
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(42 % e0).encode(s));
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(42 < e0).encode(s));
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(42 > e0).encode(s));
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(42 != e0).encode(s));
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(42 <= e0).encode(s));
-  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<UnsafeTerm>(42 >= e0).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(42 - e0).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(42 + e0).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(42 * e0).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(42 == e0).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(42 / e0).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(42 % e0).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(42 < e0).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(42 > e0).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(42 != e0).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(42 <= e0).encode(s));
+  EXPECT_EQ(UNSUPPORT_ERROR, static_cast<SharedExpr>(42 >= e0).encode(s));
 }
 
 TEST(SmtStpTest, BoolUnaryOperatorLNOT)
@@ -578,7 +578,7 @@ TEST(SmtStpTest, BoolUnaryOperatorLNOT)
   const Bool e0 = any<Bool>("x");
   const Bool e1(!e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   unsigned long len;
   print(s.vc(), s.expr(), len);
@@ -595,7 +595,7 @@ TEST(SmtStpTest, BoolUnaryOperatorLNOT)
     const Bool e1 = any<Bool>("y");                                     \
     const Bool e2(e0 op e1);                                            \
                                                                         \
-    EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));               \
+    EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));               \
                                                                         \
     unsigned long len;                                                  \
     print(s.vc(), s.expr(), len);                                       \
@@ -613,7 +613,7 @@ TEST(SmtStpTest, BoolBinaryOperatorEQL)
   const Bool e1 = any<Bool>("y");
   const Bool e2(e0 == e1);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));
 
   unsigned long len;
   print(s.vc(), s.expr(), len);
@@ -629,7 +629,7 @@ TEST(SmtStpTest, BoolBinaryOperatorIMP)
   const Bool e1 = any<Bool>("y");
   const Bool e2(implies(e0, e1));
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));
 
   unsigned long len;
   print(s.vc(), s.expr(), len);
@@ -665,7 +665,7 @@ TEST(SmtStpTest, Distinct)
 
   Bool d(distinct(std::move(operand_terms)));
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(d).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(d).encode(s));
 
   unsigned long len;
   print(s.vc(), s.expr(), len);

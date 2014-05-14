@@ -15,7 +15,7 @@ TEST(SmtCVC4Test, PositiveBvLiteral)
 
   const Bv<int32_t> e0 = literal<Bv<int32_t>>(42);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   CVC4::Expr expr = s.expr();
   EXPECT_TRUE(expr.isConst());
@@ -37,7 +37,7 @@ TEST(SmtCVC4Test, NegativeBvLiteral)
   const Bv<long> e1 = literal<Bv<long>>(42);
   const Bv<long> e3 = literal<Bv<long>>(0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   CVC4::Expr expr = s.expr();
   EXPECT_TRUE(expr.isConst());
@@ -75,7 +75,7 @@ TEST(SmtCVC4Test, InternalStringBvLiteral)
   constexpr long long v = std::numeric_limits<long long>::max();
   const Bv<long long> e0 = literal<Bv<long long>>(v);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   CVC4::Expr expr = s.expr();
   EXPECT_TRUE(expr.isConst());
@@ -98,7 +98,7 @@ TEST(SmtCVC4Test, PositiveIntLiteral)
 
   const Int e0 = literal<Int>(42);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   expr = s.expr();
   EXPECT_TRUE(expr.isConst());
@@ -111,7 +111,7 @@ TEST(SmtCVC4Test, PositiveIntLiteral)
   out.clear();
 
   const Int e1 = literal<Int>(42L);
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   expr = s.expr();
   EXPECT_TRUE(expr.isConst());
@@ -129,7 +129,7 @@ TEST(SmtCVC4Test, NegativeIntLiteral)
 
   const Int e0 = literal<Int>(-42);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   expr = s.expr();
   EXPECT_TRUE(expr.isConst());
@@ -142,7 +142,7 @@ TEST(SmtCVC4Test, NegativeIntLiteral)
   out.clear();
 
   const Int e1 = literal<Int>(-42L);
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   expr = s.expr();
   EXPECT_TRUE(expr.isConst());
@@ -158,7 +158,7 @@ TEST(SmtCVC4Test, BoolTrueLiteral)
 
   const Bool e0 = literal<Bool>(true);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   CVC4::Expr expr = s.expr();
   EXPECT_TRUE(expr.isConst());
@@ -175,7 +175,7 @@ TEST(SmtCVC4Test, BoolFalseLiteral)
 
   const Bool e0 = literal<Bool>(false);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   CVC4::Expr expr = s.expr();
   EXPECT_TRUE(expr.isConst());
@@ -192,7 +192,7 @@ TEST(SmtCVC4Test, ArrayDecl)
 
   const Array<Bv<size_t>, Bv<int>> e0 = any<Array<Bv<size_t>, Bv<int>>>("array");
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e0).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
 
   const CVC4::Expr expr(s.expr());
   EXPECT_TRUE(expr.getType().isArray());
@@ -212,7 +212,7 @@ TEST(SmtCVC4Test, ConstArrayExpr)
 {
   CVC4Solver s;
 
-  const Int init_term(std::make_shared<LiteralExpr<int>>(internal::sort<Int>(), 7));
+  const Int init_term(make_shared_expr<LiteralExpr<int>>(internal::sort<Int>(), 7));
   const ConstArrayExpr e0(internal::sort<Array<Int, Int>>(), init_term);
 
   EXPECT_EQ(OK, e0.encode(s));
@@ -252,7 +252,7 @@ TEST(SmtCVC4Test, UnaryFuncAppExpr)
   const Int e0 = any<Int>("x");
   const Bool e1 = apply(func_decl, e0);
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
 
   std::stringstream out;
   out << s.expr();
@@ -268,7 +268,7 @@ TEST(SmtCVC4Test, UnaryFuncAppExpr)
     const Bv<sign int> e0 = any<Bv<sign int>>("x");                     \
     const Bv<sign int> e1(op e0);                                       \
                                                                         \
-    EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));               \
+    EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));               \
                                                                         \
     const CVC4::Expr expr(s.expr());                                    \
     EXPECT_EQ(kind, expr.getKind());                                    \
@@ -298,7 +298,7 @@ SMT_CVC4_TEST_BV_SIGNED_UNARY_OP(~, NOT, bvnot, CVC4::kind::BITVECTOR_NOT)
     const Bv<sign int> e1 = any<Bv<sign int>>("y");                     \
     const Bool e2(e0 op e1);                                            \
                                                                         \
-    EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));               \
+    EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));               \
                                                                         \
     const CVC4::Expr expr(s.expr());                                    \
     EXPECT_EQ(kind, expr.getKind());                                    \
@@ -339,7 +339,7 @@ SMT_CVC4_TEST_BV_UNSIGNED_BINARY_REL(>=, GEQ, bvuge, CVC4::kind::BITVECTOR_UGE)
     const Bv<sign int> e1 = any<Bv<sign int>>("y");                     \
     const Bv<sign int> e2(e0 op e1);                                    \
                                                                         \
-    EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));               \
+    EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));               \
                                                                         \
     const CVC4::Expr expr(s.expr());                                    \
     EXPECT_EQ(kind, expr.getKind());                                    \
@@ -378,7 +378,7 @@ SMT_CVC4_TEST_BV_UNSIGNED_BINARY_OP(%, REM, bvurem, CVC4::kind::BITVECTOR_UREM)
     const Int e0 = any<Int>("x");                                       \
     const Int e1(op e0);                                                \
                                                                         \
-    EXPECT_EQ(OK, static_cast<UnsafeTerm>(e1).encode(s));               \
+    EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));               \
                                                                         \
     const CVC4::Expr expr(s.expr());                                    \
     EXPECT_EQ(kind, expr.getKind());                                    \
@@ -400,7 +400,7 @@ SMT_CVC4_TEST_MATH_UNARY_OP(-, SUB, -, CVC4::kind::UMINUS)
     const Int e1 = any<Int>("y");                                       \
     const Bool e2(e0 op e1);                                            \
                                                                         \
-    EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));               \
+    EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));               \
                                                                         \
     const CVC4::Expr expr(s.expr());                                    \
     EXPECT_EQ(kind, expr.getKind());                                    \
@@ -427,7 +427,7 @@ SMT_CVC4_TEST_MATH_BINARY_REL(>=, GEQ, >=, CVC4::kind::GEQ)
     const Int e1 = any<Int>("y");                                       \
     const Int e2(e0 op e1);                                             \
                                                                         \
-    EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));               \
+    EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));               \
                                                                         \
     const CVC4::Expr expr(s.expr());                                    \
     EXPECT_EQ(kind, expr.getKind());                                    \
@@ -453,7 +453,7 @@ SMT_CVC4_TEST_MATH_BINARY_OP(%, REM, mod, CVC4::kind::INTS_MODULUS)
     const Bool e1 = any<Bool>("y");                                     \
     const Bool e2(e0 op e1);                                            \
                                                                         \
-    EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));               \
+    EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));               \
                                                                         \
     const CVC4::Expr expr(s.expr());                                    \
     EXPECT_EQ(kind, expr.getKind());                                    \
@@ -476,7 +476,7 @@ TEST(SmtCVC4Test, LogicalImplication)
   const Bool e1 = any<Bool>("y");
   const Bool e2(implies(e0, e1));
 
-  EXPECT_EQ(OK, static_cast<UnsafeTerm>(e2).encode(s));
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e2).encode(s));
   EXPECT_TRUE(s.expr().getType(true).isBoolean());
   EXPECT_EQ(CVC4::kind::IMPLIES, s.expr().getKind());
 
@@ -501,7 +501,7 @@ TEST(SmtCVC4Test, Distinct)
 
   Bool d(distinct(std::move(operand_terms)));
 
-  static_cast<UnsafeTerm>(d).encode(s);
+  static_cast<SharedExpr>(d).encode(s);
 
   std::stringstream out;
   out << s.expr();
@@ -562,28 +562,28 @@ TEST(SmtCVC4Test, UnsafeAdd)
   const Sort& func_sort = internal::sort<Func<Bv<int64_t>, Bv<int64_t>>>();
   const UnsafeDecl const_decl("x", bv_sort);
   const UnsafeDecl func_decl("f", func_sort);
-  const UnsafeTerm seven_term(literal(bv_sort, 7));
-  const UnsafeTerm x_term(constant(const_decl));
-  const UnsafeTerm app_term(apply(func_decl, seven_term));
+  const SharedExpr seven_term(literal(bv_sort, 7));
+  const SharedExpr x_term(constant(const_decl));
+  const SharedExpr app_term(apply(func_decl, seven_term));
 
-  UnsafeTerms terms;
+  SharedExprs terms;
   terms.push_back(seven_term);
   terms.push_back(x_term);
   terms.push_back(app_term);
 
-  const UnsafeTerm distinct_term(distinct(std::move(terms)));
+  const SharedExpr distinct_term(distinct(std::move(terms)));
 
   const Sort& array_sort = internal::sort<Array<Bv<uint32_t>, Bv<int64_t>>>();
   const Sort& index_sort = internal::sort<Bv<uint32_t>>();
   const UnsafeDecl array_decl("array", array_sort);
   const UnsafeDecl index_decl("index", index_sort);
-  const UnsafeTerm array_term(constant(array_decl));
-  const UnsafeTerm index_term(constant(index_decl));
-  const UnsafeTerm store_term(store(array_term, index_term, app_term));
-  const UnsafeTerm select_term(select(store_term, index_term));
+  const SharedExpr array_term(constant(array_decl));
+  const SharedExpr index_term(constant(index_decl));
+  const SharedExpr store_term(store(array_term, index_term, app_term));
+  const SharedExpr select_term(select(store_term, index_term));
 
-  const UnsafeTerm eq_term(select_term == x_term);
-  const UnsafeTerm and_term(eq_term && distinct_term);
+  const SharedExpr eq_term(select_term == x_term);
+  const SharedExpr and_term(eq_term && distinct_term);
 
   s.push();
   {

@@ -142,8 +142,8 @@ TEST(SmtFunctionalTest, BitVectors)
 TEST(SmtFunctionalTest, UnsafeExpr)
 {
   const smt::UnsafeDecl unsafe_decl("x", smt::bv_sort(true, sizeof(int) * 8));
-  const smt::UnsafeTerm x = smt::constant(unsafe_decl);
-  const smt::UnsafeTerm equality = (x & smt::literal<smt::Bv<int>>(3)) != x;
+  const smt::SharedExpr x = smt::constant(unsafe_decl);
+  const smt::SharedExpr equality = (x & smt::literal<smt::Bv<int>>(3)) != x;
 
   smt::Z3Solver z3_solver;
   z3_solver.unsafe_add(equality);

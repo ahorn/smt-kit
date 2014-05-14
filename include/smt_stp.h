@@ -174,7 +174,7 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
     const Expr* const expr,
     const UnsafeDecl& decl,
     const size_t arity,
-    const UnsafeTerm* const args) override
+    const SharedExpr* const args) override
   {
     return UNSUPPORT_ERROR;
   }
@@ -182,15 +182,15 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_const_array(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& init) override
+    const SharedExpr& init) override
   {
     return UNSUPPORT_ERROR;
   }
 
   virtual Error __encode_array_select(
     const Expr* const expr,
-    const UnsafeTerm& array,
-    const UnsafeTerm& index) override
+    const SharedExpr& array,
+    const SharedExpr& index) override
   {
     if (find_expr(expr))
       return OK;
@@ -214,9 +214,9 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_array_store(
     const Expr* const expr,
-    const UnsafeTerm& array,
-    const UnsafeTerm& index,
-    const UnsafeTerm& value) override
+    const SharedExpr& array,
+    const SharedExpr& index,
+    const SharedExpr& value) override
   {
     if (find_expr(expr))
       return OK;
@@ -247,7 +247,7 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_unary_lnot(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& arg) override
+    const SharedExpr& arg) override
   {
     if (find_expr(expr))
       return OK;
@@ -263,7 +263,7 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_unary_not(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& arg) override
+    const SharedExpr& arg) override
   {
     if (find_expr(expr))
       return OK;
@@ -279,7 +279,7 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_unary_sub(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& arg) override
+    const SharedExpr& arg) override
   {
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
@@ -298,8 +298,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_sub(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
@@ -327,8 +327,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_and(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!larg.sort().is_bv() || !rarg.sort().is_bv())
       return UNSUPPORT_ERROR;
@@ -356,8 +356,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_or(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!larg.sort().is_bv() || !rarg.sort().is_bv())
       return UNSUPPORT_ERROR;
@@ -385,8 +385,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_xor(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!larg.sort().is_bv() || !rarg.sort().is_bv())
       return UNSUPPORT_ERROR;
@@ -414,8 +414,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_land(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!larg.sort().is_bool() || !rarg.sort().is_bool())
       return UNSUPPORT_ERROR;
@@ -443,8 +443,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_lor(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!larg.sort().is_bool() || !rarg.sort().is_bool())
       return UNSUPPORT_ERROR;
@@ -472,8 +472,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_imp(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!larg.sort().is_bool() || !rarg.sort().is_bool())
       return UNSUPPORT_ERROR;
@@ -501,8 +501,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_eql(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (find_expr(expr))
       return OK;
@@ -531,8 +531,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_add(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
@@ -560,8 +560,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_mul(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
@@ -589,8 +589,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_quo(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
@@ -622,8 +622,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_rem(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
@@ -655,8 +655,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_lss(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!larg.sort().is_bv() || !rarg.sort().is_bv())
       return UNSUPPORT_ERROR;
@@ -688,8 +688,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_gtr(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!larg.sort().is_bv() || !rarg.sort().is_bv())
       return UNSUPPORT_ERROR;
@@ -721,8 +721,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_neq(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (find_expr(expr))
       return OK;
@@ -753,8 +753,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_leq(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!larg.sort().is_bv() || !rarg.sort().is_bv())
       return UNSUPPORT_ERROR;
@@ -786,8 +786,8 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_binary_geq(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& larg,
-    const UnsafeTerm& rarg) override
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
   {
     if (!larg.sort().is_bv() || !rarg.sort().is_bv())
       return UNSUPPORT_ERROR;
@@ -820,7 +820,7 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
     const Expr* const expr,
     Opcode opcode,
     const Sort& sort,
-    const UnsafeTerms& args) override
+    const SharedExprs& args) override
   {
     if (find_expr(expr))
       return OK;
@@ -832,13 +832,13 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
       // pair-wise disequality, formula size O(N^2)
       const Sort& bool_sort = internal::sort<Bool>();
       VCExpr distinct_expr = vc_trueExpr(m_vc);
-      for (UnsafeTerms::const_iterator outer = args.cbegin();
+      for (SharedExprs::const_iterator outer = args.cbegin();
            outer != args.cend(); ++outer)
       {
         outer->encode(*this);
         const VCExpr outer_expr = m_expr;
 
-        for (UnsafeTerms::const_iterator inner = outer + 1;
+        for (SharedExprs::const_iterator inner = outer + 1;
              inner != args.cend(); ++inner)
         {
           assert(outer->sort() == inner->sort());
@@ -867,7 +867,7 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_bv_zero_extend(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& bv,
+    const SharedExpr& bv,
     const unsigned ext) override
   {
     if (find_expr(expr))
@@ -885,7 +885,7 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_bv_sign_extend(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& bv,
+    const SharedExpr& bv,
     const unsigned ext) override
   {
     if (find_expr(expr))
@@ -903,7 +903,7 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_bv_extract(
     const Expr* const expr,
     const Sort& sort,
-    const UnsafeTerm& bv,
+    const SharedExpr& bv,
     const unsigned high,
     const unsigned low) override
   {
@@ -948,7 +948,7 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
     vc_pop(m_vc);
   }
 
-  virtual Error __unsafe_add(const UnsafeTerm& condition) override
+  virtual Error __unsafe_add(const SharedExpr& condition) override
   {
     const Error err = condition.encode(*this);
     if (err)
