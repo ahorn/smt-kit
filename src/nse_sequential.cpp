@@ -72,62 +72,31 @@ bool SequentialDfsChecker::branch(const Internal<bool>& g, const bool direction_
   }
 
   if (!m_is_feasible)
-    // exactly like NO_BRANCH
+    // exactly like NO_BRANCH in branch(smt::Bool&&, const bool)
     return false;
 
-  const smt::Bool g_term = Internal<bool>::term(g);
-  if (m_dfs.has_next())
-  {
-    const bool direction = m_dfs.next();
-    if (direction)
-      Checker::add_guard(g_term);
-    else
-      Checker::add_guard(not g_term);
+  return branch(Internal<bool>::term(g), direction_hint);
 
-    return direction;
+}
+
+bool SequentialDfsChecker::branch(Internal<bool>&& g, const bool direction_hint)
+{
+  m_stats.branch_cnt++;
+  assert(m_stats.branch_cnt != 0);
+
+  if (g.is_literal())
+  {
+    m_stats.branch_literal_cnt++;
+    assert(m_stats.branch_literal_cnt != 0);
+
+    return g.literal();
   }
 
-  if (m_replay_manual_timer.is_active())
-    m_replay_manual_timer.stop();
-
-  Timer timer(m_stats.branch_time);
-
-  if (direction_hint)
-    goto THEN_BRANCH;
-  else
-    goto ELSE_BRANCH;
-
-THEN_BRANCH:
-  if (smt::sat == check(Checker::guard() and g_term))
-  {
-    Checker::add_guard(g_term);
-    m_dfs.append_flip(true, !direction_hint);
-    return true;
-  }
-
-  // neither THEN_BRANCH nor ELSE_BRANCH is feasible
-  if (!direction_hint)
-    goto NO_BRANCH;
-
-// fall through THEN_BRANCH to try ELSE_BRANCH
-ELSE_BRANCH:
-  if (smt::sat == check(Checker::guard() and not g_term))
-  {
-    Checker::add_guard(not g_term);
-    m_dfs.append_flip(false, direction_hint);
+  if (!m_is_feasible)
+    // exactly like NO_BRANCH in branch(smt::Bool&&, const bool)
     return false;
-  }
 
-  if (!direction_hint)
-    // try the other branch
-    goto THEN_BRANCH;
-
-NO_BRANCH:
-  // both THEN_BRANCH and ELSE_BRANCH are infeasible
-  m_is_feasible = false;
-
-  // favour "else" branch, hoping for shorter infeasible path
-  return false;
+  return branch(Internal<bool>::term(std::move(g)), direction_hint);
 }
 
 }

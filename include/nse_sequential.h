@@ -1449,6 +1449,62 @@ private:
     return r;
   }
 
+  bool branch(smt::Bool&& g_term, const bool direction_hint)
+  {
+    if (m_dfs.has_next())
+    {
+      const bool direction = m_dfs.next();
+      if (direction)
+        Checker::add_guard(std::move(g_term));
+      else
+        Checker::add_guard(not std::move(g_term));
+
+      return direction;
+    }
+
+    if (m_replay_manual_timer.is_active())
+      m_replay_manual_timer.stop();
+
+    Timer timer(m_stats.branch_time);
+
+    if (direction_hint)
+      goto THEN_BRANCH;
+    else
+      goto ELSE_BRANCH;
+
+  THEN_BRANCH:
+    if (smt::sat == check(Checker::guard() and g_term))
+    {
+      Checker::add_guard(std::move(g_term));
+      m_dfs.append_flip(true, !direction_hint);
+      return true;
+    }
+
+    // neither THEN_BRANCH nor ELSE_BRANCH is feasible
+    if (!direction_hint)
+      goto NO_BRANCH;
+
+  // fall through THEN_BRANCH to try ELSE_BRANCH
+  ELSE_BRANCH:
+    if (smt::sat == check(Checker::guard() and not g_term))
+    {
+      Checker::add_guard(not std::move(g_term));
+      m_dfs.append_flip(false, direction_hint);
+      return false;
+    }
+
+    if (!direction_hint)
+      // try the other branch
+      goto THEN_BRANCH;
+
+  NO_BRANCH:
+    // both THEN_BRANCH and ELSE_BRANCH are infeasible
+    m_is_feasible = false;
+
+    // favour "else" branch, hoping for shorter infeasible path
+    return false;
+  }
+
 protected:
   void reset_dfs()
   {
@@ -1521,6 +1577,11 @@ public:
   /// The second direction argument is only a suggestion that may be ignored.
   bool branch(const Internal<bool>&, const bool direction_hint = false);
 
+  /// Follow a feasible control flow direction, i.e. prunes infeasible branches
+
+  /// The second direction argument is only a suggestion that may be ignored.
+  bool branch(Internal<bool>&&, const bool direction_hint = false);
+
   /// Follow both control flow directions regardless of their feasibility
   bool force_branch(const Internal<bool>& g)
   {
@@ -1545,6 +1606,34 @@ public:
       Checker::add_guard(g_term);
     else
       Checker::add_guard(not g_term);
+
+    return direction;
+  }
+
+  /// Follow both control flow directions regardless of their feasibility
+  bool force_branch(Internal<bool>&& g)
+  {
+    if (g.is_literal())
+      return g.literal();
+
+    bool direction = false;
+    if (m_dfs.has_next())
+    {
+      direction = m_dfs.next();
+    }
+    else
+    {
+      if (m_replay_manual_timer.is_active())
+        m_replay_manual_timer.stop();
+
+      m_dfs.append_flip(direction);
+    }
+
+    smt::Bool g_term = Internal<bool>::term(std::move(g));
+    if (direction)
+      Checker::add_guard(std::move(g_term));
+    else
+      Checker::add_guard(not std::move(g_term));
 
     return direction;
   }
