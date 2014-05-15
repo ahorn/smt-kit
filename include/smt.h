@@ -1360,6 +1360,12 @@ public:
   }
 };
 
+namespace internal
+{
+  template<typename T>
+  class Term;
+}
+
 /// Shared but potentially not well-sorted SMT expression
 
 /// All arithmetic and bit vector operators are overloaded.
@@ -1380,7 +1386,15 @@ private:
       delete m_ptr;
   }
 
-  // private constructor to avoid exception safety issues
+  // terms call SharedExpr(Expr* const) directly because they
+  // must not have a constructor with argument SharedExpr;
+  // otherwise, there will be overload ambiguity
+  template<typename T>
+  friend class internal::Term;
+
+protected:
+  // Subclasses must avoid exception safety
+  // issues by not leaking the pointer
   SharedExpr(Expr* const ptr) noexcept
   : m_ptr(ptr)
   {
@@ -1390,13 +1404,6 @@ private:
   }
 
 public:
-  /// exception safe
-  template<typename T, class... Args>
-  static SharedExpr make(Args&&... args)
-  {
-    return SharedExpr(new T(std::forward<Args>(args)...));
-  }
-
   SharedExpr() noexcept
   : m_ptr(nullptr) {}
 
@@ -1409,6 +1416,7 @@ public:
   SharedExpr(SharedExpr&& other) noexcept
   : m_ptr(other.m_ptr)
   {
+    // move semantics allow us to bypass inc()
     other.m_ptr = nullptr;
   }
 
@@ -1448,7 +1456,6 @@ public:
   template<typename T>
   explicit operator T() const
   {
-    assert(is_null() || internal::sort<T>() == sort());
     return T(m_ptr);
   }
 
@@ -1481,10 +1488,31 @@ public:
   }
 };
 
-template<typename T, class... Args>
-static SharedExpr make_shared_expr(Args&&... args)
+/// Temporaries only constructable via make_shared_expr(Args&&...)
+
+/// This intermediate type avoids overload ambiguity and unwanted casts.
+class MakeSharedExpr : public SharedExpr
 {
-  return SharedExpr::make<T>(std::forward<Args>(args)...);
+private:
+  // external linkage
+  template<typename T, class... Args>
+  friend MakeSharedExpr make_shared_expr(Args&&...);
+
+  MakeSharedExpr(Expr* const ptr) noexcept
+  : SharedExpr(ptr) {}
+
+public:
+  // maintainer note: use RVO instead of copy or move!
+  MakeSharedExpr() = delete;
+  MakeSharedExpr(const MakeSharedExpr&) = delete;
+  MakeSharedExpr(MakeSharedExpr&&) = delete;
+};
+
+template<typename T, class... Args>
+MakeSharedExpr make_shared_expr(Args&&... args)
+{
+  // use RVO instead of copy or move constructor
+  return {new T(std::forward<Args>(args)...)};
 }
 
 namespace internal
@@ -1971,9 +1999,12 @@ Error Solver::encode_binary(
 
 namespace internal
 {
-  /// shared and well-sorted SMT expression 
+  /// Shared and well-sorted SMT expression
 
   /// Supported built-in operators depends on the type T.
+
+  /// Subclasses must use the curiously recurring template pattern (CRTP)
+  /// in order to support recursive sorts such as Func<T...>.
   template<typename T>
   class Term
   {
@@ -1981,16 +2012,19 @@ namespace internal
     SharedExpr m_ptr;
 
   protected:
-    Term()
-    : m_ptr() {}
-
-    Term(const SharedExpr& ptr)
+    // Must be private in subclass but callable by
+    // SharedExpr's conversion operator
+    Term(Expr* const ptr)
     : m_ptr(ptr)
     {
       assert(is_null() || internal::sort<T>() == sort());
     }
 
-    Term(SharedExpr&& ptr)
+    // Must be public in subclass; this visibility is OK
+    // because MakeSharedExpr is only constructable by
+    // make_shared_expr(Args&&...) function. The public
+    // constructor in subclass serves as documentation.
+    Term(MakeSharedExpr&& ptr)
     : m_ptr(std::move(ptr))
     {
       assert(is_null() || internal::sort<T>() == sort());
@@ -2004,6 +2038,9 @@ namespace internal
     ~Term() {}
 
   public:
+    Term() noexcept
+    : m_ptr() {}
+
     Term(const Term& other)
     : m_ptr(other.m_ptr)
     {
@@ -2024,18 +2061,26 @@ namespace internal
       return *this;
     }
 
+    Term& operator=(Term&& other)
+    {
+      assert(other.is_null() || internal::sort<T>() == other.sort());
+
+      m_ptr = std::move(other.m_ptr);
+      return *this;
+    }
+
     operator SharedExpr() const noexcept
     {
       return m_ptr;
     }
 
-    bool is_null() const
+    bool is_null() const noexcept
     {
       return m_ptr.is_null();
     }
 
     /// memory address of underlying SMT expression
-    uintptr_t addr() const
+    uintptr_t addr() const noexcept
     {
       return m_ptr.addr();
     }
@@ -2060,19 +2105,86 @@ namespace internal
   };
 }
 
-// Note: Curiously recurring template pattern (CRTP) is needed to
-// support recursive sorts such as Func<T...>
-#define SMT_TERM_DEF(name)                                         \
-struct name : public internal::Term<name>                          \
-{                                                                  \
-  name() : internal::Term<name>() {}                               \
-  name(const SharedExpr& ptr) : internal::Term<name>(ptr) {}       \
-  name(SharedExpr&& ptr) : internal::Term<name>(std::move(ptr)) {} \
-};                                                                 \
+class Bool : public internal::Term<Bool>
+{
+private:
+  typedef internal::Term<Bool> Super;
 
-SMT_TERM_DEF(Bool)
-SMT_TERM_DEF(Int)
-SMT_TERM_DEF(Real)
+  friend class SharedExpr;
+  Bool(Expr* const ptr) : Super(ptr) {}
+
+public:
+  Bool() : Super() {}
+  Bool(const Bool& other) : Super(other) {}
+  Bool(Bool&& other) : Super(std::move(other)) {}
+  Bool(MakeSharedExpr&& ptr) : Super(std::move(ptr)) {}
+
+  Bool& operator=(const Bool& other)
+  {
+    Super::operator=(other);
+    return *this;
+  }
+
+  Bool& operator=(Bool&& other)
+  {
+    Super::operator=(std::move(other));
+    return *this;
+  }
+};
+
+class Int : public internal::Term<Int>
+{
+private:
+  typedef internal::Term<Int> Super;
+
+  friend class SharedExpr;
+  Int(Expr* const ptr) : Super(ptr) {}
+
+public:
+  Int() : Super() {}
+  Int(const Int& other) : Super(other) {}
+  Int(Int&& other) : Super(std::move(other)) {}
+  Int(MakeSharedExpr&& ptr) : Super(std::move(ptr)) {}
+
+  Int& operator=(const Int& other)
+  {
+    Super::operator=(other);
+    return *this;
+  }
+
+  Int& operator=(Int&& other)
+  {
+    Super::operator=(std::move(other));
+    return *this;
+  }
+};
+
+class Real : public internal::Term<Real>
+{
+private:
+  typedef internal::Term<Real> Super;
+
+  friend class SharedExpr;
+  Real(Expr* const ptr) : Super(ptr) {}
+
+public:
+  Real() : Super() {}
+  Real(const Real& other) : Super(other) {}
+  Real(Real&& other) : Super(std::move(other)) {}
+  Real(MakeSharedExpr&& ptr) : Super(std::move(ptr)) {}
+
+  Real& operator=(const Real& other)
+  {
+    Super::operator=(other);
+    return *this;
+  }
+
+  Real& operator=(Real&& other)
+  {
+    Super::operator=(std::move(other));
+    return *this;
+  }
+};
 
 /// Fixed-size bit vector
 
@@ -2084,10 +2196,26 @@ class Bv : public internal::Term<Bv<T>>
 private:
   typedef internal::Term<Bv<T>> Super;
 
+  friend class SharedExpr;
+  Bv(Expr* const ptr) : Super(ptr) {}
+
 public:
   Bv() : Super() {}
-  Bv(const SharedExpr& ptr) : Super(ptr) {}
-  Bv(SharedExpr&& ptr) : Super(std::move(ptr)) {}
+  Bv(const Bv& other) : Super(other) {}
+  Bv(Bv&& other) : Super(std::move(other)) {}
+  Bv(MakeSharedExpr&& ptr) : Super(std::move(ptr)) {}
+
+  Bv& operator=(const Bv& other)
+  {
+    Super::operator=(other);
+    return *this;
+  }
+
+  Bv& operator=(Bv&& other)
+  {
+    Super::operator=(std::move(other));
+    return *this;
+  }
 };
 
 /// McCarthy Array
@@ -2099,8 +2227,21 @@ private:
 
 public:
   Array() : Super() {}
-  Array(const SharedExpr& ptr) : Super(ptr) {}
-  Array(SharedExpr&& ptr) : Super(std::move(ptr)) {}
+  Array(const Array& other) : Super(other) {}
+  Array(Array&& other) : Super(std::move(other)) {}
+  Array(MakeSharedExpr&& ptr) : Super(std::move(ptr)) {}
+
+  Array& operator=(const Array& other)
+  {
+    Super::operator=(other);
+    return *this;
+  }
+
+  Array& operator=(Array&& other)
+  {
+    Super::operator=(std::move(other));
+    return *this;
+  }
 };
 
 namespace internal
@@ -2127,7 +2268,7 @@ template<typename... T>
 class Func : public internal::Term<Func<T...>>
 {
 private:
-  typedef  internal::Term<Func<T...>> Super;
+  typedef internal::Term<Func<T...>> Super;
 
 public:
   static constexpr size_t arity = sizeof...(T) - 1;
@@ -2139,8 +2280,21 @@ public:
     std::tuple<T...>>::type Range;
 
   Func() : Super() {}
-  Func(const SharedExpr& ptr) : Super(ptr) {}
-  Func(SharedExpr&& ptr) : Super(std::move(ptr)) {}
+  Func(const Func& other) : Super(other) {}
+  Func(Func&& other) : Super(std::move(other)) {}
+  Func(MakeSharedExpr&& ptr) : Super(std::move(ptr)) {}
+
+  Func& operator=(const Func& other)
+  {
+    Super::operator=(other);
+    return *this;
+  }
+
+  Func& operator=(Func&& other)
+  {
+    Super::operator=(std::move(other));
+    return *this;
+  }
 };
 
 template<typename T>
@@ -2577,6 +2731,16 @@ public:
     assert(!m_operand.is_null());
   }
 
+  // Allocate sort statically!
+  UnaryExpr(
+    const Sort& sort,
+    SharedExpr&& operand)
+  : Expr(UNARY_EXPR_KIND, sort),
+    m_operand(std::move(operand))
+  {
+    assert(!m_operand.is_null());
+  }
+
   const SharedExpr& operand() const
   {
     return m_operand;
@@ -2606,6 +2770,19 @@ public:
   : Expr(BINARY_EXPR_KIND, sort),
     m_loperand(loperand),
     m_roperand(roperand)
+  {
+    assert(!m_loperand.is_null());
+    assert(!m_roperand.is_null());
+    assert(m_loperand.sort() == m_roperand.sort());
+  }
+
+  BinaryExpr(
+    const Sort& sort,
+    SharedExpr&& loperand,
+    SharedExpr&& roperand)
+  : Expr(BINARY_EXPR_KIND, sort),
+    m_loperand(std::move(loperand)),
+    m_roperand(std::move(roperand))
   {
     assert(!m_loperand.is_null());
     assert(!m_roperand.is_null());
@@ -2877,8 +3054,15 @@ struct Identity<LAND, Bool>
     std::is_base_of<smt::internal::Term<T>, T>::value>::type>                  \
   inline T operator op(const T& arg)                                           \
   {                                                                            \
-    return T(smt::make_shared_expr<smt::UnaryExpr<smt::opcode>>(               \
-      smt::internal::sort<T>(), arg));                                         \
+    return {smt::make_shared_expr<smt::UnaryExpr<smt::opcode>>(                \
+      smt::internal::sort<T>(), arg)};                                         \
+  }                                                                            \
+  template<typename T, typename Enable = typename std::enable_if<              \
+    std::is_base_of<smt::internal::Term<T>, T>::value>::type>                  \
+  inline T operator op(T&& arg)                                                \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::UnaryExpr<smt::opcode>>(                \
+      smt::internal::sort<T>(), std::move(arg))};                              \
   }                                                                            \
 
 #define SMT_BUILTIN_BINARY_OP(op, opcode)                                      \
@@ -2886,8 +3070,29 @@ struct Identity<LAND, Bool>
     std::is_base_of<smt::internal::Term<T>, T>::value>::type>                  \
   inline T operator op(const T& larg, const T& rarg)                           \
   {                                                                            \
-    return T(smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(              \
-      smt::internal::sort<T>(), larg, rarg));                                  \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<T>(), larg, rarg)};                                  \
+  }                                                                            \
+  template<typename T, typename Enable =  typename std::enable_if<             \
+    std::is_base_of<smt::internal::Term<T>, T>::value>::type>                  \
+  inline T operator op(T&& larg, const T& rarg)                                \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<T>(), std::move(larg), rarg)};                       \
+  }                                                                            \
+  template<typename T, typename Enable =  typename std::enable_if<             \
+    std::is_base_of<smt::internal::Term<T>, T>::value>::type>                  \
+  inline T operator op(const T& larg, T&& rarg)                                \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<T>(), larg, std::move(rarg))};                       \
+  }                                                                            \
+  template<typename T, typename Enable =  typename std::enable_if<             \
+    std::is_base_of<smt::internal::Term<T>, T>::value>::type>                  \
+  inline T operator op(T&& larg, T&& rarg)                                     \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<T>(), std::move(larg), std::move(rarg))};            \
   }                                                                            \
   template<typename T, typename U, typename Enable =                           \
     typename std::enable_if<std::is_base_of<smt::internal::Term<T>, T>::value  \
@@ -2899,9 +3104,23 @@ struct Identity<LAND, Bool>
   template<typename T, typename U, typename Enable =                           \
     typename std::enable_if<std::is_base_of<smt::internal::Term<T>, T>::value  \
     and std::is_integral<U>::value>::type>                                     \
+  inline T operator op(T&& larg, const U rscalar)                              \
+  {                                                                            \
+    return std::move(larg) op smt::literal<T, U>(rscalar);                     \
+  }                                                                            \
+  template<typename T, typename U, typename Enable =                           \
+    typename std::enable_if<std::is_base_of<smt::internal::Term<T>, T>::value  \
+    and std::is_integral<U>::value>::type>                                     \
   inline T operator op(const U lscalar, const T& rarg)                         \
   {                                                                            \
     return smt::literal<T, U>(lscalar) op rarg;                                \
+  }                                                                            \
+  template<typename T, typename U, typename Enable =                           \
+    typename std::enable_if<std::is_base_of<smt::internal::Term<T>, T>::value  \
+    and std::is_integral<U>::value>::type>                                     \
+  inline T operator op(const U lscalar, T&& rarg)                              \
+  {                                                                            \
+    return smt::literal<T, U>(lscalar) op std::move(rarg);                     \
   }                                                                            \
 
 #define SMT_BUILTIN_BINARY_REL(op, opcode)                                     \
@@ -2910,8 +3129,32 @@ struct Identity<LAND, Bool>
       std::is_base_of<smt::internal::Term<T>, T>::value>::type>                \
   inline smt::Bool operator op(const T& larg, const T& rarg)                   \
   {                                                                            \
-    return smt::Bool(smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(      \
-      smt::internal::sort<smt::Bool>(), larg, rarg));                          \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<smt::Bool>(), larg, rarg)};                          \
+  }                                                                            \
+  template<typename T, typename Enable =                                       \
+    typename std::enable_if<                                                   \
+      std::is_base_of<smt::internal::Term<T>, T>::value>::type>                \
+  inline smt::Bool operator op(T&& larg, const T& rarg)                        \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<smt::Bool>(), std::move(larg), rarg)};               \
+  }                                                                            \
+  template<typename T, typename Enable =                                       \
+    typename std::enable_if<                                                   \
+      std::is_base_of<smt::internal::Term<T>, T>::value>::type>                \
+  inline smt::Bool operator op(const T& larg, T&& rarg)                        \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<smt::Bool>(), larg, std::move(rarg))};               \
+  }                                                                            \
+  template<typename T, typename Enable =                                       \
+    typename std::enable_if<                                                   \
+      std::is_base_of<smt::internal::Term<T>, T>::value>::type>                \
+  inline smt::Bool operator op(T&& larg, T&& rarg)                             \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<smt::Bool>(), std::move(larg), std::move(rarg))};    \
   }                                                                            \
   template<typename T, typename U, typename Enable =                           \
     typename std::enable_if<std::is_base_of<smt::internal::Term<T>, T>::value  \
@@ -2923,9 +3166,23 @@ struct Identity<LAND, Bool>
   template<typename T, typename U, typename Enable =                           \
     typename std::enable_if<std::is_base_of<smt::internal::Term<T>, T>::value  \
     and std::is_integral<U>::value>::type>                                     \
+  inline smt::Bool operator op(T&& larg, const U rscalar)                      \
+  {                                                                            \
+    return std::move(larg) op smt::literal<T, U>(rscalar);                     \
+  }                                                                            \
+  template<typename T, typename U, typename Enable =                           \
+    typename std::enable_if<std::is_base_of<smt::internal::Term<T>, T>::value  \
+    and std::is_integral<U>::value>::type>                                     \
   inline smt::Bool operator op(const U lscalar, const T& rarg)                 \
   {                                                                            \
     return smt::literal<T, U>(lscalar) op rarg;                                \
+  }                                                                            \
+  template<typename T, typename U, typename Enable =                           \
+    typename std::enable_if<std::is_base_of<smt::internal::Term<T>, T>::value  \
+    and std::is_integral<U>::value>::type>                                     \
+  inline smt::Bool operator op(const U lscalar, T&& rarg)                      \
+  {                                                                            \
+    return smt::literal<T, U>(lscalar) op std::move(rarg);                     \
   }                                                                            \
 
 SMT_BUILTIN_UNARY_OP(-, SUB)
@@ -2947,16 +3204,40 @@ SMT_BUILTIN_BINARY_REL(==, EQL)
   template<typename T>                                                         \
   inline smt::Bv<T> operator op(const smt::Bv<T>& arg)                         \
   {                                                                            \
-    return smt::Bv<T>(smt::make_shared_expr<smt::UnaryExpr<smt::opcode>>(      \
-      smt::internal::sort<smt::Bv<T>>(), arg));                                \
+    return {smt::make_shared_expr<smt::UnaryExpr<smt::opcode>>(                \
+      smt::internal::sort<smt::Bv<T>>(), arg)};                                \
+  }                                                                            \
+  template<typename T>                                                         \
+  inline smt::Bv<T> operator op(smt::Bv<T>&& arg)                              \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::UnaryExpr<smt::opcode>>(                \
+      smt::internal::sort<smt::Bv<T>>(), std::move(arg))};                     \
   }                                                                            \
 
 #define SMT_BUILTIN_BV_BINARY_OP(op, opcode)                                   \
   template<typename T>                                                         \
   inline smt::Bv<T> operator op(const smt::Bv<T>& larg, const smt::Bv<T>& rarg)\
   {                                                                            \
-    return smt::Bv<T>(smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(     \
-      smt::internal::sort<smt::Bv<T>>(), larg, rarg));                         \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<smt::Bv<T>>(), larg, rarg)};                         \
+  }                                                                            \
+  template<typename T>                                                         \
+  inline smt::Bv<T> operator op(smt::Bv<T>&& larg, const smt::Bv<T>& rarg)     \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<smt::Bv<T>>(), std::move(larg), rarg)};              \
+  }                                                                            \
+  template<typename T>                                                         \
+  inline smt::Bv<T> operator op(const smt::Bv<T>& larg, smt::Bv<T>&& rarg)     \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<smt::Bv<T>>(), larg, std::move(rarg))};              \
+  }                                                                            \
+  template<typename T>                                                         \
+  inline smt::Bv<T> operator op(smt::Bv<T>&& larg, smt::Bv<T>&& rarg)          \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<smt::Bv<T>>(), std::move(larg), std::move(rarg))};   \
   }                                                                            \
   template<typename T>                                                         \
   inline smt::Bv<T> operator op(const smt::Bv<T>& larg, const T rscalar)       \
@@ -2964,9 +3245,19 @@ SMT_BUILTIN_BINARY_REL(==, EQL)
     return larg op smt::literal<smt::Bv<T>>(rscalar);                          \
   }                                                                            \
   template<typename T>                                                         \
+  inline smt::Bv<T> operator op(smt::Bv<T>&& larg, const T rscalar)            \
+  {                                                                            \
+    return std::move(larg) op smt::literal<smt::Bv<T>>(rscalar);               \
+  }                                                                            \
+  template<typename T>                                                         \
   inline smt::Bv<T> operator op(const T lscalar, const smt::Bv<T>& rarg)       \
   {                                                                            \
     return smt::literal<smt::Bv<T>>(lscalar) op rarg;                          \
+  }                                                                            \
+  template<typename T>                                                         \
+  inline smt::Bv<T> operator op(const T lscalar, smt::Bv<T>&& rarg)            \
+  {                                                                            \
+    return smt::literal<smt::Bv<T>>(lscalar) op std::move(rarg);               \
   }                                                                            \
 
 SMT_BUILTIN_BV_UNARY_OP(~, NOT)
@@ -2978,15 +3269,20 @@ SMT_BUILTIN_BV_BINARY_OP(^, XOR)
 #define SMT_BUILTIN_BOOL_UNARY_OP(op, opcode)                                  \
   inline smt::Bool operator op(const smt::Bool& arg)                           \
   {                                                                            \
-    return smt::Bool(smt::make_shared_expr<smt::UnaryExpr<smt::opcode>>(       \
-      smt::internal::sort<smt::Bool>(), arg));                                 \
+    return {smt::make_shared_expr<smt::UnaryExpr<smt::opcode>>(                \
+      smt::internal::sort<smt::Bool>(), arg)};                                 \
+  }                                                                            \
+  inline smt::Bool operator op(smt::Bool&& arg)                                \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::UnaryExpr<smt::opcode>>(                \
+      smt::internal::sort<smt::Bool>(), std::move(arg))};                      \
   }                                                                            \
 
 #define SMT_BUILTIN_BOOL_BINARY_OP(op, opcode)                                 \
   inline smt::Bool operator op(const smt::Bool& larg, const smt::Bool& rarg)   \
   {                                                                            \
-    return smt::Bool(smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(      \
-      smt::internal::sort<smt::Bool>(), larg, rarg));                          \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<smt::Bool>(), larg, rarg)};                          \
   }                                                                            \
   inline smt::Bool operator op(const smt::Bool& larg, const bool rscalar)      \
   {                                                                            \
@@ -2995,6 +3291,29 @@ SMT_BUILTIN_BV_BINARY_OP(^, XOR)
   inline smt::Bool operator op(const bool lscalar, const smt::Bool& rarg)      \
   {                                                                            \
     return smt::literal<smt::Bool>(lscalar) op rarg;                           \
+  }                                                                            \
+  inline smt::Bool operator op(smt::Bool&& larg, const smt::Bool& rarg)        \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<smt::Bool>(), std::move(larg), rarg)};               \
+  }                                                                            \
+  inline smt::Bool operator op(const smt::Bool& larg, smt::Bool&& rarg)        \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<smt::Bool>(), larg, std::move(rarg))};               \
+  }                                                                            \
+  inline smt::Bool operator op(smt::Bool&& larg, smt::Bool&& rarg)             \
+  {                                                                            \
+    return {smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(               \
+      smt::internal::sort<smt::Bool>(), std::move(larg), std::move(rarg))};    \
+  }                                                                            \
+  inline smt::Bool operator op(smt::Bool&& larg, const bool rscalar)           \
+  {                                                                            \
+    return std::move(larg) op smt::literal<smt::Bool>(rscalar);                \
+  }                                                                            \
+  inline smt::Bool operator op(const bool lscalar, smt::Bool&& rarg)           \
+  {                                                                            \
+    return smt::literal<smt::Bool>(lscalar) op std::move(rarg);                \
   }                                                                            \
 
 SMT_BUILTIN_BOOL_UNARY_OP(!, LNOT)
@@ -3011,18 +3330,6 @@ SMT_BUILTIN_BOOL_BINARY_OP(!=, NEQ)
   }                                                                            \
 
 #define SMT_UNSAFE_BINARY_OP(op, opcode)                                       \
-  inline smt::SharedExpr operator op(const smt::Bool& larg,                    \
-    const smt::SharedExpr& rarg)                                               \
-  {                                                                            \
-    return smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(                \
-      larg.sort(), larg, rarg);                                                \
-  }                                                                            \
-  inline smt::SharedExpr operator op(const smt::SharedExpr& larg,              \
-    const smt::Bool& rarg)                                                     \
-  {                                                                            \
-    return smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(                \
-      larg.sort(), larg, rarg);                                                \
-  }                                                                            \
   inline smt::SharedExpr operator op(const smt::SharedExpr& larg,              \
     const smt::SharedExpr& rarg)                                               \
   {                                                                            \
@@ -3053,6 +3360,24 @@ SMT_BUILTIN_BOOL_BINARY_OP(!=, NEQ)
     return smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(                \
       smt::internal::sort<smt::Bool>(), larg, rarg);                           \
   }                                                                            \
+  inline smt::SharedExpr operator op(smt::SharedExpr&& larg,                   \
+    const smt::SharedExpr& rarg)                                               \
+  {                                                                            \
+    return smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(                \
+      smt::internal::sort<smt::Bool>(), std::move(larg), rarg);                \
+  }                                                                            \
+  inline smt::SharedExpr operator op(const smt::SharedExpr& larg,              \
+    smt::SharedExpr&& rarg)                                                    \
+  {                                                                            \
+    return smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(                \
+      smt::internal::sort<smt::Bool>(), larg, std::move(rarg));                \
+  }                                                                            \
+  inline smt::SharedExpr operator op(smt::SharedExpr&& larg,                   \
+    smt::SharedExpr&& rarg)                                                    \
+  {                                                                            \
+    return smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(                \
+      smt::internal::sort<smt::Bool>(), std::move(larg), std::move(rarg));     \
+  }                                                                            \
   template<typename T, typename Enable =                                       \
     typename std::enable_if<std::is_integral<T>::value>::type>                 \
   inline smt::SharedExpr operator op(const T lscalar,                          \
@@ -3068,6 +3393,24 @@ SMT_BUILTIN_BOOL_BINARY_OP(!=, NEQ)
   {                                                                            \
     return smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(                \
       smt::internal::sort<smt::Bool>(), larg, literal(larg.sort(), rscalar));  \
+  }                                                                            \
+  template<typename T, typename Enable =                                       \
+    typename std::enable_if<std::is_integral<T>::value>::type>                 \
+  inline smt::SharedExpr operator op(const T lscalar,                          \
+    smt::SharedExpr&& rarg)                                                    \
+  {                                                                            \
+    return smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(                \
+      smt::internal::sort<smt::Bool>(), literal(rarg.sort(), lscalar),         \
+      std::move(rarg));                                                        \
+  }                                                                            \
+  template<typename T, typename Enable =                                       \
+    typename std::enable_if<std::is_integral<T>::value>::type>                 \
+  inline smt::SharedExpr operator op(                                          \
+    smt::SharedExpr&& larg, const T rscalar)                                   \
+  {                                                                            \
+    return smt::make_shared_expr<smt::BinaryExpr<smt::opcode>>(                \
+      smt::internal::sort<smt::Bool>(), std::move(larg),                       \
+      literal(larg.sort(), rscalar));                                          \
   }                                                                            \
 
 SMT_UNSAFE_UNARY_OP(-, SUB)
