@@ -1206,3 +1206,49 @@ TEST(SmtTest, Timer)
   EXPECT_TRUE((a.count() - 100) <= c.count());
 #endif
 }
+
+// Guard against memory leaks
+TEST(SmtTest, SharedExpr)
+{
+  const UnsafeDecl const_decl("x", internal::sort<Bv<int>>());
+  Expr::s_counter = 0;
+  {
+    SharedExpr e(make_shared_expr<ConstantExpr>(const_decl));
+  }
+  EXPECT_EQ(0, Expr::s_counter);
+
+  Expr::s_counter = 0;
+  {
+    SharedExpr e0(make_shared_expr<ConstantExpr>(const_decl));
+
+    // copy constructor
+    SharedExpr e1(e0);
+  }
+  EXPECT_EQ(0, Expr::s_counter);
+
+  Expr::s_counter = 0;
+  {
+    // move constructor
+    SharedExpr e(SharedExpr(make_shared_expr<ConstantExpr>(const_decl)));
+  }
+  EXPECT_EQ(0, Expr::s_counter);
+
+  Expr::s_counter = 0;
+  {
+    SharedExpr e0(make_shared_expr<ConstantExpr>(const_decl));
+    SharedExpr e1(make_shared_expr<ConstantExpr>(const_decl));
+
+    // assignment operator
+    e0 = e1;
+  }
+  EXPECT_EQ(0, Expr::s_counter);
+
+  Expr::s_counter = 0;
+  {
+    SharedExpr e0(make_shared_expr<ConstantExpr>(const_decl));
+
+    // assignment operator with move semantics
+    e0 = SharedExpr(make_shared_expr<ConstantExpr>(const_decl));
+  }
+  EXPECT_EQ(0, Expr::s_counter);
+}

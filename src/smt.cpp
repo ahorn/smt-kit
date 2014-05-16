@@ -8,6 +8,7 @@ namespace smt
 {
 
 Expr::SolverPtrs Expr::s_solver_ptrs;
+unsigned Expr::s_counter = 0;
 
 constexpr const char* const Logics::acronyms[24];
 

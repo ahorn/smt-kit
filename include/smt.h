@@ -1331,13 +1331,20 @@ protected:
   Expr(ExprKind expr_kind, const Sort& sort)
   : m_expr_kind(expr_kind),
     m_sort(sort),
-    ref_counter(0) {}
+    ref_counter(0)
+  {
+    ++Expr::s_counter;
+  }
 
 public:
+  static unsigned s_counter;
+
   Expr(const Expr&) = delete;
 
   virtual ~Expr()
   {
+    --Expr::s_counter;
+
     assert(ref_counter == 0);
 
     for (uintptr_t s_ptr : s_solver_ptrs)
@@ -1382,6 +1389,8 @@ private:
 
   void dec() const noexcept
   {
+    assert(m_ptr == nullptr || 0 < m_ptr->ref_counter);
+
     if (m_ptr != nullptr && --m_ptr->ref_counter == 0)
       delete m_ptr;
   }
@@ -1447,7 +1456,10 @@ public:
 
   SharedExpr& operator=(SharedExpr&& other) noexcept
   {
+    dec();
     m_ptr = other.m_ptr;
+
+    // move semantics allow us to bypass inc()
     other.m_ptr = nullptr;
 
     return *this;
