@@ -335,6 +335,18 @@ private:
   // invariant: m_term.is_null() implies m_op == nullptr
   const simplifier::AbstractOp<T>* m_op;
 
+  // Returns statically allocated memory if is_literal is false; otherwise, null
+  template<smt::Opcode opcode>
+  static inline const simplifier::AbstractOp<T>* op_ptr(const bool is_literal)
+  {
+    // The following equivalent form does not generally perform better:
+    //
+    // return reinterpret_cast<const simplifier::AbstractOp<T>* const>(
+    //    reinterpret_cast<uintptr_t>(simplifier::Op<opcode, T>::op_ptr()) &
+    //      (static_cast<uintptr_t>(is_literal) - 1U));
+    return is_literal ? nullptr : simplifier::Op<opcode, T>::op_ptr();
+  }
+
   explicit Internal(
     const typename Smt<T>::Sort& term,
     const T v,
@@ -496,9 +508,8 @@ public:
     // check that arg.m_v is defined
     assert(arg.is_literal() || arg.is_lazy());
 
-    const simplifier::AbstractOp<T>* const op =
-      arg.is_literal() ? nullptr : simplifier::Op<opcode, T>::op_ptr();
-    return Internal(arg.m_term, internal::Eval<opcode>::eval(arg.m_v, literal), op);
+    return Internal(arg.m_term, internal::Eval<opcode>::eval(arg.m_v, literal),
+      Internal<T>::op_ptr<opcode>(arg.is_literal()));
   }
 
   /// Propagate constants in commutative monoids
@@ -510,10 +521,8 @@ public:
     // check that arg.m_v is defined
     assert(arg.is_literal() || arg.is_lazy());
 
-    const simplifier::AbstractOp<T>* const op =
-      arg.is_literal() ? nullptr : simplifier::Op<opcode, T>::op_ptr();
-    return Internal(std::move(arg.m_term),
-      internal::Eval<opcode>::eval(std::move(arg.m_v), literal), op);
+    return Internal(std::move(arg.m_term), internal::Eval<opcode>::eval(
+      std::move(arg.m_v), literal), Internal<T>::op_ptr<opcode>(arg.is_literal()));
   }
 
   /// Folds constant expressions over commutative monoid operators
