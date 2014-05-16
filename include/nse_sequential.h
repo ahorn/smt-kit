@@ -442,6 +442,8 @@ public:
   T literal() const
   {
     assert(is_literal());
+
+    // recall m_op invariant
     assert(m_op == nullptr);
 
     return m_v;
