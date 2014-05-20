@@ -1343,6 +1343,23 @@ TEST(SmtTest, UnsafeDeclHash)
 }
 #endif
 
+TEST(SmtTest, ExpressionSharing)
+{
+  Expr::s_counter = 0;
+
+  smt::Int x = any<smt::Int>("x");
+  smt::Int y = any<smt::Int>("y");
+  smt::Bool z0 = x < y;
+  smt::Bool z1 = x < y;
+
+#ifdef ENABLE_HASH_CONS
+  EXPECT_EQ(3, Expr::s_counter);
+#else
+  // no perfect expression sharing
+  EXPECT_EQ(4, Expr::s_counter);
+#endif
+}
+
 TEST(SmtTest, SortHash)
 {
   size_t hashes[] = {
