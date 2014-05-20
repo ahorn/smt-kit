@@ -1,4 +1,4 @@
-// Copyright 2013, Alex Horn. All rights reserved.
+// Copyright 2013-2014, Alex Horn. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <array>
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
 #include <chrono>
 #include <string>
 #include <memory>
@@ -17,6 +18,9 @@
 #include <cassert>
 #include <stdexcept>
 #include <type_traits>
+
+// Perfect sharing of syntactically equivalent expressions
+#define ENABLE_HASH_CONS
 
 namespace smt
 {
@@ -409,6 +413,18 @@ enum ExprKind : unsigned
   BV_EXTRACT_EXPR_KIND,
 };
 
+// courtesy of Daniel Kroening, see CPROVER source file util/irep.cpp
+static inline size_t hash_rotl(const size_t value, const int shift)
+{
+  return (value << shift) | (value >> (sizeof(value)*8 - shift));
+}
+
+// courtesy of Daniel Kroening, see CPROVER source file util/irep.cpp
+static inline size_t hash_combine(const size_t h1, const size_t h2)
+{
+  return hash_rotl(h1, 7)^h2;
+}
+
 class Sort {
 private:
   const bool m_is_bool;
@@ -422,6 +438,42 @@ private:
   const bool m_is_tuple;
   const Sort* const * m_sorts;
   const size_t m_sorts_size;
+
+  // courtesy of Daniel Kroening, see CPROVER source file util/irep.cpp
+  static constexpr size_t hash_rotl(const size_t value, const int shift)
+  {
+    return (value << shift) | (value >> (sizeof(value)*8 - shift));
+  }
+
+  // courtesy of Daniel Kroening, see CPROVER source file util/irep.cpp
+  static constexpr size_t hash_combine(const size_t h1, const size_t h2)
+  {
+    return hash_rotl(h1, 7)^h2;
+  }
+
+  // compute the combined hash value of sort.sorts(i) for all 0 <= i <= k
+  static constexpr size_t hash(const size_t k, const Sort& sort)
+  {
+    return k == 0 ?
+      sort.sorts(k).hash() : hash_combine(sort.sorts(k).hash(), hash(k - 1, sort));
+  }
+
+  // prefers short bit vector sorts
+  constexpr size_t hash_flags() const
+  {
+    static_assert(1 <= sizeof(size_t), "size of size_t must be at least one byte");
+
+    return (
+      m_is_real   << 7 |
+      m_is_array  << 6 |
+      m_is_func   << 5 |
+      m_is_tuple  << 4 |
+      m_is_int    << 3 |
+      m_is_bool   << 2 | // two since m_bv_size is zero exactly if m_is_bv is zero
+      m_bv_size   << 2 |
+      m_is_signed << 1 |
+      m_is_bv     << 0 ) * 50331653;
+  }
 
   constexpr unsigned check_sorts_index(size_t index) const
   {
@@ -499,6 +551,13 @@ public:
 
   constexpr size_t sorts_size() const { return m_sorts_size; }
 
+public:
+  constexpr size_t hash() const
+  {
+    return m_sorts_size == 0 ?
+      hash_flags() : hash_combine(hash_flags(), hash(m_sorts_size - 1, *this));
+  }
+
   bool operator==(const Sort& other) const
   {
     // Most often we expect to encounter statically allocated sorts.
@@ -514,6 +573,11 @@ public:
       m_is_tuple   == other.m_is_tuple  &&
       m_sorts      == other.m_sorts     &&
       m_sorts_size == other.m_sorts_size;
+  }
+
+  bool operator!=(const Sort& other) const
+  {
+    return !operator==(other);
   }
 };
 
@@ -679,7 +743,7 @@ private:
   mutable std::string m_symbol;
 
 public:
-  /// Allocate sort statically, positive counters must be globally unique
+  /// Allocate sort statically, counter must be globally unique
   UnsafeDecl(
     const char* const prefix,
     const unsigned counter,
@@ -746,13 +810,37 @@ public:
     return m_sort;
   }
 
-  bool operator==(const UnsafeDecl& other) const
+  size_t hash() const
   {
-    if (this == &other) {
-      return true;
+    if (m_prefix == nullptr)
+    {
+      std::hash<std::string> string_hash;
+      return hash_combine(m_sort.hash(), string_hash(m_symbol));
     }
 
-    return m_symbol == other.m_symbol and &m_sort == &other.m_sort;
+    // see also http://planetmath.org/goodhashtableprimes
+    constexpr size_t good_hash_table_prime = 12582917;
+    return hash_combine(m_sort.hash(), m_counter * good_hash_table_prime);
+  }
+
+  bool operator==(const UnsafeDecl& other) const
+  {
+    if (this == &other)
+      return true;
+
+    if (m_prefix == nullptr)
+      return other.m_prefix == nullptr &&
+        m_symbol == other.m_symbol &&
+        m_sort == other.m_sort;
+
+    return m_prefix == other.m_prefix &&
+      m_counter == other.m_counter &&
+      m_sort == other.m_sort;
+  }
+
+  bool operator!=(const UnsafeDecl& other) const
+  {
+    return !operator==(other);
   }
 };
 
@@ -760,7 +848,7 @@ template<typename T>
 class Decl : public UnsafeDecl 
 {
 public:
-  /// If counter is positive, it must be globally unique
+  /// Counter must be globally unique
 
   /// Prefix won't be freed; so it is (preferably) statically allocated
   Decl(const char* const prefix, const unsigned counter)
@@ -1298,6 +1386,12 @@ public:
 
 class Expr
 {
+#ifdef ENABLE_HASH_CONS
+public:
+  /// Hash value
+  typedef size_t Hash;
+#endif
+
 private:
   friend class Solver;
   friend class SharedExpr;
@@ -1321,6 +1415,10 @@ private:
   const ExprKind m_expr_kind;
   const Sort& m_sort;
 
+#ifdef ENABLE_HASH_CONS
+  const size_t m_hash;
+#endif
+
   // modified by SharedExpr
   unsigned ref_counter;
 
@@ -1328,13 +1426,33 @@ private:
 
 protected:
   // Allocate sort statically!
-  Expr(ExprKind expr_kind, const Sort& sort)
+  Expr(
+    ExprKind expr_kind,
+    const Sort& sort)
   : m_expr_kind(expr_kind),
     m_sort(sort),
+#ifdef ENABLE_HASH_CONS
+    m_hash(0),
+#endif
     ref_counter(0)
   {
     ++Expr::s_counter;
   }
+
+#ifdef ENABLE_HASH_CONS
+  // Allocate sort statically!
+  Expr(
+    ExprKind expr_kind,
+    const Sort& sort,
+    size_t hash)
+  : m_expr_kind(expr_kind),
+    m_sort(sort),
+    m_hash(hash),
+    ref_counter(0)
+  {
+    ++Expr::s_counter;
+  }
+#endif
 
 public:
   static unsigned s_counter;
@@ -1360,6 +1478,17 @@ public:
   {
     return m_sort;
   }
+
+#ifdef ENABLE_HASH_CONS
+  /// \internal Weak hash value or zero if expression is not hash-consed
+
+  /// If not zero, the hash value is only suitable among a group of
+  /// expressions of the same kind
+  Expr::Hash hash() const
+  {
+    return m_hash;
+  }
+#endif
 
   Error encode(Solver& solver) const
   {
@@ -1492,6 +1621,15 @@ public:
     return m_ptr->sort();
   }
 
+#ifdef ENABLE_HASH_CONS
+  /// \pre !is_null()
+  Expr::Hash hash() const
+  {
+    assert(!is_null());
+    return m_ptr->hash();
+  }
+#endif
+
   /// \internal \pre !is_null()
   Error encode(Solver& solver) const
   {
@@ -1510,22 +1648,115 @@ private:
   template<typename T, class... Args>
   friend MakeSharedExpr make_shared_expr(Args&&...);
 
+protected:
   MakeSharedExpr(Expr* const ptr) noexcept
   : SharedExpr(ptr) {}
 
 public:
-  // maintainer note: use RVO instead of copy or move!
+  // maintainer note: always use RVO instead of copy or move!
   MakeSharedExpr() = delete;
   MakeSharedExpr(const MakeSharedExpr&) = delete;
   MakeSharedExpr(MakeSharedExpr&&) = delete;
 };
 
+#ifdef ENABLE_HASH_CONS
+namespace internal
+{
+  /// Hash table that contains expressions of type T
+
+  /// It is safe for an expression store to have static storage duration.
+  template<typename T>
+  class ExprStore
+  {
+  private:
+    typedef std::unordered_multimap<Expr::Hash, T* const> Multimap;
+    Multimap m_multimap;
+
+  public:
+    typedef typename Multimap::iterator Iterator;
+    typedef typename Multimap::const_iterator ConstIterator;
+
+    ExprStore()
+    : m_multimap() {}
+
+    // maintainer note: it is this destructor that makes
+    // static storage duration of expression stores safe
+    ~ExprStore()
+    {
+      for (typename Multimap::value_type& pair : m_multimap)
+        pair.second->release_from_store();
+
+      m_multimap.clear();
+    }
+
+    /// Return all expressions that have the given hash key
+    ConstIterator find(const Expr::Hash hash) const
+    {
+      return m_multimap.find(hash);
+    }
+
+    ConstIterator cend() const
+    {
+      return m_multimap.cend();
+    }
+
+    /// Add expression T to store
+
+    /// The newly added T expression removes itself from this
+    /// expression store when T's destructor is called.
+    template<class... Args>
+    Iterator emplace(const Expr::Hash hash, Args&&... args)
+    {
+      return m_multimap.emplace(hash,
+        new T(this, hash, std::forward<Args>(args)...));
+    }
+
+    void erase(const ConstIterator citer)
+    {
+      m_multimap.erase(citer);
+    }
+  };
+}
+
+/// Hash consing
+template<typename T, class... Args>
+MakeSharedExpr make_shared_expr(Args&&... args)
+{
+  // unique hash table for expressions of type T
+  static internal::ExprStore<T> s_expr_multimap;
+
+  const Expr::Hash hash = T::hash_args(args...);
+  {
+    typename internal::ExprStore<T>::ConstIterator citer =
+      s_expr_multimap.find(hash);
+
+    for (const typename internal::ExprStore<T>::ConstIterator
+         cend = s_expr_multimap.cend();
+
+         citer != cend;
+         ++citer)
+    {
+      T* const expr_ptr = citer->second;
+      if (expr_ptr->is_equal(args...))
+        return {expr_ptr};
+    }
+  }
+
+  typename internal::ExprStore<T>::Iterator iter =
+    s_expr_multimap.emplace(hash, std::forward<Args>(args)...);
+
+  return {iter->second};
+}
+
+#else
+/// No hash consing
 template<typename T, class... Args>
 MakeSharedExpr make_shared_expr(Args&&... args)
 {
   // use RVO instead of copy or move constructor
   return {new T(std::forward<Args>(args)...)};
 }
+#endif
 
 namespace internal
 {
@@ -2309,10 +2540,72 @@ public:
   }
 };
 
+#ifdef ENABLE_HASH_CONS
+namespace internal
+{
+  /// Subclass must be of type T, i.e. CRTP
+  template<typename T>
+  class ExprDeleter
+  {
+  protected:
+    /// \internal Raw pointer to expression store
+    typedef internal::ExprStore<T>* ExprStorePtr;
+
+  private:
+    ExprStorePtr m_expr_store_ptr;
+
+  protected:
+    ExprDeleter()
+    : m_expr_store_ptr(nullptr) {}
+
+    ExprDeleter(ExprStorePtr expr_store_ptr)
+    : m_expr_store_ptr(expr_store_ptr) {}
+
+    ~ExprDeleter() {}
+
+    /// Must be called by subclass T's destructor
+    void delete_from_store(const T* const derived)
+    {
+      if (m_expr_store_ptr == nullptr)
+        return;
+
+      ExprStore<T>& expr_store = *m_expr_store_ptr;
+      typename internal::ExprStore<T>::ConstIterator citer =
+        expr_store.find(derived->hash());
+
+      for (const typename internal::ExprStore<T>::ConstIterator
+           cend = expr_store.cend();
+
+           citer != cend;
+           ++citer)
+      {
+        T* const expr_ptr = citer->second;
+        if (derived->is_equal(*expr_ptr))
+        {
+          expr_store.erase(citer);
+          goto OK;
+        }
+      }
+
+      assert(false && "Failed to delete expression");
+    OK: ;
+    }
+
+  public:
+    void release_from_store()
+    {
+      m_expr_store_ptr = nullptr;
+    }
+  };
+}
+#endif
+
 template<typename T>
 class LiteralExpr : public Expr
+#ifdef ENABLE_HASH_CONS
+, public internal::ExprDeleter<LiteralExpr<T>>
+#endif
 {
-private:
   const T m_literal;
 
   virtual Error __encode(Solver& solver) const override
@@ -2321,6 +2614,32 @@ private:
   }
 
 public:
+#ifdef ENABLE_HASH_CONS
+  typedef internal::ExprDeleter<LiteralExpr<T>> Deleter;
+
+  static Expr::Hash hash_args(const Sort& sort, T literal)
+  {
+    // see also http://planetmath.org/goodhashtableprimes
+    constexpr size_t good_hash_table_prime = 196613;
+    return hash_combine(literal * good_hash_table_prime, sort.hash());
+  }
+
+  /// \internal
+  LiteralExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Hash hash,
+    const Sort& sort,
+    T literal)
+  : Expr(LITERAL_EXPR_KIND, sort, hash),
+    Deleter(expr_store_ptr),
+    m_literal(literal) {}
+
+  ~LiteralExpr()
+  {
+    Deleter::delete_from_store(this);
+  }
+#endif
+
   // Allocate sort statically!
   LiteralExpr(const Sort& sort, T literal)
   : Expr(LITERAL_EXPR_KIND, sort),
@@ -2330,9 +2649,22 @@ public:
   {
     return m_literal;
   }
+
+  bool is_equal(const LiteralExpr<T>& other) const
+  {
+    return is_equal(other.sort(), other.m_literal);
+  }
+
+  bool is_equal(const Sort& sort, T literal) const
+  {
+    return Expr::sort() == sort && m_literal == literal;
+  }
 };
 
 class ConstantExpr : public Expr
+#ifdef ENABLE_HASH_CONS
+, public internal::ExprDeleter<ConstantExpr>
+#endif
 {
 private:
   const UnsafeDecl m_decl;
@@ -2343,6 +2675,29 @@ private:
   }
 
 public:
+#ifdef ENABLE_HASH_CONS
+  typedef internal::ExprDeleter<ConstantExpr> Deleter;
+
+  static Expr::Hash hash_args(const UnsafeDecl& decl)
+  {
+    return decl.hash();
+  }
+
+  /// \internal
+  ConstantExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const UnsafeDecl& decl)
+  : Expr(CONSTANT_EXPR_KIND, decl.sort(), hash),
+    Deleter(expr_store_ptr),
+    m_decl(decl) {}
+
+  ~ConstantExpr()
+  {
+    Deleter::delete_from_store(this);
+  }
+#endif
+
   ConstantExpr(const UnsafeDecl& decl)
   : Expr(CONSTANT_EXPR_KIND, decl.sort()),
     m_decl(decl) {}
@@ -2351,11 +2706,24 @@ public:
   {
     return m_decl;
   }
+
+  bool is_equal(const UnsafeDecl& decl) const
+  {
+    return m_decl == decl;
+  }
+
+  bool is_equal(const ConstantExpr& other) const
+  {
+    return is_equal(other.m_decl);
+  }
 };
 
 /// For example, if \c x is equal to \c #110, then \c BvZeroExtendExpr(x, 4)
 /// is a bit vector of length seven (= 3+4) that is equal to \c #b0000110.
 class BvZeroExtendExpr : public Expr
+#ifdef ENABLE_HASH_CONS
+, public internal::ExprDeleter<BvZeroExtendExpr>
+#endif
 {
 private:
   const SharedExpr m_bv;
@@ -2366,25 +2734,81 @@ private:
     return solver.encode_bv_zero_extend(this, Expr::sort(), m_bv, m_ext);
   }
 
+  void check_obj() const
+  {
+    assert(Expr::sort().is_bv());
+    assert(!m_bv.sort().is_signed());
+    assert(Expr::sort().bv_size() > m_bv.sort().bv_size());
+    assert(m_ext == Expr::sort().bv_size() - m_bv.sort().bv_size());
+
+    // no truncation in above subtraction
+    assert(m_ext > 0);
+  }
+
 public:
+#ifdef ENABLE_HASH_CONS
+  typedef internal::ExprDeleter<BvZeroExtendExpr> Deleter;
+
+  static Expr::Hash hash_args(
+    const Sort& sort,
+    const SharedExpr& bv,
+    unsigned ext)
+  {
+    size_t h = hash_combine(sort.hash(), bv.hash());
+    h = hash_combine(ext * 402653189, h);
+    return h;
+  }
+
+  /// \internal
+  BvZeroExtendExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const Sort& sort,
+    const SharedExpr& bv,
+    unsigned ext)
+  : Expr(BV_ZERO_EXTEND_EXPR_KIND, sort, hash),
+    Deleter(expr_store_ptr),
+    m_bv(bv), m_ext(ext)
+  {
+    check_obj();
+  }
+
+  ~BvZeroExtendExpr()
+  {
+    Deleter::delete_from_store(this);
+  }
+#endif
+
   /// Allocate sort statically!
   BvZeroExtendExpr(const Sort& sort, const SharedExpr& bv, unsigned ext)
   : Expr(BV_ZERO_EXTEND_EXPR_KIND, sort),
     m_bv(bv), m_ext(ext)
   {
-    assert(sort.is_bv());
-    assert(!bv.sort().is_signed());
-    assert(sort.bv_size() > bv.sort().bv_size());
-    assert(m_ext == sort.bv_size() - bv.sort().bv_size());
+    check_obj();
+  }
 
-    // no truncation in above subtraction
-    assert(m_ext > 0);
+  bool is_equal(
+    const Sort& sort,
+    const SharedExpr& bv,
+    unsigned ext) const
+  {
+    return Expr::sort() == sort &&
+      m_bv.addr() == bv.addr() &&
+      m_ext == ext;
+  }
+
+  bool is_equal(const BvZeroExtendExpr& other) const
+  {
+    return is_equal(other.sort(), other.m_bv, other.m_ext);
   }
 };
 
 /// For example, if \c x is equal to \c #110, then \c BvSignExtendExpr(x, 4)
 /// is a bit vector of length seven (= 3+4) that is equal to \c #b1111110.
 class BvSignExtendExpr : public Expr
+#ifdef ENABLE_HASH_CONS
+, public internal::ExprDeleter<BvSignExtendExpr>
+#endif
 {
 private:
   const SharedExpr m_bv;
@@ -2395,25 +2819,81 @@ private:
     return solver.encode_bv_sign_extend(this, Expr::sort(), m_bv, m_ext);
   }
 
+  void check_obj() const
+  {
+    assert(Expr::sort().is_bv());
+    assert(m_bv.sort().is_signed());
+    assert(Expr::sort().bv_size() > m_bv.sort().bv_size());
+    assert(m_ext == Expr::sort().bv_size() - m_bv.sort().bv_size());
+
+    // no truncation in above subtraction
+    assert(m_ext > 0);
+  }
+
 public:
+#ifdef ENABLE_HASH_CONS
+  typedef internal::ExprDeleter<BvSignExtendExpr> Deleter;
+
+  static Expr::Hash hash_args(
+    const Sort& sort,
+    const SharedExpr& bv,
+    unsigned ext)
+  {
+    size_t h = hash_combine(sort.hash(), bv.hash());
+    h = hash_combine(ext * 402653189, h);
+    return h;
+  }
+
+  /// \internal
+  BvSignExtendExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const Sort& sort,
+    const SharedExpr& bv,
+    unsigned ext)
+  : Expr(BV_SIGN_EXTEND_EXPR_KIND, sort, hash),
+    Deleter(expr_store_ptr),
+    m_bv(bv), m_ext(ext)
+  {
+    check_obj();
+  }
+
+  ~BvSignExtendExpr()
+  {
+    Deleter::delete_from_store(this);
+  }
+#endif
+
   /// Allocate sort statically!
   BvSignExtendExpr(const Sort& sort, const SharedExpr& bv, unsigned ext)
   : Expr(BV_SIGN_EXTEND_EXPR_KIND, sort),
     m_bv(bv), m_ext(ext)
   {
-    assert(sort.is_bv());
-    assert(bv.sort().is_signed());
-    assert(sort.bv_size() > bv.sort().bv_size());
-    assert(m_ext == sort.bv_size() - bv.sort().bv_size());
+    check_obj();
+  }
 
-    // no truncation in above subtraction
-    assert(m_ext > 0);
+  bool is_equal(
+    const Sort& sort,
+    const SharedExpr& bv,
+    unsigned ext) const
+  {
+    return Expr::sort() == sort &&
+      m_bv.addr() == bv.addr() &&
+      m_ext == ext;
+  }
+
+  bool is_equal(const BvSignExtendExpr& other) const
+  {
+    return is_equal(other.sort(), other.m_bv, other.m_ext);
   }
 };
 
 /// For example, if \c x is equal to \c #b00011, then \c BvExtractExpr(x, 2, 0)
 /// is a bit vector of length three (0..2 inclusive) that is equal to \c #b011.
 class BvExtractExpr : public Expr
+#ifdef ENABLE_HASH_CONS
+, public internal::ExprDeleter<BvExtractExpr>
+#endif
 {
 private:
   const SharedExpr m_bv;
@@ -2425,7 +2905,51 @@ private:
     return solver.encode_bv_extract(this, Expr::sort(), m_bv, m_high, m_low);
   }
 
+  void check_obj() const
+  {
+    assert(m_high > m_low);
+
+    assert(Expr::sort().is_bv());
+    assert(Expr::sort().bv_size() == (m_high - m_low) + 1);
+  }
+
 public:
+#ifdef ENABLE_HASH_CONS
+  typedef internal::ExprDeleter<BvExtractExpr> Deleter;
+
+  static Expr::Hash hash_args(
+    const Sort& sort,
+    const SharedExpr& bv,
+    unsigned high,
+    unsigned low)
+  {
+    size_t h = hash_combine(sort.hash(), bv.hash());
+    h = hash_combine(high * 402653189, h);
+    h = hash_combine(low * 402653189, h);
+    return h;
+  }
+
+  /// \internal
+  BvExtractExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const Sort& sort,
+    const SharedExpr& bv,
+    unsigned high,
+    unsigned low)
+  : Expr(BV_EXTRACT_EXPR_KIND, sort, hash),
+    Deleter(expr_store_ptr),
+    m_bv(bv), m_high(high), m_low(low)
+  {
+    check_obj();
+  }
+
+  ~BvExtractExpr()
+  {
+    Deleter::delete_from_store(this);
+  }
+#endif
+
   /// Allocate sort statically!
 
   /// \pre: high > low
@@ -2433,10 +2957,24 @@ public:
   : Expr(BV_EXTRACT_EXPR_KIND, sort),
     m_bv(bv), m_high(high), m_low(low)
   {
-    assert(m_high > m_low);
+    check_obj();
+  }
 
-    assert(sort.is_bv());
-    assert(sort.bv_size() == (m_high - m_low) + 1);
+  bool is_equal(
+    const Sort& sort,
+    const SharedExpr& bv,
+    unsigned high,
+    unsigned low) const
+  {
+    return Expr::sort() == sort &&
+      m_bv.addr() == bv.addr() &&
+      m_high == high &&
+      m_low == low;
+  }
+
+  bool is_equal(const BvExtractExpr& other) const
+  {
+    return is_equal(other.sort(), other.m_bv, other.m_high, other.m_low);
   }
 };
 
@@ -2548,6 +3086,9 @@ Bv<T> bv_cast(const Bv<T>& source)
 
 template<size_t arity>
 class FuncAppExpr : public Expr
+#ifdef ENABLE_HASH_CONS
+, public internal::ExprDeleter<FuncAppExpr<arity>>
+#endif
 {
 private:
   const UnsafeDecl m_func_decl;
@@ -2559,6 +3100,37 @@ private:
   }
 
 public:
+#ifdef ENABLE_HASH_CONS
+  typedef internal::ExprDeleter<FuncAppExpr<arity>> Deleter;
+
+  static Expr::Hash hash_args(
+    const UnsafeDecl& func_decl,
+    const std::array<SharedExpr, arity>& args)
+  {
+    size_t h = func_decl.sort().hash();
+    for (const SharedExpr& arg : args)
+      h = hash_combine(h, arg.hash());
+
+    return h;
+  }
+
+  /// \internal
+  FuncAppExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const UnsafeDecl& func_decl,
+    std::array<SharedExpr, arity>&& args)
+  : Expr(FUNC_APP_EXPR_KIND, func_decl.sort().sorts(arity), hash),
+    Deleter(expr_store_ptr),
+    m_func_decl(func_decl),
+    m_args(std::move(args)) {}
+
+  ~FuncAppExpr()
+  {
+    Deleter::delete_from_store(this);
+  }
+#endif
+
   FuncAppExpr(
     const UnsafeDecl& func_decl,
     std::array<SharedExpr, arity>&& args)
@@ -2574,6 +3146,25 @@ public:
   const UnsafeDecl& func_decl() const
   {
     return m_func_decl;
+  }
+
+  bool is_equal(
+    const UnsafeDecl& func_decl,
+    const std::array<SharedExpr, arity>& args) const
+  {
+    if (m_func_decl != func_decl)
+      return false;
+
+    bool args_equality = true;
+    for (size_t i = 0; i < arity; ++i)
+      args_equality &= m_args[i].addr() == args[i].addr();
+
+    return args_equality;
+  }
+
+  bool is_equal(const FuncAppExpr<arity>& other) const
+  {
+    return is_equal(other.m_func_decl, other.m_args);
   }
 };
 
@@ -2704,12 +3295,12 @@ typename Func<T...>::Range apply(
     internal::to_array<SharedExpr, typename Func<T...>::Args>(args)));
 }
 
-/// If counter is positive, it must be globally unique
+/// Counter must be globally unique
 
 /// Prefix won't be freed by the constructed object.
 /// Callers are encouraged to statically allocate prefix.
 template<typename T>
-T any(const char * const prefix, const unsigned counter = 0)
+T any(const char * const prefix, const unsigned counter)
 {
   return constant(Decl<T>(prefix, counter));
 }
@@ -2723,6 +3314,9 @@ T any(std::string&& symbol_name)
 
 template<Opcode opcode>
 class UnaryExpr : public Expr
+#ifdef ENABLE_HASH_CONS
+, public internal::ExprDeleter<UnaryExpr<opcode>>
+#endif
 {
 private:
   const SharedExpr m_operand;
@@ -2732,7 +3326,54 @@ private:
     return solver.encode_unary<opcode>(this, Expr::sort(), m_operand);
   }
 
+  void check_obj() const
+  {
+    assert(!m_operand.is_null());
+  }
+
 public:
+#ifdef ENABLE_HASH_CONS
+  typedef internal::ExprDeleter<UnaryExpr<opcode>> Deleter;
+
+  static Expr::Hash hash_args(
+    const Sort& sort,
+    const SharedExpr& operand)
+  {
+    return hash_combine(sort.hash(), operand.hash());
+  }
+
+  /// \internal
+  UnaryExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const Sort& sort,
+    const SharedExpr& operand)
+  : Expr(UNARY_EXPR_KIND, sort, hash),
+    Deleter(expr_store_ptr),
+    m_operand(operand)
+  {
+    check_obj();
+  }
+
+  /// \internal
+  UnaryExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const Sort& sort,
+    SharedExpr&& operand)
+  : Expr(UNARY_EXPR_KIND, sort, hash),
+    Deleter(expr_store_ptr),
+    m_operand(std::move(operand))
+  {
+    check_obj();
+  }
+
+  ~UnaryExpr()
+  {
+    Deleter::delete_from_store(this);
+  }
+#endif
+
   // Allocate sort statically!
   UnaryExpr(
     const Sort& sort,
@@ -2740,7 +3381,7 @@ public:
   : Expr(UNARY_EXPR_KIND, sort),
     m_operand(operand)
   {
-    assert(!m_operand.is_null());
+    check_obj();
   }
 
   // Allocate sort statically!
@@ -2750,18 +3391,34 @@ public:
   : Expr(UNARY_EXPR_KIND, sort),
     m_operand(std::move(operand))
   {
-    assert(!m_operand.is_null());
+    check_obj();
   }
 
   const SharedExpr& operand() const
   {
     return m_operand;
   }
+
+  bool is_equal(
+    const Sort& sort,
+    const SharedExpr& operand) const
+  {
+    return Expr::sort() == sort &&
+      m_operand.addr() == operand.addr();
+  }
+
+  bool is_equal(const UnaryExpr<opcode>& other) const
+  {
+    return is_equal(other.sort(), other.m_operand);
+  }
 };
 
 /// Two operand instruction whose operands must be the same sort
 template<Opcode opcode>
 class BinaryExpr : public Expr
+#ifdef ENABLE_HASH_CONS
+, public internal::ExprDeleter<BinaryExpr<opcode>>
+#endif
 {
 private:
   const SharedExpr m_loperand;
@@ -2773,7 +3430,63 @@ private:
       Expr::sort(), m_loperand, m_roperand);
   }
 
+  void check_obj() const
+  {
+    assert(!m_loperand.is_null());
+    assert(!m_roperand.is_null());
+    assert(m_loperand.sort() == m_roperand.sort());
+  }
+
 public:
+#ifdef ENABLE_HASH_CONS
+  typedef internal::ExprDeleter<BinaryExpr<opcode>> Deleter;
+
+  static Expr::Hash hash_args(
+    const Sort& sort,
+    const SharedExpr& loperand,
+    const SharedExpr& roperand)
+  {
+    size_t h = hash_combine(sort.hash(), loperand.hash());
+    h = hash_combine(h, roperand.hash());
+    return h;
+  }
+
+  /// \internal
+  BinaryExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const Sort& sort,
+    SharedExpr&& loperand,
+    SharedExpr&& roperand)
+  : Expr(BINARY_EXPR_KIND, sort, hash),
+    Deleter(expr_store_ptr),
+    m_loperand(std::move(loperand)),
+    m_roperand(std::move(roperand))
+  {
+    check_obj();
+  }
+
+  /// \internal
+  BinaryExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const Sort& sort,
+    const SharedExpr& loperand,
+    const SharedExpr& roperand)
+  : Expr(BINARY_EXPR_KIND, sort, hash),
+    Deleter(expr_store_ptr),
+    m_loperand(loperand),
+    m_roperand(roperand)
+  {
+    check_obj();
+  }
+
+  ~BinaryExpr()
+  {
+    Deleter::delete_from_store(this);
+  }
+#endif
+
   // Allocate sort statically, operands must have the same sort!
   BinaryExpr(
     const Sort& sort,
@@ -2783,9 +3496,7 @@ public:
     m_loperand(loperand),
     m_roperand(roperand)
   {
-    assert(!m_loperand.is_null());
-    assert(!m_roperand.is_null());
-    assert(m_loperand.sort() == m_roperand.sort());
+    check_obj();
   }
 
   BinaryExpr(
@@ -2796,9 +3507,7 @@ public:
     m_loperand(std::move(loperand)),
     m_roperand(std::move(roperand))
   {
-    assert(!m_loperand.is_null());
-    assert(!m_roperand.is_null());
-    assert(m_loperand.sort() == m_roperand.sort());
+    check_obj();
   }
 
   const SharedExpr& loperand() const
@@ -2809,6 +3518,21 @@ public:
   const SharedExpr& roperand() const
   {
     return m_roperand;
+  }
+
+  bool is_equal(
+    const Sort& sort,
+    const SharedExpr& loperand,
+    const SharedExpr& roperand) const
+  {
+    return Expr::sort() == sort &&
+      m_loperand.addr() == loperand.addr() &&
+      m_roperand.addr() == roperand.addr();
+  }
+
+  bool is_equal(const BinaryExpr<opcode>& other) const
+  {
+    return is_equal(other.sort(), other.m_loperand, other.m_roperand);
   }
 };
 
@@ -2845,6 +3569,9 @@ public:
 
 template<Opcode opcode>
 class NaryExpr : public Expr
+#ifdef ENABLE_HASH_CONS
+, public internal::ExprDeleter<NaryExpr<opcode>>
+#endif
 {
 private:
   const SharedExprs m_operands;
@@ -2854,6 +3581,11 @@ private:
     return solver.encode_nary(this, opcode, Expr::sort(), m_operands);
   }
 
+  void check_obj() const
+  {
+    assert(!m_operands.empty());
+  }
+
 protected:
   const SharedExprs& operands() const
   {
@@ -2861,6 +3593,50 @@ protected:
   }
 
 public:
+#ifdef ENABLE_HASH_CONS
+  typedef internal::ExprDeleter<NaryExpr<opcode>> Deleter;
+
+  static Expr::Hash hash_args(const Sort& sort, const SharedExprs& operands)
+  {
+    size_t h = sort.hash();
+    for (size_t i = 0; i < operands.size(); ++i)
+      h = hash_combine(h, operands.at(i).hash());
+
+    return h;
+  }
+
+  /// \internal
+  NaryExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const Sort& sort,
+    SharedExprs&& operands)
+  : Expr(NARY_EXPR_KIND, sort, hash),
+    Deleter(expr_store_ptr),
+    m_operands(std::move(operands))
+  {
+    check_obj();
+  }
+
+  /// \internal
+  NaryExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const Sort& sort,
+    const SharedExprs& operands)
+  : Expr(NARY_EXPR_KIND, sort, hash),
+    Deleter(expr_store_ptr),
+    m_operands(operands)
+  {
+    check_obj();
+  }
+
+  ~NaryExpr()
+  {
+    Deleter::delete_from_store(this);
+  }
+#endif
+
   // Sort must be statically allocated and
   // there must be at least one operand.
   NaryExpr(
@@ -2869,7 +3645,7 @@ public:
   : Expr(NARY_EXPR_KIND, sort),
     m_operands(std::move(operands))
   {
-    assert(!m_operands.empty());
+    check_obj();
   }
 
   // Sort must be statically allocated and
@@ -2880,7 +3656,7 @@ public:
   : Expr(NARY_EXPR_KIND, sort),
     m_operands(operands)
   {
-    assert(!m_operands.empty());
+    check_obj();
   }
 
   size_t size() const
@@ -2891,6 +3667,25 @@ public:
   const SharedExpr& operand(size_t n) const
   {
     return m_operands.at(n);
+  }
+
+  bool is_equal(
+    const Sort& sort,
+    const SharedExprs& operands) const
+  {
+    if (Expr::sort() != sort)
+      return false;
+
+    bool operands_equality = true;
+    for (size_t i = 0; i < operands.size(); ++i)
+      operands_equality &= m_operands[i].addr() == operands[i].addr();
+
+    return operands_equality;
+  }
+
+  bool is_equal(const NaryExpr<opcode>& other) const
+  {
+    return is_equal(other.sort(), other.m_operands);
   }
 };
 
@@ -2904,6 +3699,9 @@ Bool distinct(Terms<T>&& terms)
 }
 
 class ConstArrayExpr : public Expr
+#ifdef ENABLE_HASH_CONS
+, public internal::ExprDeleter<ConstArrayExpr>
+#endif
 {
 private:
   const SharedExpr m_init;
@@ -2913,23 +3711,71 @@ private:
     return solver.encode_const_array(this, Expr::sort(), m_init);
   }
 
+  void check_obj() const
+  {
+    assert(!m_init.is_null());
+    assert(Expr::sort().is_array());
+  }
+
 public:
+#ifdef ENABLE_HASH_CONS
+  typedef internal::ExprDeleter<ConstArrayExpr> Deleter;
+
+  static Expr::Hash hash_args(const Sort& sort, const SharedExpr& init)
+  {
+    return hash_combine(sort.hash(), init.hash());
+  }
+
+  /// \internal
+  ConstArrayExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const Sort& sort,
+    const SharedExpr& init)
+  : Expr(CONST_ARRAY_EXPR_KIND, sort, hash),
+    Deleter(expr_store_ptr),
+    m_init(init)
+  {
+    check_obj();
+  }
+
+  ~ConstArrayExpr()
+  {
+    Deleter::delete_from_store(this);
+  }
+#endif
+
   // Allocate sort statically!
   ConstArrayExpr(const Sort& sort, const SharedExpr& init)
   : Expr(CONST_ARRAY_EXPR_KIND, sort),
     m_init(init)
   {
-    assert(!m_init.is_null());
-    assert(sort.is_array());
+    check_obj();
   }
 
   const SharedExpr& init() const
   {
     return m_init;
   }
+
+  bool is_equal(
+    const Sort& sort,
+    const SharedExpr& init) const
+  {
+    return Expr::sort() == sort &&
+      m_init.addr() == init.addr();
+  }
+
+  bool is_equal(const ConstArrayExpr& other) const
+  {
+    return is_equal(other.sort(), other.m_init);
+  }
 };
 
 class ArraySelectExpr : public Expr
+#ifdef ENABLE_HASH_CONS
+, public internal::ExprDeleter<ArraySelectExpr>
+#endif
 {
 private:
   const SharedExpr m_array;
@@ -2940,7 +3786,43 @@ private:
     return solver.encode_array_select(this, m_array, m_index);
   }
 
+  void check_obj() const
+  {
+    assert(!m_array.is_null());
+    assert(!m_index.is_null());
+  }
+
 public:
+#ifdef ENABLE_HASH_CONS
+  typedef internal::ExprDeleter<ArraySelectExpr> Deleter;
+
+  static Expr::Hash hash_args(
+    const SharedExpr& array,
+    const SharedExpr& index)
+  {
+    return hash_combine(array.hash(), index.hash());
+  }
+
+  /// \internal
+  ArraySelectExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const SharedExpr& array,
+    const SharedExpr& index)
+  : Expr(ARRAY_SELECT_EXPR_KIND, array.sort().sorts(/* range */ 1), hash),
+    Deleter(expr_store_ptr),
+    m_array(array),
+    m_index(index)
+  {
+    check_obj();
+  }
+
+  ~ArraySelectExpr()
+  {
+    Deleter::delete_from_store(this);
+  }
+#endif
+
   ArraySelectExpr(
     const SharedExpr& array,
     const SharedExpr& index)
@@ -2948,8 +3830,7 @@ public:
     m_array(array),
     m_index(index)
   {
-    assert(!m_array.is_null());
-    assert(!m_index.is_null());
+    check_obj();
   }
 
   const SharedExpr& array() const
@@ -2961,9 +3842,25 @@ public:
   {
     return m_index;
   }
+
+  bool is_equal(
+    const SharedExpr& array,
+    const SharedExpr& index) const
+  {
+    return m_array.addr() == array.addr() &&
+      m_index.addr() == index.addr();
+  }
+
+  bool is_equal(const ArraySelectExpr& other) const
+  {
+    return is_equal(other.m_array, other.m_index);
+  }
 };
 
 class ArrayStoreExpr : public Expr
+#ifdef ENABLE_HASH_CONS
+, public internal::ExprDeleter<ArrayStoreExpr>
+#endif
 {
 private:
   const SharedExpr m_array;
@@ -2975,7 +3872,49 @@ private:
     return solver.encode_array_store(this, m_array, m_index, m_value);
   }
 
+  void check_obj() const
+  {
+    assert(!m_array.is_null());
+    assert(!m_index.is_null());
+    assert(!m_value.is_null());
+  }
+
 public:
+#ifdef ENABLE_HASH_CONS
+  typedef internal::ExprDeleter<ArrayStoreExpr> Deleter;
+
+  static Expr::Hash hash_args(
+    const SharedExpr& array,
+    const SharedExpr& index,
+    const SharedExpr& value)
+  {
+    size_t h = hash_combine(array.hash(), index.hash());
+    h = hash_combine(h, value.hash());
+    return h;
+  }
+
+  /// \internal
+  ArrayStoreExpr(
+    typename Deleter::ExprStorePtr expr_store_ptr,
+    Expr::Hash hash,
+    const SharedExpr& array,
+    const SharedExpr& index,
+    const SharedExpr& value)
+  : Expr(ARRAY_STORE_EXPR_KIND, array.sort(), hash),
+    Deleter(expr_store_ptr),
+    m_array(array),
+    m_index(index),
+    m_value(value)
+  {
+    check_obj();
+  }
+
+  ~ArrayStoreExpr()
+  {
+    Deleter::delete_from_store(this);
+  }
+#endif
+
   // Allocate sort statically!
   ArrayStoreExpr(
     const SharedExpr& array,
@@ -2986,9 +3925,7 @@ public:
     m_index(index),
     m_value(value)
   {
-    assert(!m_array.is_null());
-    assert(!m_index.is_null());
-    assert(!m_value.is_null());
+    check_obj();
   }
 
   const SharedExpr& array() const
@@ -3004,6 +3941,21 @@ public:
   const SharedExpr& value() const
   {
     return m_value;
+  }
+
+  bool is_equal(
+    const SharedExpr& array,
+    const SharedExpr& index,
+    const SharedExpr& value) const
+  {
+    return m_array.addr() == array.addr() &&
+      m_index.addr() == index.addr() &&
+      m_value.addr() == value.addr();
+  }
+
+  bool is_equal(const ArrayStoreExpr& other) const
+  {
+    return is_equal(other.m_array, other.m_index, other.m_value);
   }
 };
 

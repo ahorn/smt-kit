@@ -1252,3 +1252,208 @@ TEST(SmtTest, SharedExpr)
   }
   EXPECT_EQ(0, Expr::s_counter);
 }
+
+TEST(SmtTest, UnsafeDeclEquality)
+{
+  const UnsafeDecl ax0("x", internal::sort<Bv<int>>());
+  const UnsafeDecl ax1("x", internal::sort<Bv<int>>());
+  const UnsafeDecl ax2("x", internal::sort<Bv<long>>());
+  const UnsafeDecl ay0("y", internal::sort<Bv<long>>());
+  const UnsafeDecl ay1("y", internal::sort<Bv<int>>());
+
+  EXPECT_TRUE(ax0 == ax1);
+  EXPECT_TRUE(ax1 == ax0);
+  EXPECT_FALSE(ax0 != ax1);
+  EXPECT_FALSE(ax1 != ax0);
+
+  EXPECT_FALSE(ax0 == ax2);
+  EXPECT_FALSE(ax2 == ax0);
+  EXPECT_TRUE(ax2 != ax0);
+  EXPECT_TRUE(ax0 != ax2);
+
+  EXPECT_FALSE(ax2 == ay0);
+  EXPECT_FALSE(ay0 == ax2);
+  EXPECT_TRUE(ax2 != ay0);
+  EXPECT_TRUE(ay0 != ax2);
+
+  EXPECT_FALSE(ax2 == ay1);
+  EXPECT_FALSE(ay1 == ax2);
+  EXPECT_TRUE(ax2 != ay1);
+  EXPECT_TRUE(ay1 != ax2);
+
+  EXPECT_FALSE(ax0 == ay1);
+  EXPECT_FALSE(ay1 == ax0);
+  EXPECT_TRUE(ax0 != ay1);
+  EXPECT_TRUE(ay1 != ax0);
+
+  const UnsafeDecl bx0("x!", 1, internal::sort<Bv<int>>());
+  const UnsafeDecl bx1("x!", 1, internal::sort<Bv<int>>());
+  const UnsafeDecl bx2("x!", 1, internal::sort<Bv<long>>());
+  const UnsafeDecl by0("y!", 2, internal::sort<Bv<long>>());
+  const UnsafeDecl by1("y!", 2, internal::sort<Bv<int>>());
+
+  EXPECT_TRUE(bx0 == bx1);
+  EXPECT_TRUE(bx1 == bx0);
+  EXPECT_FALSE(bx0 != bx1);
+  EXPECT_FALSE(bx1 != bx0);
+
+  EXPECT_FALSE(bx0 == bx2);
+  EXPECT_FALSE(bx2 == bx0);
+  EXPECT_TRUE(bx2 != bx0);
+  EXPECT_TRUE(bx0 != bx2);
+
+  EXPECT_FALSE(bx2 == by0);
+  EXPECT_FALSE(by0 == bx2);
+  EXPECT_TRUE(bx2 != by0);
+  EXPECT_TRUE(by0 != bx2);
+
+  EXPECT_FALSE(bx2 == by1);
+  EXPECT_FALSE(by1 == bx2);
+  EXPECT_TRUE(bx2 != by1);
+  EXPECT_TRUE(by1 != bx2);
+
+  EXPECT_FALSE(bx0 == by1);
+  EXPECT_FALSE(by1 == bx0);
+  EXPECT_TRUE(bx0 != by1);
+  EXPECT_TRUE(by1 != bx0);
+}
+
+#ifdef ENABLE_HASH_CONS
+TEST(SmtTest, UnsafeDeclHash)
+{
+  const UnsafeDecl ax1("x", internal::sort<Bv<int>>());
+  const UnsafeDecl ax2("x", internal::sort<Bv<long>>());
+  const UnsafeDecl ay0("y", internal::sort<Bv<long>>());
+  const UnsafeDecl ay1("y", internal::sort<Bv<int>>());
+
+  EXPECT_EQ(5748889232583992344U, ax1.hash());
+  EXPECT_EQ(5748890057217893400U, ax2.hash());
+  EXPECT_EQ(8485946718835845059U, ay0.hash());
+  EXPECT_EQ(8485945894202107843U, ay1.hash());
+
+  const UnsafeDecl bx1("x!", 1, internal::sort<Bv<int>>());
+  const UnsafeDecl bx2("x!", 1, internal::sort<Bv<long>>());
+  const UnsafeDecl by0("y!", 2, internal::sort<Bv<long>>());
+  const UnsafeDecl by1("y!", 2, internal::sort<Bv<int>>());
+
+  EXPECT_EQ(843973740421U, bx1.hash());
+  EXPECT_EQ(1668607543173U, bx2.hash());
+  EXPECT_EQ(1668620126090U, by0.hash());
+  EXPECT_EQ(843986323338U, by1.hash());
+}
+#endif
+
+TEST(SmtTest, SortHash)
+{
+  size_t hashes[] = {
+    internal::sort<Bv<uint8_t>>().hash(),
+    internal::sort<Bv<int8_t>>().hash(),
+    internal::sort<Bv<uint16_t>>().hash(),
+    internal::sort<Bv<int16_t>>().hash(),
+    internal::sort<Bv<uint32_t>>().hash(),
+    internal::sort<Bv<int32_t>>().hash(),
+    internal::sort<Bv<uint64_t>>().hash(),
+    internal::sort<Bv<int64_t>>().hash(),
+
+    internal::sort<Int>().hash(),
+    internal::sort<Real>().hash(),
+    internal::sort<Array<Int, Int>>().hash(),
+    internal::sort<Array<Int, Real>>().hash(),
+    internal::sort<Array<Int, Bv<int16_t>>>().hash(),
+
+    internal::sort<Array<Bv<int16_t>, Bv<uint8_t>>>().hash(),
+    internal::sort<Array<Bv<int16_t>, Bv<int8_t>>>().hash(),
+    internal::sort<Array<Bv<int16_t>, Bv<uint16_t>>>().hash(),
+    internal::sort<Array<Bv<int16_t>, Bv<int16_t>>>().hash(),
+    internal::sort<Array<Bv<int16_t>, Bv<uint32_t>>>().hash(),
+    internal::sort<Array<Bv<int16_t>, Bv<int32_t>>>().hash(),
+    internal::sort<Array<Bv<int16_t>, Bv<uint64_t>>>().hash(),
+    internal::sort<Array<Bv<int16_t>, Bv<int64_t>>>().hash(),
+
+    internal::sort<Array<Bv<uint16_t>, Bv<uint8_t>>>().hash(),
+    internal::sort<Array<Bv<uint16_t>, Bv<int8_t>>>().hash(),
+    internal::sort<Array<Bv<uint16_t>, Bv<uint16_t>>>().hash(),
+    internal::sort<Array<Bv<uint16_t>, Bv<int16_t>>>().hash(),
+    internal::sort<Array<Bv<uint16_t>, Bv<uint32_t>>>().hash(),
+    internal::sort<Array<Bv<uint16_t>, Bv<int32_t>>>().hash(),
+    internal::sort<Array<Bv<uint16_t>, Bv<uint64_t>>>().hash(),
+    internal::sort<Array<Bv<uint16_t>, Bv<int64_t>>>().hash(),
+
+    internal::sort<Array<Bv<int32_t>, Bv<uint8_t>>>().hash(),
+    internal::sort<Array<Bv<int32_t>, Bv<int8_t>>>().hash(),
+    internal::sort<Array<Bv<int32_t>, Bv<uint16_t>>>().hash(),
+    internal::sort<Array<Bv<int32_t>, Bv<int16_t>>>().hash(),
+    internal::sort<Array<Bv<int32_t>, Bv<uint32_t>>>().hash(),
+    internal::sort<Array<Bv<int32_t>, Bv<int32_t>>>().hash(),
+    internal::sort<Array<Bv<int32_t>, Bv<uint64_t>>>().hash(),
+    internal::sort<Array<Bv<int32_t>, Bv<int64_t>>>().hash(),
+    internal::sort<Array<Bv<int32_t>, Int>>().hash(),
+
+    internal::sort<Array<Bv<uint32_t>, Bv<uint8_t>>>().hash(),
+    internal::sort<Array<Bv<uint32_t>, Bv<int8_t>>>().hash(),
+    internal::sort<Array<Bv<uint32_t>, Bv<uint16_t>>>().hash(),
+    internal::sort<Array<Bv<uint32_t>, Bv<int16_t>>>().hash(),
+    internal::sort<Array<Bv<uint32_t>, Bv<uint32_t>>>().hash(),
+    internal::sort<Array<Bv<uint32_t>, Bv<int32_t>>>().hash(),
+    internal::sort<Array<Bv<uint32_t>, Bv<uint64_t>>>().hash(),
+    internal::sort<Array<Bv<uint32_t>, Bv<int64_t>>>().hash(),
+    internal::sort<Array<Bv<uint32_t>, Int>>().hash()
+  };
+
+  // no hash collision in this list
+  size_t expects[] = {
+    1660944549,
+    1761607855,
+    3271557445,
+    3372220751,
+    6492783237,
+    6593446543,
+    12935234821,
+    13035898127,
+    402653224,
+    6442451584,
+    464259167272,
+    687597543464,
+    19730007976,
+    349117150159,
+    362002052815,
+    5519705039,
+    18404607695,
+    692714595279,
+    705599497935,
+    2067104146383,
+    2079989049039,
+    349016486853,
+    361901389509,
+    5419041733,
+    18303944389,
+    692613931973,
+    705498834629,
+    2067003483077,
+    2079888385733,
+    343748440079,
+    365223277839,
+    150994959,
+    21625832719,
+    687345885199,
+    708820722959,
+    2061735436303,
+    2083210274063,
+    470449960591,
+    343647776773,
+    365122614533,
+    50331653,
+    21525169413,
+    687245221893,
+    708720059653,
+    2061634772997,
+    2083109610757,
+    470349297285
+  };
+
+  int k = 0;
+  for (size_t hash : hashes)
+    EXPECT_EQ(expects[k++], hash);
+
+ EXPECT_EQ(47, k);
+}

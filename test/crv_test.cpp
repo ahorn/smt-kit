@@ -3152,7 +3152,11 @@ TEST(CrvTest, LazyInternal)
   Internal<int> b(Internal<int>::make_lazy<smt::ADD>(a, 5));
   EXPECT_TRUE(b.is_lazy());
   EXPECT_FALSE(b.is_literal());
+#ifdef ENABLE_HASH_CONS
+  EXPECT_EQ(Internal<int>::term(b).addr(), Internal<int>::term(b).addr());
+#else
   EXPECT_NE(Internal<int>::term(b).addr(), Internal<int>::term(b).addr());
+#endif
   EXPECT_EQ(5, roperand<smt::ADD>(b));
 
   Internal<int> c(Internal<int>::propagate<smt::ADD>(b, 3));
@@ -3174,7 +3178,11 @@ TEST(CrvTest, LazyInternal)
   Internal<int> f(Internal<int>::make_lazy<smt::ADD>(std::move(a), 5));
   EXPECT_TRUE(f.is_lazy());
   EXPECT_FALSE(f.is_literal());
+#ifdef ENABLE_HASH_CONS
+  EXPECT_EQ(Internal<int>::term(f).addr(), Internal<int>::term(f).addr());
+#else
   EXPECT_NE(Internal<int>::term(f).addr(), Internal<int>::term(f).addr());
+#endif
   EXPECT_EQ(5, roperand<smt::ADD>(f));
 
   Internal<int> g(Internal<int>::propagate<smt::ADD>(std::move(b), 3));
