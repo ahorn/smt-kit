@@ -1354,6 +1354,7 @@ TEST(SmtTest, ExpressionSharing)
 
 #ifdef ENABLE_HASH_CONS
   EXPECT_EQ(3, Expr::s_counter);
+  EXPECT_EQ(z0.addr(), z1.addr());
 #else
   // no perfect expression sharing
   EXPECT_EQ(4, Expr::s_counter);
