@@ -927,7 +927,24 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
         }
 
       }
+
       cache_term(expr, distinct_term);
+      return OK;
+    }
+
+    if (opcode == LAND)
+    {
+      msat_term and_term = msat_make_true(m_env);
+      for (const SharedExpr& arg : args)
+      {
+        err = arg.encode(*this);
+        if (err)
+          return err;
+
+        and_term = msat_make_and(m_env, and_term, m_term);
+      }
+
+      cache_term(expr, and_term);
       return OK;
     }
 

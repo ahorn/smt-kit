@@ -721,6 +721,56 @@ TEST(SmtStpTest, Distinct)
   s.pop();
 }
 
+TEST(SmtStpTest, Conjunction)
+{
+  StpSolver s;
+
+  const Bool x = any<Bool>("x");
+  const Bool y = any<Bool>("y");
+  const Bool z = any<Bool>("z");
+  const Bool w = any<Bool>("w");
+
+  Terms<Bool> operand_terms(3);
+  operand_terms.push_back(x);
+  operand_terms.push_back(y);
+  operand_terms.push_back(z);
+
+  Bool d(conjunction(std::move(operand_terms)));
+
+  EXPECT_EQ(OK, static_cast<SharedExpr>(d).encode(s));
+  s.add(d);
+
+  EXPECT_EQ(sat, s.check());
+
+  s.push();
+  {
+    s.add(not x);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(not y);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(not z);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(not w);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+}
+
 TEST(SmtStpTest, AutoConfig)
 {
   StpSolver solver;

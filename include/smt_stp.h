@@ -817,11 +817,14 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
     {
       // pair-wise disequality, formula size O(N^2)
       const Sort& bool_sort = internal::sort<Bool>();
-      VCExpr distinct_expr = vc_trueExpr(m_vc);
+      VCExpr pairwise_expr = vc_trueExpr(m_vc);
       for (SharedExprs::const_iterator outer = args.cbegin();
            outer != args.cend(); ++outer)
       {
-        outer->encode(*this);
+        err = outer->encode(*this);
+        if (err)
+          return err;
+
         const VCExpr outer_expr = m_expr;
 
         for (SharedExprs::const_iterator inner = outer + 1;
@@ -829,7 +832,10 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
         {
           assert(outer->sort() == inner->sort());
 
-          inner->encode(*this);
+          err = inner->encode(*this);
+          if (err)
+            return err;
+
           const VCExpr inner_expr = m_expr;
 
           VCExpr eq_expr;
@@ -838,12 +844,28 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
           else
             eq_expr = vc_eqExpr(m_vc, outer_expr, inner_expr);
 
-          distinct_expr = vc_andExpr(m_vc, distinct_expr,
+          pairwise_expr = vc_andExpr(m_vc, pairwise_expr,
             vc_notExpr(m_vc, eq_expr));
         }
-
       }
-      cache_expr(expr, distinct_expr);
+
+      cache_expr(expr, pairwise_expr);
+      return OK;
+    }
+
+    if (opcode == LAND)
+    {
+      VCExpr and_expr = vc_trueExpr(m_vc);
+      for (const SharedExpr& arg : args)
+      {
+        err = arg.encode(*this);
+        if (err)
+          return err;
+
+        and_expr = vc_andExpr(m_vc, and_expr, m_expr);
+      }
+
+      cache_expr(expr, and_expr);
       return OK;
     }
 

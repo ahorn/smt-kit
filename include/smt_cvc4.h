@@ -632,22 +632,26 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
   {
     Error err;
 
-    if (opcode == NEQ) {
-      std::vector<CVC4::Expr> exprs;
-      exprs.reserve(args.size());
-      for (SharedExprs::const_reference arg : args) {
-        err = arg.encode(*this);
-        if (err) {
-          return err;
-        }
-        exprs.push_back(m_expr);
-      }
-
-      set_expr(m_expr_manager.mkExpr(CVC4::kind::DISTINCT, exprs));
-      return OK;
-    } else {
+    if (opcode != NEQ && opcode != LAND)
       return UNSUPPORT_ERROR;
+
+    std::vector<CVC4::Expr> exprs;
+    exprs.reserve(args.size());
+    for (SharedExprs::const_reference arg : args)
+    {
+      err = arg.encode(*this);
+      if (err)
+        return err;
+
+      exprs.push_back(m_expr);
     }
+
+    if (opcode == NEQ)
+      set_expr(m_expr_manager.mkExpr(CVC4::kind::DISTINCT, exprs));
+    else if (opcode == LAND)
+      set_expr(m_expr_manager.mkExpr(CVC4::kind::AND, exprs));
+
+    return OK;
   }
 
   virtual Error __encode_bv_zero_extend(

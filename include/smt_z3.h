@@ -692,31 +692,33 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   {
     Error err;
 
-    if (opcode == NEQ) {
-      // SMT-LIB 2.0 distinct variadic function, formula size O(N)
-      size_t i = 0, args_size = args.size();
-      Z3_ast asts[args_size];
-      for (const SharedExpr& arg : args) {
-        err = arg.encode(*this);
-        if (err) {
-          return err;
-        }
-        asts[i] = m_z3_expr;
-        Z3_inc_ref(m_z3_context, asts[i]);
+    if (opcode != NEQ && opcode != LAND)
+      return UNSUPPORT_ERROR;
 
-        assert(i < args_size);
-        i++;
-      }
+    size_t i = 0, args_size = args.size();
+    Z3_ast asts[args_size];
+    for (const SharedExpr& arg : args)
+    {
+      err = arg.encode(*this);
+      if (err)
+        return err;
 
+      asts[i] = m_z3_expr;
+      Z3_inc_ref(m_z3_context, asts[i]);
+
+      assert(i < args_size);
+      i++;
+    }
+
+    if (opcode == NEQ)
       m_z3_expr = z3::expr(m_z3_context,
         Z3_mk_distinct(m_z3_context, args_size, asts));
+    else if (opcode == LAND)
+      m_z3_expr = z3::expr(m_z3_context,
+        Z3_mk_and(m_z3_context, args_size, asts));
 
-      for (i = 0; i < args_size; i++) {
-        Z3_dec_ref(m_z3_context, asts[i]);
-      }
-    } else {
-      return UNSUPPORT_ERROR;
-    }
+    for (i = 0; i < args_size; i++)
+      Z3_dec_ref(m_z3_context, asts[i]);
 
     return OK;
   }

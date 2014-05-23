@@ -1024,6 +1024,69 @@ namespace internal
   };
 }
 
+template<typename T>
+class Terms
+{
+public:
+  SharedExprs terms;
+
+  Terms()
+  : terms() {}
+
+  Terms(size_t count)
+  : terms()
+  {
+    terms.reserve(count);
+  }
+
+  Terms(Terms&& other)
+  : terms(std::move(other.terms)) {}
+
+  void push_back(const T& term)
+  {
+    terms.push_back(term);
+  }
+
+  void push_back(T&& term)
+  {
+    terms.push_back(std::move(term));
+  }
+
+  size_t size() const noexcept
+  {
+    return terms.size();
+  }
+
+  void clear() noexcept
+  {
+    terms.clear();
+  }
+
+  bool empty() const noexcept
+  {
+    return terms.empty();
+  }
+
+  T front() const
+  {
+    assert(!empty());
+    return at(0);
+  }
+
+  T back() const
+  {
+    assert(!empty());
+    return at(size() - 1);
+  }
+
+  T at(size_t pos) const
+  {
+    return static_cast<T>(terms.at(pos));
+  }
+};
+
+typedef Terms<Bool> Bools;
+
 /// Abstract base class of an SMT/SAT solver
 
 /// Memory management:
@@ -1350,6 +1413,8 @@ public:
   void pop();
 
   void add(const Bool& condition);
+  void add_all(const Bools& conditions);
+
   void unsafe_add(const SharedExpr& condition);
 
   CheckResult check();
@@ -3465,37 +3530,6 @@ public:
   }
 };
 
-template<typename T>
-class Terms
-{
-public:
-  SharedExprs terms;
-
-  Terms(size_t count)
-  : terms()
-  {
-    terms.reserve(count);
-  }
-
-  Terms(Terms&& other)
-  : terms(std::move(other.terms)) {}
-
-  void push_back(const T& term)
-  {
-    terms.push_back(term);
-  }
-
-  size_t size() const
-  {
-    return terms.size();
-  }
-
-  T at(size_t pos) const
-  {
-    return static_cast<const T>(terms.at(pos));
-  }
-};
-
 template<Opcode opcode>
 class NaryExpr : public Expr
 #ifdef ENABLE_HASH_CONS
@@ -3626,6 +3660,9 @@ Bool distinct(Terms<T>&& terms)
   return Bool(make_shared_expr<NaryExpr<NEQ>>(
     internal::sort<Bool>(), std::move(terms.terms)));
 }
+
+Bool conjunction(Terms<Bool>&&);
+Bool conjunction(const Terms<Bool>&);
 
 class ConstArrayExpr : public Expr
 #ifdef ENABLE_HASH_CONS

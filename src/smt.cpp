@@ -60,6 +60,18 @@ SharedExpr distinct(SharedExprs&& terms)
     internal::sort<Bool>(), std::move(terms));
 }
 
+Bool conjunction(Terms<Bool>&& bools)
+{
+  return Bool(make_shared_expr<NaryExpr<LAND>>(
+    internal::sort<Bool>(), std::move(bools.terms)));
+}
+
+Bool conjunction(const Terms<Bool>& bools)
+{
+  return Bool(make_shared_expr<NaryExpr<LAND>>(
+    internal::sort<Bool>(), bools.terms));
+}
+
 SharedExpr select(
   const SharedExpr& array,
   const SharedExpr& index)
@@ -292,6 +304,12 @@ void Solver::add(const Bool& condition)
 {
   const Error err = __unsafe_add(condition);
   assert(err == OK);
+}
+
+void Solver::add_all(const Bools& conditions)
+{
+  for (const SharedExpr& condition : conditions.terms)
+    unsafe_add(condition);
 }
 
 CheckResult Solver::check()
