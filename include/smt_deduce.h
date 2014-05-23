@@ -2,44 +2,89 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-#ifndef _SMT_BDD_H_
-#define _SMT_BDD_H_
+#ifndef _SMT_LATTICE_H_
+#define _SMT_LATTICE_H_
 
 #include <unordered_map>
-#include <string>
 #include <vector>
 #include <stack>
 
-#include "bdd.h"
 #include "smt.h"
 
 namespace smt
 {
 
-using namespace bdd;
+/// Deduce facts in the Boolean skeleton of formulas using unit propagation
 
-/// Use binary decision diagrams (BDDs) to solve the Boolean skeleton of formulas
-
-/// This solver merely aims to illustrate how symbolic execution can
-/// use Boolean abstraction techniques for path condition checks.
-class BDDSolver : public Solver
+/// This solver shows how symbolic execution can use abstraction techniques
+/// to check whether the Boolean skeleton of path conditions is unsatisfiable.
+///
+/// This solver design is inspired by recent papers on abstract satisfaction,
+/// see D'Silva, Haller and Kroening who published in POPL'13 and POPL'14.
+class DeduceSolver : public Solver
 {
 private:
-  BDDManager m_bdd_manager;
+  static constexpr Error conflict_error()
+  {
+    return static_cast<Error>(404U);
+  }
 
-  // always call set_bdd() instead of directly assigning field
-  BDD m_bdd;
+  /// Partial assignment for predicates in the Boolean skeleton of the
+  /// formula to be checked for unsatisfiability
 
-  typedef std::unordered_map<uintptr_t, const BDD> BDDMap;
-  BDDMap m_bdd_map;
+  /// Unit propagation is implemented as an abstract transformer that
+  /// assigns satisfying truth values to the Boolean variables according
+  /// to the in-order traversal of the formula's syntactic structure.
+  ///
+  /// Conflicts are detected by unit_propagate(), the only function
+  /// that is allowed to directly update the partial assignments!
+  typedef std::unordered_map<uintptr_t, bool> PartialAssignment;
 
-  typedef std::vector<const BDD> BDDs;
-  BDDs m_assertions;
+  /// Partial assignment of predicates in the Boolean skeleton
+  PartialAssignment m_partial_assignment;
 
+  /// Interpreted as logical conjunction
+  SharedExprs m_assertions;
+
+  /// Used to implement incremental solving, i.e. push() and pop()
   typedef std::stack<unsigned> AssertionStack;
   AssertionStack m_assertion_stack;
 
-  unsigned m_binary_relation_counter;
+  /// Used to interpret the formula in negation normal form
+  bool m_is_negation;
+
+  bool is_top(uintptr_t addr)
+  {
+    PartialAssignment::const_iterator citer = m_partial_assignment.find(addr);
+    return citer == m_partial_assignment.cend();
+  }
+
+  bool is_false(uintptr_t addr)
+  {
+    PartialAssignment::const_iterator citer = m_partial_assignment.find(addr);
+    if (citer == m_partial_assignment.cend())
+      return false;
+
+    return !citer->second;
+  }
+
+  Error unit_propagate(const Expr* const expr, bool fact)
+  {
+    PartialAssignment::iterator iter;
+    bool ok;
+
+    std::tie(iter, ok) = m_partial_assignment.emplace(
+      reinterpret_cast<uintptr_t>(expr), fact);
+    const bool is_consistent = iter->second == fact;
+
+    /// a newly inserted fact cannot yield a conflict
+    assert(!ok || is_consistent);
+
+    if (!is_consistent)
+      return conflict_error();
+
+    return OK;
+  }
 
   /// \pre: expr->sort().is_bool()
   Error abstract_binary_relation(
@@ -47,45 +92,7 @@ private:
     const SharedExpr& larg,
     const SharedExpr& rarg)
   {
-    static constexpr char s_prefix[] = "binary_relation_bdd!";
-
-    assert(expr->sort().is_bool());
-    if (find_bdd(expr))
-      return OK;
-
-    BDD binary_relation_bdd = m_bdd_manager.make_var(
-      s_prefix + std::to_string(m_binary_relation_counter++));
-
-    assert(m_binary_relation_counter != 0);
-    set_bdd(expr, binary_relation_bdd);
-    return OK;
-  }
-
-  bool is_abstract() const
-  {
-    return m_binary_relation_counter != 0;
-  }
-
-  bool find_bdd(const Expr* const expr)
-  {
-    const BDDMap::const_iterator citer = m_bdd_map.find(
-      reinterpret_cast<uintptr_t>(expr));
-
-    if (citer == m_bdd_map.cend())
-      return false;
-
-    m_bdd = citer->second;
-    return true;
-  }
-
-  // \pre: not find_bdd(expr)
-  void set_bdd(const Expr* const expr, const BDD& bdd)
-  {
-    m_bdd = bdd;
-
-    bool ok = std::get<1>(m_bdd_map.emplace(
-      reinterpret_cast<uintptr_t>(expr), bdd));
-    assert(ok);
+    return unit_propagate(expr, !m_is_negation);
   }
 
   virtual Error __encode_literal(
@@ -93,21 +100,16 @@ private:
     const Sort& sort,
     bool literal)
   {
-    if (find_bdd(expr))
-      return OK;
-
     if (!expr->sort().is_bool())
       return UNSUPPORT_ERROR;
 
-    if (literal)
-      set_bdd(expr, m_bdd_manager.True());
-    else
-      set_bdd(expr, m_bdd_manager.False());
+    if (literal == m_is_negation)
+      return conflict_error();
 
     return OK;
   }
 
-#define SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(type)     \
+#define SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(type) \
   virtual Error __encode_literal(                     \
      const Expr* const expr,                          \
      const Sort& sort,                                \
@@ -116,32 +118,29 @@ private:
     return UNSUPPORT_ERROR;                           \
   }                                                   \
 
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(char)
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(signed char)
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(unsigned char)
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(wchar_t)
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(char16_t)
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(char32_t)
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(short)
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(unsigned short)
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(int)
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(unsigned int)
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(long)
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(long long)
-SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(char)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(signed char)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned char)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(wchar_t)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(char16_t)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(char32_t)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(short)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned short)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(int)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned int)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(long)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(long long)
+SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_constant(
     const Expr* const expr,
     const UnsafeDecl& decl) override
   {
-    if (find_bdd(expr))
-      return OK;
+    if (!decl.sort().is_bool())
+      return UNSUPPORT_ERROR;
 
-    if (decl.sort().is_bool())
-      set_bdd(expr, m_bdd_manager.make_var(decl.symbol()));
-
-    return OK;
+    return unit_propagate(expr, !m_is_negation);
   }
 
   virtual Error __encode_func_app(
@@ -183,14 +182,13 @@ SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const Sort& sort,
     const SharedExpr& arg) override
   {
-    if (find_bdd(expr))
-      return OK;
-
+    m_is_negation = !m_is_negation;
     const Error err = arg.encode(*this);
+    m_is_negation = !m_is_negation;
+
     if (err)
       return err;
 
-    set_bdd(expr, !m_bdd);
     return OK;
   }
 
@@ -252,23 +250,21 @@ SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
-    if (find_bdd(expr))
-      return OK;
-
     Error err;
-    err = larg.encode(*this);
-    if (err)
-      return err;
+    if (!m_is_negation || is_false(larg.addr()))
+    {
+      err = rarg.encode(*this);
+      if (err)
+        return err;
+    }
 
-    const BDD lbdd = m_bdd;
+    if (!m_is_negation || is_false(rarg.addr()))
+    {
+      err = larg.encode(*this);
+      if (err)
+        return err;
+    }
 
-    err = rarg.encode(*this);
-    if (err)
-      return err;
-
-    const BDD rbdd = m_bdd;
-
-    set_bdd(expr, lbdd & rbdd);
     return OK;
   }
 
@@ -278,23 +274,21 @@ SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
-    if (find_bdd(expr))
-      return OK;
-
     Error err;
-    err = larg.encode(*this);
-    if (err)
-      return err;
+    if (m_is_negation || is_false(larg.addr()))
+    {
+      err = rarg.encode(*this);
+      if (err)
+        return err;
+    }
 
-    const BDD lbdd = m_bdd;
+    if (m_is_negation || is_false(rarg.addr()))
+    {
+      err = larg.encode(*this);
+      if (err)
+        return err;
+    }
 
-    err = rarg.encode(*this);
-    if (err)
-      return err;
-
-    const BDD rbdd = m_bdd;
-
-    set_bdd(expr, lbdd | rbdd);
     return OK;
   }
 
@@ -304,24 +298,7 @@ SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
-    if (find_bdd(expr))
-      return OK;
-
-    Error err;
-    err = larg.encode(*this);
-    if (err)
-      return err;
-
-    const BDD lbdd = m_bdd;
-
-    err = rarg.encode(*this);
-    if (err)
-      return err;
-
-    const BDD rbdd = m_bdd;
-
-    set_bdd(expr, !lbdd | rbdd);
-    return OK;
+    return UNSUPPORT_ERROR;
   }
 
   virtual Error __encode_binary_eql(
@@ -420,7 +397,24 @@ SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const Sort& sort,
     const SharedExprs& args) override
   {
-    return UNSUPPORT_ERROR;
+    switch (opcode)
+    {
+    case LAND:
+    case LOR:
+      break;
+    default:
+      return UNSUPPORT_ERROR;
+    }
+
+    Error err;
+    for (const SharedExpr& arg : args)
+    {
+      err = arg.encode(*this);
+      if (err)
+        return err;
+    }
+
+    return OK;
   }
 
   virtual Error __encode_bv_zero_extend(
@@ -453,19 +447,18 @@ SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual void __notify_delete(const Expr* const expr) override
   {
-    m_bdd_map.erase(reinterpret_cast<uintptr_t>(expr));
+    m_partial_assignment.erase(reinterpret_cast<uintptr_t>(expr));
   }
 
   virtual void __reset() override
   {
-    m_bdd_map.clear();
+    m_partial_assignment.clear();
     m_assertions.clear();
-    m_bdd = m_bdd_manager.True();
 
     while (!m_assertion_stack.empty())
       m_assertion_stack.pop();
 
-    m_binary_relation_counter = 0;
+    m_is_negation = false;
   }
 
   virtual void __push() override
@@ -488,11 +481,7 @@ SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __unsafe_add(const SharedExpr& condition) override
   {
-    const Error err = condition.encode(*this);
-    if (err)
-      return err;
-
-    m_assertions.push_back(m_bdd);
+    m_assertions.push_back(condition);
 
     if (!m_assertion_stack.empty())
       ++m_assertion_stack.top();
@@ -505,39 +494,46 @@ SMT_BDD_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     return __unsafe_add(condition);
   }
 
+  /// Is the conjunction of assertions unsatisfiable?
+
+  /// Since this implementation considers only the Boolean skeleton of the
+  /// formula, __check() is necessarily incomplete.
   virtual CheckResult __check() override
   {
-    BDD formula = m_bdd_manager.True();
-    for (const BDD& bdd : m_assertions)
-      formula = formula & bdd;
+    Error err;
+    PartialAssignment::size_type size;
 
-    if (formula.is_false())
-      return unsat;
+    m_partial_assignment.clear();
+    for (;;)
+    {
+      size = m_partial_assignment.size();
+      err = __encode_nary(nullptr, LAND, internal::sort<Bool>(), m_assertions);
 
-    if (is_abstract())
-      return unknown;
+      if (err == conflict_error())
+        return unsat;
+
+      // reached fixed point
+      if (size == m_partial_assignment.size())
+        return unknown;
+    }
 
     return sat;
   }
 
 public:
-  BDDSolver()
+  DeduceSolver()
   : Solver(),
-    m_bdd_manager(),
-    m_bdd(m_bdd_manager.True()),
-    m_bdd_map(),
+    m_partial_assignment(),
     m_assertions(),
     m_assertion_stack(),
-    m_binary_relation_counter(0) {}
+    m_is_negation(false) {}
 
-  BDDSolver(Logic logic)
+  DeduceSolver(Logic logic)
   : Solver(logic),
-    m_bdd_manager(),
-    m_bdd(m_bdd_manager.True()),
-    m_bdd_map(),
+    m_partial_assignment(),
     m_assertions(),
     m_assertion_stack(),
-    m_binary_relation_counter(0) {}
+    m_is_negation(false) {}
 };
 
 }

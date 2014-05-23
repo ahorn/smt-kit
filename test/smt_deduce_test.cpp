@@ -1,12 +1,12 @@
 #include "gtest/gtest.h"
 
-#include "smt_bdd.h"
+#include "smt_deduce.h"
 
 using namespace smt;
 
-TEST(SmtBddTest, Literal)
+TEST(SmtDeduceTest, Literal)
 {
-  BDDSolver s;
+  DeduceSolver s;
 
   smt::Bool true_literal = smt::literal<smt::Bool>(true);
   smt::Bool false_literal = smt::literal<smt::Bool>(false);
@@ -14,7 +14,7 @@ TEST(SmtBddTest, Literal)
   s.push();
   {
     s.add(true_literal);
-    EXPECT_EQ(smt::sat, s.check());
+    EXPECT_EQ(smt::unknown, s.check());
   }
   s.pop();
 
@@ -26,9 +26,9 @@ TEST(SmtBddTest, Literal)
   s.pop();
 }
 
-TEST(SmtBddTest, Bools)
+TEST(SmtDeduceTest, Bools)
 {
-  BDDSolver s;
+  DeduceSolver s;
   smt::Bool x = smt::any<smt::Bool>("x");
   smt::Bool y = smt::any<smt::Bool>("y");
   smt::Bool z = smt::any<smt::Bool>("z");
@@ -42,45 +42,60 @@ TEST(SmtBddTest, Bools)
 
   s.push();
   {
+    s.add(not x and not x);
+    EXPECT_EQ(smt::unknown, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
     s.add(y);
     s.add(not y);
     EXPECT_EQ(smt::unsat, s.check());
   }
   s.pop();
 
+  // increase precision
   s.push();
   {
     smt::Bool ite = (x and y) or (not x and y);
     s.add(ite and not y);
-    EXPECT_EQ(smt::unsat, s.check());
+    EXPECT_EQ(smt::unknown, s.check());
   }
   s.pop();
 
   s.push();
   {
     s.add(x and y);
-    EXPECT_EQ(smt::sat, s.check());
+    EXPECT_EQ(smt::unknown, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x and not y);
+    EXPECT_EQ(smt::unknown, s.check());
   }
   s.pop();
 
   s.push();
   {
     s.add(x and x);
-    EXPECT_EQ(smt::sat, s.check());
+    EXPECT_EQ(smt::unknown, s.check());
   }
   s.pop();
 
   s.push();
   {
     s.add((x or y) and z);
-    EXPECT_EQ(smt::sat, s.check());
+    EXPECT_EQ(smt::unknown, s.check());
   }
   s.pop();
 }
 
-TEST(SmtBddTest, Abstraction)
+TEST(SmtDeduceTest, Abstraction)
 {
-  BDDSolver s;
+  DeduceSolver s;
   smt::Int a = smt::any<smt::Int>("a");
   smt::Int b = smt::any<smt::Int>("b");
   smt::Int c = smt::any<smt::Int>("c");
@@ -98,23 +113,38 @@ TEST(SmtBddTest, Abstraction)
 
   s.push();
   {
+    s.add(not x and not x);
+    EXPECT_EQ(smt::unknown, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
     s.add(y);
     s.add(not y);
     EXPECT_EQ(smt::unsat, s.check());
   }
   s.pop();
 
+  // increase precision
   s.push();
   {
     smt::Bool ite = (x and y) or (not x and y);
     s.add(ite and not y);
-    EXPECT_EQ(smt::unsat, s.check());
+    EXPECT_EQ(smt::unknown, s.check());
   }
   s.pop();
 
   s.push();
   {
     s.add(x and y);
+    EXPECT_EQ(smt::unknown, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x and not y);
     EXPECT_EQ(smt::unknown, s.check());
   }
   s.pop();
@@ -134,9 +164,9 @@ TEST(SmtBddTest, Abstraction)
   s.pop();
 }
 
-TEST(SmtBddTest, Reset)
+TEST(SmtDeduceTest, Reset)
 {
-  BDDSolver s;
+  DeduceSolver s;
   smt::Bool x = smt::any<smt::Bool>("x");
 
   s.add(x and not x);
@@ -145,5 +175,5 @@ TEST(SmtBddTest, Reset)
   s.reset();
 
   s.add(x);
-  EXPECT_EQ(smt::sat, s.check());
+  EXPECT_EQ(smt::unknown, s.check());
 }
