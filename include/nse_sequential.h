@@ -1484,7 +1484,7 @@ private:
       goto ELSE_BRANCH;
 
   THEN_BRANCH:
-    if (smt::sat == check(Checker::guard() and g_term))
+    if (smt::unsat != check(Checker::guard() and g_term))
     {
       Checker::add_guard(std::move(g_term));
       m_dfs.append_flip(true, !direction_hint);
@@ -1497,7 +1497,7 @@ private:
 
   // fall through THEN_BRANCH to try ELSE_BRANCH
   ELSE_BRANCH:
-    if (smt::sat == check(Checker::guard() and not g_term))
+    if (smt::unsat != check(Checker::guard() and not g_term))
     {
       Checker::add_guard(not std::move(g_term));
       m_dfs.append_flip(false, direction_hint);
