@@ -378,7 +378,11 @@ class Func;
 template<typename T, typename Enable>
 class Bv;
 
-// Contingencies that an implementation of the API must always consider
+/// Contingencies that an implementation of the API must always consider
+
+/// An error is a value between 0 and 255. Any higher value is reserved
+/// for solver implementation uses. Any of these internal values are
+/// interpreted as errors if they leak the Solver interface.
 enum Error : unsigned {
   // No error, OK equals zero
   OK = 0,
@@ -387,7 +391,10 @@ enum Error : unsigned {
   OPCODE_ERROR,
 
   // Unsupported SMT-LIB feature
-  UNSUPPORT_ERROR
+  UNSUPPORT_ERROR,
+
+  /// Bitwise mask to clear any internal error flags
+  ERROR_MASK = 0xFFU
 };
 
 enum CheckResult 
