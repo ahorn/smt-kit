@@ -1326,20 +1326,24 @@ TEST(SmtTest, UnsafeDeclHash)
   const UnsafeDecl ay0("y", internal::sort<Bv<long>>());
   const UnsafeDecl ay1("y", internal::sort<Bv<int>>());
 
-  EXPECT_EQ(5748889232583992344U, ax1.hash());
-  EXPECT_EQ(5748890057217893400U, ax2.hash());
-  EXPECT_EQ(8485946718835845059U, ay0.hash());
-  EXPECT_EQ(8485945894202107843U, ay1.hash());
+  EXPECT_NE(ax1.hash(), ax2.hash());
+  EXPECT_NE(ax1.hash(), ay0.hash());
+  EXPECT_NE(ax1.hash(), ay1.hash());
+  EXPECT_NE(ax2.hash(), ay0.hash());
+  EXPECT_NE(ax2.hash(), ay1.hash());
+  EXPECT_NE(ay0.hash(), ay1.hash());
 
   const UnsafeDecl bx1("x!", 1, internal::sort<Bv<int>>());
   const UnsafeDecl bx2("x!", 1, internal::sort<Bv<long>>());
   const UnsafeDecl by0("y!", 2, internal::sort<Bv<long>>());
   const UnsafeDecl by1("y!", 2, internal::sort<Bv<int>>());
 
-  EXPECT_EQ(843973740421U, bx1.hash());
-  EXPECT_EQ(1668607543173U, bx2.hash());
-  EXPECT_EQ(1668620126090U, by0.hash());
-  EXPECT_EQ(843986323338U, by1.hash());
+  EXPECT_NE(bx1.hash(), bx2.hash());
+  EXPECT_NE(bx1.hash(), by0.hash());
+  EXPECT_NE(bx1.hash(), by1.hash());
+  EXPECT_NE(bx2.hash(), by0.hash());
+  EXPECT_NE(bx2.hash(), by1.hash());
+  EXPECT_NE(by0.hash(), by1.hash());
 }
 #endif
 
