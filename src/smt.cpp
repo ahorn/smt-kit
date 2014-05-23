@@ -161,14 +161,13 @@ Error Solver::encode_func_app(
 
 Error Solver::encode_const_array(
   const Expr* const expr,
-  const Sort& sort,
   const SharedExpr& init)
 {
   ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
 
   assert(!init.is_null());
 
-  return __encode_const_array(expr, sort, init);
+  return __encode_const_array(expr, init);
 }
 
 Error Solver::encode_array_select(
@@ -204,7 +203,6 @@ Error Solver::encode_array_store(
 Error Solver::encode_nary(
   const Expr* const expr,
   Opcode opcode,
-  const Sort& sort,
   const SharedExprs& args)
 {
   ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
@@ -229,36 +227,33 @@ Error Solver::encode_nary(
   }
 
   m_stats.nary_ops++;
-  return __encode_nary(expr, opcode, sort, args);
+  return __encode_nary(expr, opcode, args);
 }
 
 Error Solver::encode_bv_zero_extend(
   const Expr* const expr,
-  const Sort& sort,
   const SharedExpr& bv,
   const unsigned ext)
 {
   ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
 
   assert(bv.sort().is_bv());
-  return __encode_bv_zero_extend(expr, sort, bv, ext);
+  return __encode_bv_zero_extend(expr, bv, ext);
 }
 
 Error Solver::encode_bv_sign_extend(
   const Expr* const expr,
-  const Sort& sort,
   const SharedExpr& bv,
   const unsigned ext)
 {
   ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
 
   assert(bv.sort().is_bv());
-  return __encode_bv_sign_extend(expr, sort, bv, ext);
+  return __encode_bv_sign_extend(expr, bv, ext);
 }
 
 Error Solver::encode_bv_extract(
   const Expr* const expr,
-  const Sort& sort,
   const SharedExpr& bv,
   const unsigned high,
   const unsigned low)
@@ -266,7 +261,7 @@ Error Solver::encode_bv_extract(
   ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
 
   assert(bv.sort().is_bv());
-  return __encode_bv_extract(expr, sort, bv, high, low);
+  return __encode_bv_extract(expr, bv, high, low);
 }
 
 void Solver::reset()

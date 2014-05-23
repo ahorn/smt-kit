@@ -23,9 +23,10 @@ private:
   template<typename T>
   Error nocast_encode_literal(
      const Expr* const expr,
-     const Sort& sort,
      T literal)
   {
+    const Sort& sort = expr->sort();
+
     if (sort.is_bool()) {
       m_z3_expr = m_z3_context.bool_val(literal);
     } else if (sort.is_int()) {
@@ -44,32 +45,29 @@ private:
   template<typename T>
   Error cast_encode_literal(
      const Expr* const expr,
-     const Sort& sort,
      T literal)
   {
     if (std::is_signed<T>::value) {
-      return nocast_encode_literal<long long>(expr, sort, literal);
+      return nocast_encode_literal<long long>(expr, literal);
     } else {
-      return nocast_encode_literal<unsigned long long>(expr, sort, literal);
+      return nocast_encode_literal<unsigned long long>(expr, literal);
     }
   }
 
 #define SMT_Z3_NOCAST_ENCODE_BUILTIN_LITERAL(type)      \
   virtual Error __encode_literal(                       \
      const Expr* const expr,                            \
-     const Sort& sort,                                  \
      type literal) override                             \
   {                                                     \
-    return nocast_encode_literal(expr, sort, literal);  \
+    return nocast_encode_literal(expr, literal);        \
   }                                                     \
 
 #define SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(type)        \
   virtual Error __encode_literal(                       \
     const Expr* const expr,                             \
-     const Sort& sort,                                  \
      type literal) override                             \
   {                                                     \
-    return cast_encode_literal(expr, sort, literal);    \
+    return cast_encode_literal(expr, literal);          \
   }                                                     \
 
 SMT_Z3_NOCAST_ENCODE_BUILTIN_LITERAL(bool)
@@ -193,9 +191,9 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_const_array(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& init) override
   {
+    const Sort& sort = expr->sort();
     assert(sort.is_array());
 
     Error err;
@@ -268,7 +266,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_unary_lnot(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) override
   {
     const Error err = arg.encode(*this);
@@ -281,7 +278,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_unary_not(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) override
   {
     const Error err = arg.encode(*this);
@@ -294,7 +290,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_unary_sub(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) override
   {
     const Error err = arg.encode(*this);
@@ -307,7 +302,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_sub(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -330,7 +324,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_and(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -353,7 +346,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_or(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -376,7 +368,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_xor(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -399,7 +390,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_land(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -422,7 +412,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_lor(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -445,7 +434,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_imp(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -468,7 +456,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_eql(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -491,7 +478,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_add(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -514,7 +500,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_mul(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -537,7 +522,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_quo(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -554,6 +538,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
     const z3::expr rexpr(m_z3_expr);
 
+    const Sort& sort = expr->sort();
     if (sort.is_bv() && !sort.is_signed())
       m_z3_expr = udiv(lexpr, rexpr);
     else
@@ -564,7 +549,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_rem(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -573,7 +557,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_lss(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -601,7 +584,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_gtr(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -629,7 +611,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_neq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -652,7 +633,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_leq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -680,7 +660,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_binary_geq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -709,7 +688,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __encode_nary(
     const Expr* const expr,
     Opcode opcode,
-    const Sort& sort,
     const SharedExprs& args) override
   {
     Error err;
@@ -745,7 +723,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_bv_zero_extend(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned ext) override
   {
@@ -761,7 +738,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_bv_sign_extend(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned ext) override
   {
@@ -777,7 +753,6 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
 
   virtual Error __encode_bv_extract(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned high,
     const unsigned low) override

@@ -1007,7 +1007,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -1017,7 +1016,6 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
@@ -1078,7 +1076,6 @@ private:
 private:                                                                       \
   virtual Error __encode_literal(                                              \
     const Expr* const expr,                                                    \
-    const Sort& sort,                                                          \
     type literal)                                                              \
   {                                                                            \
     return UNSUPPORT_ERROR;                                                    \
@@ -1087,10 +1084,9 @@ private:                                                                       \
 public:                                                                        \
   Error encode_literal(                                                        \
     const Expr* const expr,                                                    \
-    const Sort& sort,                                                          \
     type literal)                                                              \
   {                                                                            \
-    return __encode_literal(expr, sort, literal);                              \
+    return __encode_literal(expr, literal);                                    \
   }                                                                            \
 
 SMT_ENCODE_BUILTIN_LITERAL(bool)
@@ -1125,7 +1121,6 @@ private:
 
   virtual Error __encode_const_array(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& init) = 0;
 
   virtual Error __encode_array_select(
@@ -1141,142 +1136,118 @@ private:
 
   virtual Error __encode_unary_lnot(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) = 0;
 
   virtual Error __encode_unary_not(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) = 0;
 
   virtual Error __encode_unary_sub(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) = 0;
 
   virtual Error __encode_binary_sub(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_and(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_or(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_xor(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_land(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_lor(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_imp(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_eql(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_add(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_mul(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_quo(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_rem(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_lss(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_gtr(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_neq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_leq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_binary_geq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
   virtual Error __encode_nary(
     const Expr* const expr,
     Opcode opcode,
-    const Sort& sort,
     const SharedExprs& args) = 0;
 
   virtual Error __encode_bv_zero_extend(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned ext) = 0;
 
   virtual Error __encode_bv_sign_extend(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned ext) = 0;
 
   virtual Error __encode_bv_extract(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned high,
     const unsigned low) = 0;
@@ -1321,7 +1292,6 @@ public:
 
   Error encode_const_array(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& init);
 
   Error encode_array_select(
@@ -1338,37 +1308,31 @@ public:
   template<Opcode opcode>
   Error encode_unary(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg);
 
   template<Opcode opcode>
   Error encode_binary(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg);
 
   Error encode_nary(
     const Expr* const expr,
     Opcode opcode,
-    const Sort& sort,
     const SharedExprs& args);
 
   Error encode_bv_zero_extend(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned ext);
 
   Error encode_bv_sign_extend(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned ext);
 
   Error encode_bv_extract(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned high,
     const unsigned low);
@@ -1773,16 +1737,14 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
-      return solver->__encode_unary_lnot(expr, sort, arg);
+      return solver->__encode_unary_lnot(expr, arg);
     }
 
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
@@ -1796,16 +1758,14 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
-      return solver->__encode_unary_not(expr, sort, arg);
+      return solver->__encode_unary_not(expr, arg);
     }
 
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
@@ -1819,20 +1779,18 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
-      return solver->__encode_unary_sub(expr, sort, arg);
+      return solver->__encode_unary_sub(expr, arg);
     }
 
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
-      return solver->__encode_binary_sub(expr, sort, larg, rarg);
+      return solver->__encode_binary_sub(expr, larg, rarg);
     }
   };
 
@@ -1842,7 +1800,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -1851,11 +1808,10 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
-      return solver->__encode_binary_and(expr, sort, larg, rarg);
+      return solver->__encode_binary_and(expr, larg, rarg);
     }
   };
 
@@ -1865,7 +1821,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -1874,11 +1829,10 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
-      return solver->__encode_binary_or(expr, sort, larg, rarg);
+      return solver->__encode_binary_or(expr, larg, rarg);
     }
   };
 
@@ -1888,7 +1842,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -1897,11 +1850,10 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
-      return solver->__encode_binary_xor(expr, sort, larg, rarg);
+      return solver->__encode_binary_xor(expr, larg, rarg);
     }
   };
 
@@ -1911,7 +1863,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -1920,12 +1871,11 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
       solver->m_stats.conjunctions++;
-      return solver->__encode_binary_land(expr, sort, larg, rarg);
+      return solver->__encode_binary_land(expr, larg, rarg);
     }
   };
 
@@ -1935,7 +1885,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -1944,12 +1893,11 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
       solver->m_stats.disjunctions++;
-      return solver->__encode_binary_lor(expr, sort, larg, rarg);
+      return solver->__encode_binary_lor(expr, larg, rarg);
     }
   };
 
@@ -1959,7 +1907,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -1968,12 +1915,11 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
       solver->m_stats.implications++;
-      return solver->__encode_binary_imp(expr, sort, larg, rarg);
+      return solver->__encode_binary_imp(expr, larg, rarg);
     }
   };
 
@@ -1983,7 +1929,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -1992,12 +1937,11 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
       solver->m_stats.equalities++;
-      return solver->__encode_binary_eql(expr, sort, larg, rarg);
+      return solver->__encode_binary_eql(expr, larg, rarg);
     }
   };
 
@@ -2007,7 +1951,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -2016,11 +1959,10 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
-      return solver->__encode_binary_add(expr, sort, larg, rarg);
+      return solver->__encode_binary_add(expr, larg, rarg);
     }
   };
 
@@ -2030,7 +1972,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -2039,11 +1980,10 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
-      return solver->__encode_binary_mul(expr, sort, larg, rarg);
+      return solver->__encode_binary_mul(expr, larg, rarg);
     }
   };
 
@@ -2053,7 +1993,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -2062,11 +2001,10 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
-      return solver->__encode_binary_quo(expr, sort, larg, rarg);
+      return solver->__encode_binary_quo(expr, larg, rarg);
     }
   };
 
@@ -2076,7 +2014,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -2085,11 +2022,10 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
-      return solver->__encode_binary_rem(expr, sort, larg, rarg);
+      return solver->__encode_binary_rem(expr, larg, rarg);
     }
   };
 
@@ -2099,7 +2035,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -2108,12 +2043,11 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
       solver->m_stats.inequalities++;
-      return solver->__encode_binary_lss(expr, sort, larg, rarg);
+      return solver->__encode_binary_lss(expr, larg, rarg);
     }
   };
 
@@ -2123,7 +2057,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -2132,12 +2065,11 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
       solver->m_stats.inequalities++;
-      return solver->__encode_binary_gtr(expr, sort, larg, rarg);
+      return solver->__encode_binary_gtr(expr, larg, rarg);
     }
   };
 
@@ -2147,7 +2079,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -2156,12 +2087,11 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
       solver->m_stats.disequalities++;
-      return solver->__encode_binary_neq(expr, sort, larg, rarg);
+      return solver->__encode_binary_neq(expr, larg, rarg);
     }
   };
 
@@ -2171,7 +2101,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -2180,12 +2109,11 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
       solver->m_stats.inequalities++;
-      return solver->__encode_binary_leq(expr, sort, larg, rarg);
+      return solver->__encode_binary_leq(expr, larg, rarg);
     }
   };
 
@@ -2195,7 +2123,6 @@ namespace internal
     static Error encode_unary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& arg)
     {
       return OPCODE_ERROR;
@@ -2204,12 +2131,11 @@ namespace internal
     static Error encode_binary(
       Solver* const solver,
       const Expr* const expr,
-      const Sort& sort,
       const SharedExpr& larg,
       const SharedExpr& rarg)
     {
       solver->m_stats.inequalities++;
-      return solver->__encode_binary_geq(expr, sort, larg, rarg);
+      return solver->__encode_binary_geq(expr, larg, rarg);
     }
   };
 }
@@ -2217,7 +2143,6 @@ namespace internal
 template<Opcode opcode>
 Error Solver::encode_unary(
   const Expr* const expr,
-  const Sort& sort,
   const SharedExpr& arg)
 {
   ElapsedTimer timer(m_stats.encode_elapsed_time, m_is_timer_on);
@@ -2225,14 +2150,12 @@ Error Solver::encode_unary(
   assert(!arg.is_null());
 
   m_stats.unary_ops++;
-  return internal::EncodeDispatch<opcode>::encode_unary(
-    this, expr, sort, arg);
+  return internal::EncodeDispatch<opcode>::encode_unary(this, expr, arg);
 }
 
 template<Opcode opcode>
 Error Solver::encode_binary(
   const Expr* const expr,
-  const Sort& sort,
   const SharedExpr& larg,
   const SharedExpr& rarg)
 {
@@ -2244,7 +2167,7 @@ Error Solver::encode_binary(
 
   m_stats.binary_ops++;
   return internal::EncodeDispatch<opcode>::encode_binary(
-    this, expr, sort, larg, rarg);
+    this, expr, larg, rarg);
 }
 
 namespace internal
@@ -2617,7 +2540,7 @@ class LiteralExpr : public Expr
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_literal(this, Expr::sort(), m_literal);
+    return solver.encode_literal(this, m_literal);
   }
 
 public:
@@ -2738,7 +2661,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_bv_zero_extend(this, Expr::sort(), m_bv, m_ext);
+    return solver.encode_bv_zero_extend(this, m_bv, m_ext);
   }
 
   void check_obj() const
@@ -2823,7 +2746,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_bv_sign_extend(this, Expr::sort(), m_bv, m_ext);
+    return solver.encode_bv_sign_extend(this, m_bv, m_ext);
   }
 
   void check_obj() const
@@ -2909,7 +2832,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_bv_extract(this, Expr::sort(), m_bv, m_high, m_low);
+    return solver.encode_bv_extract(this, m_bv, m_high, m_low);
   }
 
   void check_obj() const
@@ -3330,7 +3253,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_unary<opcode>(this, Expr::sort(), m_operand);
+    return solver.encode_unary<opcode>(this, m_operand);
   }
 
   void check_obj() const
@@ -3433,8 +3356,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_binary<opcode>(this,
-      Expr::sort(), m_loperand, m_roperand);
+    return solver.encode_binary<opcode>(this, m_loperand, m_roperand);
   }
 
   void check_obj() const
@@ -3585,7 +3507,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_nary(this, opcode, Expr::sort(), m_operands);
+    return solver.encode_nary(this, opcode, m_operands);
   }
 
   void check_obj() const
@@ -3715,7 +3637,7 @@ private:
 
   virtual Error __encode(Solver& solver) const override
   {
-    return solver.encode_const_array(this, Expr::sort(), m_init);
+    return solver.encode_const_array(this, m_init);
   }
 
   void check_obj() const

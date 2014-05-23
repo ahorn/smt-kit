@@ -73,9 +73,9 @@ private:
 #define SMT_STP_ENCODE_BV_LITERAL(type)                     \
   virtual Error __encode_literal(                           \
      const Expr* const expr,                                \
-     const Sort& sort,                                      \
      type literal) override                                 \
   {                                                         \
+    const Sort& sort = expr->sort();                        \
     if (!sort.is_bv())                                      \
       return UNSUPPORT_ERROR;                               \
                                                             \
@@ -100,9 +100,9 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_literal(
     const Expr* const expr,
-    const Sort& sort,
     bool literal) override
   {
+    const Sort& sort = expr->sort();
     if (sort.is_bool())
     {
       if (literal)
@@ -181,7 +181,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_const_array(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& init) override
   {
     return UNSUPPORT_ERROR;
@@ -246,7 +245,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_unary_lnot(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) override
   {
     if (find_expr(expr))
@@ -262,7 +260,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_unary_not(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) override
   {
     if (find_expr(expr))
@@ -278,10 +275,9 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_unary_sub(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) override
   {
-    if (!sort.is_bv())
+    if (!expr->sort().is_bv())
       return UNSUPPORT_ERROR;
 
     if (find_expr(expr))
@@ -297,10 +293,10 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_sub(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
+    const Sort& sort = expr->sort();
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
 
@@ -326,7 +322,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_and(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -355,7 +350,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_or(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -384,7 +378,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_xor(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -413,7 +406,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_land(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -442,7 +434,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_lor(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -471,7 +462,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_imp(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -500,7 +490,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_eql(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -530,10 +519,11 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_add(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
+    const Sort& sort = expr->sort();
+
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
 
@@ -559,10 +549,11 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_mul(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
+    const Sort& sort = expr->sort();
+
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
 
@@ -588,10 +579,10 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_quo(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
+    const Sort& sort = expr->sort();
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
 
@@ -621,10 +612,11 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_rem(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
+    const Sort& sort = expr->sort();
+
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
 
@@ -654,7 +646,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_lss(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -687,7 +678,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_gtr(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -720,7 +710,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_neq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -752,7 +741,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_leq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -785,7 +773,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_geq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -819,7 +806,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
   virtual Error __encode_nary(
     const Expr* const expr,
     Opcode opcode,
-    const Sort& sort,
     const SharedExprs& args) override
   {
     if (find_expr(expr))
@@ -866,7 +852,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_bv_zero_extend(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned ext) override
   {
@@ -884,7 +869,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_bv_sign_extend(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned ext) override
   {
@@ -895,6 +879,7 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
     if (err)
       return err;
 
+    const Sort& sort = expr->sort();
     assert(sort.bv_size() == ext + bv.sort().bv_size());
     cache_expr(expr, vc_bvSignExtend(m_vc, m_expr, sort.bv_size()));
     return OK;
@@ -902,7 +887,6 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
 
   virtual Error __encode_bv_extract(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned high,
     const unsigned low) override

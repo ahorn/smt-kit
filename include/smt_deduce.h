@@ -97,7 +97,6 @@ private:
 
   virtual Error __encode_literal(
     const Expr* const expr,
-    const Sort& sort,
     bool literal)
   {
     if (!expr->sort().is_bool())
@@ -112,7 +111,6 @@ private:
 #define SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(type) \
   virtual Error __encode_literal(                     \
      const Expr* const expr,                          \
-     const Sort& sort,                                \
      type literal) override                           \
   {                                                   \
     return UNSUPPORT_ERROR;                           \
@@ -154,7 +152,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_const_array(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& init) override
   {
     return UNSUPPORT_ERROR;
@@ -179,7 +176,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_unary_lnot(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) override
   {
     m_is_negation = !m_is_negation;
@@ -194,7 +190,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_unary_not(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) override
   {
     return UNSUPPORT_ERROR;
@@ -202,7 +197,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_unary_sub(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) override
   {
     return UNSUPPORT_ERROR;
@@ -210,7 +204,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_sub(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -219,7 +212,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_and(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -228,7 +220,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_or(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -237,7 +228,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_xor(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -246,7 +236,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_land(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -270,7 +259,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_lor(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -294,7 +282,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_imp(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -303,7 +290,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_eql(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -312,7 +298,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_add(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -321,7 +306,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_mul(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -330,7 +314,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_quo(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -339,7 +322,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_rem(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -348,7 +330,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_lss(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -357,7 +338,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_gtr(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -366,7 +346,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_neq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -375,7 +354,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_leq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -384,7 +362,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_geq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -394,7 +371,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   virtual Error __encode_nary(
     const Expr* const expr,
     Opcode opcode,
-    const Sort& sort,
     const SharedExprs& args) override
   {
     switch (opcode)
@@ -419,7 +395,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_bv_zero_extend(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned ext) override
   {
@@ -428,7 +403,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_bv_sign_extend(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned ext) override
   {
@@ -437,7 +411,6 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_bv_extract(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned high,
     const unsigned low) override
@@ -507,7 +480,7 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     for (;;)
     {
       size = m_partial_assignment.size();
-      err = __encode_nary(nullptr, LAND, internal::sort<Bool>(), m_assertions);
+      err = __encode_nary(nullptr, LAND, m_assertions);
 
       if (err == conflict_error())
         return unsat;

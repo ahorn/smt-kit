@@ -51,9 +51,9 @@ private:
 
   Error encode_number(
      const Expr* const expr,
-     const Sort& sort,
      const std::string& literal_rep)
   {
+    const Sort& sort = expr->sort();
     assert(!sort.is_bool());
 
     const char * const literal_str = literal_rep.c_str(); 
@@ -73,11 +73,11 @@ private:
   template<typename T>
   Error encode_literal(
      const Expr* const expr,
-     const Sort& sort,
      typename std::enable_if<std::is_unsigned<T>::value, T>::type literal)
   {
     static_assert(std::is_unsigned<bool>::value, "Bool must be unsigned");
 
+    const Sort& sort = expr->sort();
     if (sort.is_bool()) {
       if (literal) {
         cache_term(expr, msat_make_true(m_env));
@@ -87,15 +87,16 @@ private:
       return OK;
     }
 
-    return encode_number(expr, sort, std::to_string(literal));
+    return encode_number(expr, std::to_string(literal));
   }
 
   template<typename T>
   Error encode_literal(
      const Expr* const expr,
-     const Sort& sort,
      typename std::enable_if<std::is_signed<T>::value, T>::type literal)
   {
+    const Sort& sort = expr->sort();
+
     if (sort.is_bv() and literal < 0) {
       assert(std::numeric_limits<intmax_t>::min() < literal);
       std::string abs_literal_rep = std::to_string(std::abs(literal));
@@ -109,19 +110,18 @@ private:
       return OK;
     }
 
-    return encode_number(expr, sort, std::to_string(literal));
+    return encode_number(expr, std::to_string(literal));
   }
 
 #define SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(type)    \
   virtual Error __encode_literal(                     \
      const Expr* const expr,                          \
-     const Sort& sort,                                \
      type literal) override                           \
   {                                                   \
     if (find_term(expr))                              \
       return OK;                                      \
                                                       \
-    return encode_literal<type>(expr, sort, literal); \
+    return encode_literal<type>(expr, literal);       \
   }                                                   \
 
 SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(bool)
@@ -247,7 +247,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_const_array(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& init) override
   {
     return UNSUPPORT_ERROR;
@@ -312,7 +311,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_unary_lnot(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) override
   {
     if (find_term(expr))
@@ -328,7 +326,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_unary_not(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) override
   {
     if (find_term(expr))
@@ -344,10 +341,9 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_unary_sub(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& arg) override
   {
-    if (!sort.is_bv())
+    if (!expr->sort().is_bv())
       return UNSUPPORT_ERROR;
 
     if (find_term(expr))
@@ -363,7 +359,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_sub(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -389,7 +384,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_and(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -415,7 +409,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_or(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -441,7 +434,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_xor(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -467,7 +459,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_land(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -493,7 +484,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_lor(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -519,7 +509,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_imp(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -548,7 +537,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_eql(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -578,7 +566,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_add(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -597,6 +584,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       return err;
 
     const msat_term rterm = m_term;
+    const Sort& sort = expr->sort();
 
     if (sort.is_bv())
       cache_term(expr, msat_make_bv_plus(m_env, lterm, rterm));
@@ -610,7 +598,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_mul(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -629,6 +616,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       return err;
 
     const msat_term rterm = m_term;
+    const Sort& sort = expr->sort();
 
     if (sort.is_bv())
       cache_term(expr, msat_make_bv_times(m_env, lterm, rterm));
@@ -642,7 +630,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_quo(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -661,6 +648,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       return err;
 
     const msat_term rterm = m_term;
+    const Sort& sort = expr->sort();
 
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
@@ -675,7 +663,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_rem(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -694,6 +681,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       return err;
 
     const msat_term rterm = m_term;
+    const Sort& sort = expr->sort();
 
     if (!sort.is_bv())
       return UNSUPPORT_ERROR;
@@ -708,7 +696,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_lss(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -755,7 +742,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_gtr(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -798,7 +784,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_neq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -832,7 +817,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_leq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -869,7 +853,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_binary_geq(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& larg,
     const SharedExpr& rarg) override
   {
@@ -907,7 +890,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   virtual Error __encode_nary(
     const Expr* const expr,
     Opcode opcode,
-    const Sort& sort,
     const SharedExprs& args) override
   {
     if (find_term(expr))
@@ -954,7 +936,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_bv_zero_extend(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned ext) override
   {
@@ -972,7 +953,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_bv_sign_extend(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned ext) override
   {
@@ -990,7 +970,6 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
   virtual Error __encode_bv_extract(
     const Expr* const expr,
-    const Sort& sort,
     const SharedExpr& bv,
     const unsigned high,
     const unsigned low) override
