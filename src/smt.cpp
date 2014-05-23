@@ -271,17 +271,17 @@ Error Solver::encode_bv_extract(
 
 void Solver::reset()
 {
-  return __reset();
+  __reset();
 }
 
 void Solver::push()
 {
-  return __push();
+  __push();
 }
 
 void Solver::pop()
 {
-  return __pop();
+  __pop();
 }
 
 void Solver::unsafe_add(const SharedExpr& condition)
