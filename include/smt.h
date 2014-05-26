@@ -1023,6 +1023,8 @@ template<typename T>
 class Terms
 {
 public:
+  typedef SharedExprs::size_type SizeType;
+
   SharedExprs terms;
 
   Terms()
@@ -1036,6 +1038,9 @@ public:
 
   Terms(Terms&& other)
   : terms(std::move(other.terms)) {}
+
+  Terms(SharedExprs&& terms)
+  : terms(std::move(terms)) {}
 
   void push_back(const T& term)
   {
@@ -1062,6 +1067,16 @@ public:
     return terms.empty();
   }
 
+  SizeType capacity() const noexcept
+  {
+    return terms.capacity();
+  }
+
+  void resize(SizeType count)
+  {
+    return terms.resize(count);
+  }
+
   T front() const
   {
     assert(!empty());
@@ -1077,6 +1092,12 @@ public:
   T at(size_t pos) const
   {
     return static_cast<T>(terms.at(pos));
+  }
+
+  Terms<T>& operator=(Terms<T>&& other)
+  {
+    terms = std::move(other.terms);
+    return *this;
   }
 };
 
