@@ -1830,7 +1830,7 @@ private:
 
     auto cidom_map(Encoder::communication_immediate_dominator_map(tracer));
 
-    Bools inits;
+    std::list<smt::Bool> inits;
     smt::SharedExpr ext_match(smt::literal<smt::Bool>(true));
     for (const MatchBoolMap::value_type& triple : match_bool_map)
     {
@@ -2192,17 +2192,17 @@ public:
   // Symbolic multi-path analysis
   void scope_then(const Internal<bool>& guard)
   {
-    set_guard(m_tracer.scope_then(guard));
+    set_guards(m_tracer.scope_then(guard));
   }
 
   void scope_else()
   {
-    set_guard(m_tracer.scope_else());
+    set_guards(m_tracer.scope_else());
   }
 
   void scope_end()
   {
-    set_guard(m_tracer.scope_end());
+    set_guards(m_tracer.scope_end());
   }
 
   const Dfs& dfs() const

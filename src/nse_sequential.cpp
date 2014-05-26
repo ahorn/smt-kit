@@ -13,24 +13,29 @@ void Checker::add_assertion(Internal<bool>&& assertion)
 
   smt::Bool assertion_term = Internal<bool>::term(std::move(assertion));
   if (m_assertions.is_null())
-    m_assertions = assertion_term;
+    m_assertions = std::move(assertion_term);
   else
-    m_assertions = m_assertions and assertion_term;
-
-  // so we can prune more branches
-  add_guard(assertion_term);
+    m_assertions = m_assertions and std::move(assertion_term);
 }
 
 void Checker::add_error(Internal<bool>&& error)
 {
+  smt::Bool guard;
+  if (guards().empty())
+    guard = smt::literal<smt::Bool>(true);
+  else if (guards().size() == 1)
+    guard = guards().front();
+  else
+    guard = smt::conjunction(guards());
+
   if (error.is_literal())
   {
     if (error.literal())
     {
       if (m_errors.is_null())
-        m_errors = guard();
+        m_errors = std::move(guard);
       else
-        m_errors = m_errors or guard();
+        m_errors = m_errors or std::move(guard);
     }
     else
     {
@@ -41,9 +46,9 @@ void Checker::add_error(Internal<bool>&& error)
   else
   {
     if (m_errors.is_null())
-      m_errors = guard() and Internal<bool>::term(std::move(error));
+      m_errors = std::move(guard) and Internal<bool>::term(std::move(error));
     else
-      m_errors = m_errors or (guard() and Internal<bool>::term(std::move(error)));
+      m_errors = m_errors or (std::move(guard) and Internal<bool>::term(std::move(error)));
   }
 }
 
@@ -76,7 +81,6 @@ bool SequentialDfsChecker::branch(const Internal<bool>& g, const bool direction_
     return false;
 
   return branch(Internal<bool>::term(g), direction_hint);
-
 }
 
 bool SequentialDfsChecker::branch(Internal<bool>&& g, const bool direction_hint)

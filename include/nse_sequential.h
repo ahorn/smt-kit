@@ -1332,16 +1332,12 @@ public:
   }
 };
 
-typedef std::list<smt::Bool> Bools;
-
 class Checker
 {
 private:
   smt::Bool m_assertions;
   smt::Bool m_errors;
-
-  // never null
-  smt::Bool m_guard;
+  smt::Bools m_guards;
 
   void reset_assertions()
   {
@@ -1353,9 +1349,9 @@ private:
     m_errors = smt::Bool();
   }
 
-  void reset_guard()
+  void reset_guards()
   {
-    m_guard = smt::literal<smt::Bool>(true);
+    m_guards.clear();
   }
 
 protected:
@@ -1365,18 +1361,20 @@ protected:
   Checker()
   : m_assertions(),
     m_errors(),
-    m_guard(smt::literal<smt::Bool>(true)) {}
+    m_guards() {}
 
   void reset()
   {
     reset_assertions();
     reset_errors();
-    reset_guard();
+    reset_guards();
   }
 
-  void set_guard(const smt::Bool& guard)
+  /// Create an array that only contains the given guard
+  void set_guards(const smt::Bool& guard)
   {
-    m_guard = guard;
+    m_guards.clear();
+    m_guards.push_back(guard);
   }
 
 public:
@@ -1386,19 +1384,19 @@ public:
   /// if-statement except that no further flips are required.
   void add_assertion(Internal<bool>&&);
 
-  /// Add conjunction of guard() and given Boolean term to errors()
+  /// Add conjunction of guards() and given Boolean term to errors()
   void add_error(Internal<bool>&&);
 
   void add_guard(smt::Bool&& g)
   {
     assert(!g.is_null());
-    m_guard = m_guard and std::move(g);
+    m_guards.push_back(std::move(g));
   }
 
   void add_guard(const smt::Bool& g)
   {
     assert(!g.is_null());
-    m_guard = m_guard and g;
+    m_guards.push_back(g);
   }
 
   /// is_null() or logical conjunction
@@ -1413,10 +1411,9 @@ public:
     return m_errors;
   }
 
-  const smt::Bool& guard() const
+  const smt::Bools& guards() const
   {
-    assert(!m_guard.is_null());
-    return m_guard;
+    return m_guards;
   }
 };
 
@@ -1454,6 +1451,7 @@ private:
   smt::CheckResult check(const smt::Bool& condition)
   {
     m_solver.push();
+    m_solver.add_all(Checker::guards());
     m_solver.add(condition);
     const smt::CheckResult r = m_solver.check();
     m_solver.pop();
@@ -1484,7 +1482,7 @@ private:
       goto ELSE_BRANCH;
 
   THEN_BRANCH:
-    if (smt::unsat != check(Checker::guard() and g_term))
+    if (smt::unsat != check(g_term))
     {
       Checker::add_guard(std::move(g_term));
       m_dfs.append_flip(true, !direction_hint);
@@ -1497,7 +1495,7 @@ private:
 
   // fall through THEN_BRANCH to try ELSE_BRANCH
   ELSE_BRANCH:
-    if (smt::unsat != check(Checker::guard() and not g_term))
+    if (smt::unsat != check(not g_term))
     {
       Checker::add_guard(not std::move(g_term));
       m_dfs.append_flip(false, direction_hint);
@@ -1581,6 +1579,14 @@ public:
     // overflow?
     assert(path_cnt != 0);
     return path_cnt;
+  }
+
+  void add_assertion(Internal<bool>&& g)
+  {
+    // so we can prune more branches
+    add_guard(Internal<bool>::term(g));
+
+    Checker::add_assertion(std::move(g));
   }
 
   /// Follow a feasible control flow direction, i.e. prunes infeasible branches
@@ -1675,9 +1681,8 @@ public:
 
   /// Check for any sequential program safety violations (i.e. bugs)
 
-  /// Use SAT/SMT solver to check the satisfiability of the
-  /// disjunction of errors() and guard() conjoined with
-  /// the conjunction of assertions() (if any)
+  /// Invoke SAT/SMT solver to check the satisfiability of the disjunction of
+  /// errors() conjoined with the conjunction of guards() and assertions() (if any)
   ///
   /// pre: not Checker::errors().is_null()
   smt::CheckResult check()
@@ -1695,7 +1700,7 @@ public:
       m_solver.add(Checker::assertions());
 
     m_solver.add(Checker::errors());
-    m_solver.add(Checker::guard());
+    m_solver.add_all(Checker::guards());
 
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
