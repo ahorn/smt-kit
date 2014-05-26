@@ -801,12 +801,7 @@ public:
   const std::string& symbol() const
   {
     if (m_symbol.empty())
-    {
-      if (m_counter != 0)
-        m_symbol = m_prefix + std::to_string(m_counter);
-      else
-        m_symbol = m_prefix;
-    }
+      m_symbol = m_prefix + std::to_string(m_counter);
 
     assert(!m_symbol.empty());
     return m_symbol;
