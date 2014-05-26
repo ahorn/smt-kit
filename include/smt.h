@@ -1340,6 +1340,11 @@ private:
   virtual Error __unsafe_add(const SharedExpr& condition) = 0;
   virtual CheckResult __check() = 0;
 
+  virtual std::pair<CheckResult, SharedExprs::size_type>
+  __check_assumptions(
+    const SharedExprs& assumptions,
+    SharedExprs& unsat_core) = 0;
+
 protected:
   /// Registers solver
   Solver();
@@ -1434,6 +1439,50 @@ public:
   void unsafe_add(const SharedExpr& condition);
 
   CheckResult check();
+
+  /// Check consistency of the assertions in the solver and optional assumptions
+
+  /// If the assertions conjoined with the assumptions are unsatisfiable, the
+  /// unsat_core output vector will contain a subset of assumptions that are
+  /// logically inconsistent; otherwise, unsat_core is not modified.
+  ///
+  /// If unsat_core is modified, the lowest index is unsat_core.size() - 1 and
+  /// the highest index is unsat_core.size() - returned size, i.e. the vector
+  /// must be indexed in reverse order. This allows for optimizations when only
+  /// a strict subset of the unsatisfiable assumptions are interesting to the
+  /// caller. This means that if unsat_core.size() < assumptions.size(), then
+  /// some unsatisfiable assumptions may not be stored in unsat_core. This is
+  /// avoided by ensuring that unsat_core.size() >= assumptions.size().
+  ///
+  /// Importantly, the assumptions (if any) in unsat_core preserve the ordering
+  /// of the original assumptions given as input.
+  ///
+  /// For example, if unsat_core.size() is equal to 1 and only assumptions[i]
+  /// and assumptions[j] are unsatisfiable such that i < j, then unsat_core[0]
+  /// is set to assumptions[j], the return value is 1 and assumptions[i] is
+  /// disregarded.
+  ///
+  /// \returns number of assumptions written to the end of unsat_core
+  std::pair<CheckResult, Bools::SizeType> check_assumptions(
+    const Bools& assumptions, Bools& unsat_core);
+
+  class TemporaryAssertions
+  {
+  private:
+    Solver& m_solver_ref;
+
+  public:
+    TemporaryAssertions(Solver& solver_ref)
+    : m_solver_ref(solver_ref)
+    {
+      m_solver_ref.push();
+    }
+
+    ~TemporaryAssertions()
+    {
+      m_solver_ref.pop();
+    }
+  };
 };
 
 class Expr

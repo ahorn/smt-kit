@@ -319,6 +319,14 @@ CheckResult Solver::check()
   return __check();
 }
 
+std::pair<CheckResult, Bools::SizeType> Solver::check_assumptions(
+  const Bools& assumptions,
+  Bools& unsat_core)
+{
+  NonReentrantTimer<ElapsedTime> timer(m_stats.check_elapsed_time);
+  return __check_assumptions(assumptions.terms, unsat_core.terms);
+}
+
 Bool Identity<LAND, Bool>::term(literal<Bool>(true));
 
 }

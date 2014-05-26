@@ -1241,3 +1241,145 @@ TEST(SmtZ3Test, BvTruncate)
   }
   s.pop();
 }
+
+TEST(SmtZ3Test, UnsatCore)
+{
+  Z3Solver s;
+  std::pair<CheckResult, Bools::SizeType> r;
+
+  Bool a = any<Bool>("a");
+  Bool b = any<Bool>("b");
+  Bool c = any<Bool>("c");
+  Bool not_b = not b;
+  Bool d = any<Bool>("d");
+
+  Int x = any<Int>("x");
+  Int y = any<Int>("y");
+  Int z = any<Int>("z");
+
+  Bools unsat_core;
+
+  s.push();
+  {
+    Bools assumptions;
+    assumptions.push_back(a);
+    assumptions.push_back(b);
+    assumptions.push_back(not_b);
+    assumptions.push_back(d);
+
+    unsat_core.resize(7);
+    r = s.check_assumptions(assumptions, unsat_core);
+
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(2, r.second);
+
+    EXPECT_EQ(not_b.addr(), unsat_core.at(unsat_core.size() - 1).addr());
+    EXPECT_EQ(b.addr(), unsat_core.at(unsat_core.size() - 2).addr());
+
+    // singleton
+    unsat_core.resize(1);
+    r = s.check_assumptions(assumptions, unsat_core);
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(1, r.second);
+    EXPECT_EQ(not_b.addr(), unsat_core.back().addr());
+  }
+  s.pop();
+
+  s.push();
+  {
+    // duplicate in assumption
+    Bools assumptions;
+    assumptions.push_back(a);
+    assumptions.push_back(b);
+    assumptions.push_back(not_b);
+    assumptions.push_back(b);
+    assumptions.push_back(d);
+
+    unsat_core.resize(7);
+    r = s.check_assumptions(assumptions, unsat_core);
+
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(2, r.second);
+
+    EXPECT_EQ(not_b.addr(), unsat_core.at(unsat_core.size() - 1).addr());
+    EXPECT_EQ(b.addr(), unsat_core.at(unsat_core.size() - 2).addr());
+
+    // singleton
+    unsat_core.resize(1);
+    r = s.check_assumptions(assumptions, unsat_core);
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(1, r.second);
+    EXPECT_EQ(not_b.addr(), unsat_core.back().addr());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(smt::implies(a, x < 5));
+    s.add(smt::implies(b, y < x));
+    s.add(smt::implies(c, z < 2));
+    s.add(smt::implies(d, 5 < y));
+
+    Bools assumptions;
+    assumptions.push_back(a);
+    assumptions.push_back(b);
+    assumptions.push_back(c);
+    assumptions.push_back(d);
+
+    unsat_core.resize(7);
+    r = s.check_assumptions(assumptions, unsat_core);
+
+    EXPECT_EQ(smt::unsat, r.first);
+
+    unsat_core.resize(7);
+    r = s.check_assumptions(assumptions, unsat_core);
+
+    EXPECT_EQ(3, r.second);
+    EXPECT_EQ(d.addr(), unsat_core.at(unsat_core.size() - 1).addr());
+    EXPECT_EQ(b.addr(), unsat_core.at(unsat_core.size() - 2).addr());
+    EXPECT_EQ(a.addr(), unsat_core.at(unsat_core.size() - 3).addr());
+
+    // singleton
+    unsat_core.resize(1);
+    r = s.check_assumptions(assumptions, unsat_core);
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(1, r.second);
+    EXPECT_EQ(d.addr(), unsat_core.back().addr());
+  }
+  s.pop();
+
+  s.push();
+  {
+    a = x < 5;
+    b = y < x;
+    c = z < 2;
+    d = 5 < y;
+
+    Bools assumptions;
+    assumptions.push_back(a);
+    assumptions.push_back(b);
+    assumptions.push_back(c);
+    assumptions.push_back(d);
+
+    unsat_core.resize(7);
+    r = s.check_assumptions(assumptions, unsat_core);
+
+    EXPECT_EQ(smt::unsat, r.first);
+
+    unsat_core.resize(7);
+    r = s.check_assumptions(assumptions, unsat_core);
+
+    EXPECT_EQ(3, r.second);
+    EXPECT_EQ(d.addr(), unsat_core.at(unsat_core.size() - 1).addr());
+    EXPECT_EQ(b.addr(), unsat_core.at(unsat_core.size() - 2).addr());
+    EXPECT_EQ(a.addr(), unsat_core.at(unsat_core.size() - 3).addr());
+
+    // singleton
+    unsat_core.resize(1);
+    r = s.check_assumptions(assumptions, unsat_core);
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(1, r.second);
+    EXPECT_EQ(d.addr(), unsat_core.back().addr());
+  }
+  s.pop();
+}

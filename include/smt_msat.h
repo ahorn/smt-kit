@@ -1053,6 +1053,14 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     }
   }
 
+  virtual std::pair<CheckResult, SharedExprs::size_type>
+  __check_assumptions(
+    const SharedExprs& assumptions,
+    SharedExprs& unsate_core) override
+  {
+    return {unknown, 0};
+  }
+
 public:
   /// Auto configure MathSAT5
   MsatSolver()

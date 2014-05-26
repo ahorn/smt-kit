@@ -816,6 +816,103 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     }
   }
 
+  class TemporaryAssertions
+  {
+  private:
+    z3::solver& m_solver_ref;
+
+  public:
+    TemporaryAssertions(z3::solver& solver_ref)
+    : m_solver_ref(solver_ref)
+    {
+      m_solver_ref.push();
+    }
+
+    ~TemporaryAssertions()
+    {
+      m_solver_ref.pop();
+    }
+  };
+
+  virtual std::pair<CheckResult, SharedExprs::size_type>
+  __check_assumptions(
+    const SharedExprs& assumptions,
+    SharedExprs& unsat_core) override
+  {
+    static constexpr char s_z3_prop_prefix[] = "z3_prop!";
+
+    TemporaryAssertions temporary_assertions(m_z3_solver);
+    Error err;
+
+    SharedExpr prop;
+    z3::expr_vector z3_props(m_z3_context);
+    z3_props.resize(assumptions.size());
+
+    unsigned z3_prop_index = 0;
+    for (const SharedExpr& assumption : assumptions)
+    {
+      prop = smt::any<smt::Bool>(s_z3_prop_prefix, z3_prop_index);
+      __unsafe_add(smt::implies(prop, assumption));
+
+      assert(m_z3_expr.is_app());
+      assert(m_z3_expr.decl().decl_kind() == Z3_OP_IMPLIES);
+      assert(m_z3_expr.num_args() == 2);
+
+      Z3_ast_vector_set(m_z3_context, z3_props, z3_prop_index++, m_z3_expr.arg(0));
+    }
+
+    z3::check_result check_result = m_z3_solver.check(z3_props);
+    switch (check_result)
+    {
+    case z3::sat:
+      return {sat, 0};
+    case z3::unknown:
+      return {unknown, 0};
+    default:
+      assert(check_result == z3::unsat);
+    }
+
+    if (unsat_core.empty())
+      return {unsat, 0};
+
+    z3::expr_vector z3_unsat_core = m_z3_solver.unsat_core();
+    if (z3_unsat_core.empty())
+      return {unsat, 0};
+
+    const unsigned z3_unsat_core_size = z3_unsat_core.size();
+    const unsigned z3_props_size = z3_props.size();
+
+    assert(z3_unsat_core_size != 0);
+    assert(z3_unsat_core_size <= z3_props_size);
+
+    SharedExprs::size_type k = unsat_core.size();
+    z3::expr x(m_z3_context);
+
+    for (unsigned i = z3_props_size; i != 0 && k != 0; --i)
+    {
+      // ordering of assumptions in z3_unsat_core is undefined
+      for (unsigned j = 0; j < z3_unsat_core_size; ++j)
+      {
+        if (eq(z3_unsat_core[j], z3_props[i - 1]))
+        {
+          x = z3_unsat_core[j];
+          for (j = i; j < z3_props_size; ++j)
+          {
+            if (eq(x, z3_props[j]))
+              goto SKIP_DUPLICATE;
+          }
+
+          unsat_core[--k] = assumptions[i - 1];
+          SKIP_DUPLICATE: break;
+        }
+      }
+    }
+
+    // z3_unsat_core may contain duplicates
+    assert(unsat_core.size() - k <= z3_unsat_core_size);
+    return {unsat, unsat_core.size() - k};
+  }
+
 public:
   /// Auto configure Z3
   Z3Solver()

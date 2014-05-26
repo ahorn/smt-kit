@@ -987,6 +987,14 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
     }
   }
 
+  virtual std::pair<CheckResult, SharedExprs::size_type>
+  __check_assumptions(
+    const SharedExprs& assumptions,
+    SharedExprs& unsat_core) override
+  {
+    return {unknown, 0};
+  }
+
 public:
   /// Auto configure STP
   StpSolver()

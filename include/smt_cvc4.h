@@ -749,6 +749,14 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     }
   }
 
+  virtual std::pair<CheckResult, SharedExprs::size_type>
+  __check_assumptions(
+    const SharedExprs& assumptions,
+    SharedExprs& unsat_core) override
+  {
+    return {unknown, 0};
+  }
+
 public:
   /// Auto configure CVC4
   CVC4Solver()
