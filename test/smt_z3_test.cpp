@@ -1287,6 +1287,34 @@ TEST(SmtZ3Test, UnsatCore)
 
   s.push();
   {
+    // assertion will contradict assumption
+    s.add(b);
+
+    Bools assumptions;
+    assumptions.push_back(a);
+    assumptions.push_back(not_b);
+    assumptions.push_back(c);
+    assumptions.push_back(d);
+
+    unsat_core.resize(7);
+    r = s.check_assumptions(assumptions, unsat_core);
+
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(1, r.second);
+
+    EXPECT_EQ(not_b.addr(), unsat_core.back().addr());
+
+    // singleton
+    unsat_core.resize(1);
+    r = s.check_assumptions(assumptions, unsat_core);
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(1, r.second);
+    EXPECT_EQ(not_b.addr(), unsat_core.back().addr());
+  }
+  s.pop();
+
+  s.push();
+  {
     // duplicate in assumption
     Bools assumptions;
     assumptions.push_back(a);

@@ -1297,6 +1297,16 @@ public:
     return true;
   }
 
+  bool backtrack(unsigned backtrack_counter)
+  {
+    assert(backtrack_counter <= m_flips.size());
+
+    while (backtrack_counter--)
+      m_flips.pop_back();
+
+    return find_next_path();
+  }
+
   bool has_next() const
   {
     return m_flip_index < m_flips.size();
@@ -1710,6 +1720,302 @@ public:
 
 /// Symbolic execution of only feasible paths in a depth-first search manner
 extern SequentialDfsChecker& sequential_dfs_checker();
+
+/// Non-chronological symbolic execution
+class BacktrackDfsChecker : public Checker
+{
+public:
+  typedef std::chrono::milliseconds ElapsedTime;
+
+  struct Stats
+  {
+    // time it has taken so far to explore new branches
+    ElapsedTime branch_time;
+
+    // time it has taken so far to restore earlier explored states
+    ElapsedTime replay_time;
+
+    // number of branch(c) calls
+    unsigned long long branch_cnt;
+
+    // number of branch(c) calls where c is a literal
+    unsigned long long branch_literal_cnt;
+  };
+
+private:
+  typedef smt::NonReentrantTimer<ElapsedTime> Timer;
+
+  smt::Z3Solver m_solver;
+  Dfs m_dfs;
+  Stats m_stats;
+
+  // backtrack when flag is false
+  bool m_is_feasible;
+
+  // number of flips to pop of path condition
+  unsigned m_backtrack_counter;
+
+  // a singleton vector because we aim to find the latest guard that
+  // causes the conjunction of path conditions to be unsatisfiable
+  smt::Bools m_unsat_core;
+
+  smt::ManualTimer<ElapsedTime> m_replay_manual_timer;
+
+  /// Checks satisfiability of assertions and guards (if any)
+
+  /// Sets m_is_feasible to false if path condition is unsatisfiable.
+  /// If m_is_feasible is false, it also sets m_backtrack_counter so
+  /// that the deepest unsatisfiable guard can be flipped.
+  ///
+  /// The procedure always add Check::assertions() to m_solver
+  /// regardless whether there are guards or not.
+  ///
+  /// \pre: m_is_feasible is true and m_unsat_core is a singleton
+  void backtrack_check(const smt::TemporaryAssertions& temp)
+  {
+    assert(m_is_feasible);
+    assert(m_unsat_core.size() == 1);
+
+    m_backtrack_counter = 0;
+
+    // procedure contract
+    if (!Checker::assertions().is_null())
+      m_solver.add(Checker::assertions());
+
+    // okay, we're done
+    if (Checker::guards().empty())
+      return;
+
+    std::pair<smt::CheckResult, smt::Bools::SizeType> r =
+      m_solver.check_assumptions(Checker::guards(), m_unsat_core);
+    if (r.second != 0)
+    {
+      assert(r.first == smt::unsat);
+      m_is_feasible = false;
+
+      // address of guard that is the earliest possible reason
+      // why path condition is unsatisfiable
+      const uintptr_t flip_guard_addr = m_unsat_core.back().addr();
+
+      // find out how many flips can be ignored (i.e. popped by Dfs)
+      // because they were made after flip_guard_addr
+      for (unsigned k = Checker::guards().size(); k != 0;)
+      {
+        if (flip_guard_addr == Checker::guards().at(--k).addr())
+        {
+          // Dfs::backtrack() is only allowed to pop the number of
+          // guards which were skipped before finding flip_guard_addr
+          m_backtrack_counter = Checker::guards().size() - (k + 1);
+          break;
+        }
+      }
+      assert(m_backtrack_counter != Checker::guards().size());
+    }
+  }
+
+protected:
+  void reset_dfs()
+  {
+    m_dfs.reset();
+  }
+
+  void reset_solver()
+  {
+    m_solver.reset();
+  }
+
+  void reset_stats()
+  {
+    m_stats.replay_time = m_stats.branch_time = ElapsedTime::zero();
+    m_stats.branch_cnt = m_stats.branch_literal_cnt = 0;
+
+    if (m_replay_manual_timer.is_active())
+      m_replay_manual_timer.stop();
+  }
+
+  void reset_unsat_core()
+  {
+    m_is_feasible = true;
+    m_backtrack_counter = 0;
+    m_unsat_core.resize(1);
+  }
+
+public:
+
+  BacktrackDfsChecker()
+  : Checker(),
+#ifdef _BV_THEORY_
+    m_solver(smt::QF_ABV_LOGIC),
+#else
+    m_solver(smt::QF_AUFLIRA_LOGIC),
+#endif
+    m_dfs(),
+    m_stats{},
+    m_is_feasible(true),
+    m_backtrack_counter(0),
+    m_unsat_core(),
+    m_replay_manual_timer(m_stats.replay_time)
+  {
+    reset_stats();
+    reset_unsat_core();
+  }
+
+  void reset()
+  {
+    reset_dfs();
+    reset_solver();
+    reset_stats();
+    reset_unsat_core();
+
+    Checker::reset();
+    internal::Inputs::reset();
+  }
+
+  const smt::Solver& solver() const
+  {
+    return m_solver;
+  }
+
+  const Stats& stats() const
+  {
+    return m_stats;
+  }
+
+  unsigned long long path_cnt() const
+  {
+    unsigned long long path_cnt = m_dfs.path_cnt() + 1;
+
+    // overflow?
+    assert(path_cnt != 0);
+    return path_cnt;
+  }
+
+  bool force_branch(const Internal<bool>& g)
+  {
+    return branch(g);
+  }
+
+  /// Follow both control flow directions regardless of their feasibility
+  bool branch(const Internal<bool>& g)
+  {
+    if (g.is_literal())
+      return g.literal();
+
+    bool direction = false;
+    if (m_dfs.has_next())
+    {
+      assert(m_is_feasible);
+      direction = m_dfs.next();
+    }
+    else
+    {
+      if (m_replay_manual_timer.is_active())
+        m_replay_manual_timer.stop();
+
+      if (!m_is_feasible)
+        return false;
+
+      m_dfs.append_flip(direction);
+    }
+
+    smt::Bool g_term = Internal<bool>::term(g);
+    if (direction)
+      Checker::add_guard(g_term);
+    else
+      Checker::add_guard(not g_term);
+
+    return direction;
+  }
+
+  bool force_branch(Internal<bool>&& g)
+  {
+    return branch(std::move(g));
+  }
+
+  /// Follow both control flow directions regardless of their feasibility
+  bool branch(Internal<bool>&& g)
+  {
+    if (g.is_literal())
+      return g.literal();
+
+    bool direction = false;
+    if (m_dfs.has_next())
+    {
+      assert(m_is_feasible);
+      direction = m_dfs.next();
+    }
+    else
+    {
+      if (m_replay_manual_timer.is_active())
+        m_replay_manual_timer.stop();
+
+      if (!m_is_feasible)
+        return false;
+
+      m_dfs.append_flip(direction);
+    }
+
+    smt::Bool g_term = Internal<bool>::term(std::move(g));
+    if (direction)
+      Checker::add_guard(std::move(g_term));
+    else
+      Checker::add_guard(not std::move(g_term));
+
+    return direction;
+  }
+
+  /// Use DFS with backtracking to find an unexplored path, if any
+
+  /// \return is there another path to explore?
+  bool find_next_path()
+  {
+    if (m_is_feasible)
+    {
+      smt::TemporaryAssertions temporary_assertions(m_solver);
+      backtrack_check(temporary_assertions);
+    }
+
+    const bool found_path = m_dfs.backtrack(m_backtrack_counter);
+    if (found_path)
+    {
+      Checker::reset(); // do not reset m_dfs etc.
+
+      if (m_replay_manual_timer.is_active())
+         m_replay_manual_timer.stop();
+
+      m_replay_manual_timer.start();
+    }
+
+    reset_unsat_core();
+    return found_path;
+  }
+
+  /// Check for any sequential program safety violations (i.e. bugs)
+
+  /// Invoke SAT/SMT solver to check the satisfiability of the disjunction of
+  /// errors() conjoined with the conjunction of guards() and assertions() (if any)
+  ///
+  /// pre: not Checker::errors().is_null()
+  smt::CheckResult check()
+  {
+    assert(!Checker::errors().is_null());
+
+    if (!m_is_feasible)
+      return smt::unsat;
+
+    // avoid redundant satisfiability checks
+    smt::TemporaryAssertions temporary_assertions(m_solver);
+    backtrack_check(temporary_assertions);
+    if (!m_is_feasible)
+      return smt::unsat;
+
+    m_solver.add(Checker::errors());
+    return m_solver.check();
+  }
+};
+
+/// Non-chronological symbolic execution
+extern BacktrackDfsChecker& backtrack_dfs_checker();
 
 }
 

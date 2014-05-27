@@ -103,4 +103,10 @@ bool SequentialDfsChecker::branch(Internal<bool>&& g, const bool direction_hint)
   return branch(Internal<bool>::term(std::move(g)), direction_hint);
 }
 
+BacktrackDfsChecker& backtrack_dfs_checker()
+{
+  static BacktrackDfsChecker s_backtrack_dfs_checker;
+  return s_backtrack_dfs_checker;
+}
+
 }
