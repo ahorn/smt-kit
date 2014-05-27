@@ -1465,24 +1465,25 @@ public:
   /// \returns number of assumptions written to the end of unsat_core
   std::pair<CheckResult, Bools::SizeType> check_assumptions(
     const Bools& assumptions, Bools& unsat_core);
+};
 
-  class TemporaryAssertions
+/// RAII for Solver::push and Solver::pop()
+class TemporaryAssertions
+{
+private:
+  Solver& m_solver_ref;
+
+public:
+  TemporaryAssertions(Solver& solver_ref)
+  : m_solver_ref(solver_ref)
   {
-  private:
-    Solver& m_solver_ref;
+    m_solver_ref.push();
+  }
 
-  public:
-    TemporaryAssertions(Solver& solver_ref)
-    : m_solver_ref(solver_ref)
-    {
-      m_solver_ref.push();
-    }
-
-    ~TemporaryAssertions()
-    {
-      m_solver_ref.pop();
-    }
-  };
+  ~TemporaryAssertions()
+  {
+    m_solver_ref.pop();
+  }
 };
 
 class Expr
