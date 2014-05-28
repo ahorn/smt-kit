@@ -135,7 +135,8 @@ SharedExpr store(
 
 Solver::Solver()
 : m_stats{0},
-  m_is_timer_on(false)
+  m_is_timer_on(false),
+  m_assertion_stack_size(0)
 {
   m_stats.encode_elapsed_time = ElapsedTime::zero();
   m_stats.check_elapsed_time = ElapsedTime::zero();
@@ -145,7 +146,8 @@ Solver::Solver()
 
 Solver::Solver(Logic logic)
 : m_stats{0},
-  m_is_timer_on(false)
+  m_is_timer_on(false),
+  m_assertion_stack_size(0)
 {
   m_stats.encode_elapsed_time = ElapsedTime::zero();
   m_stats.check_elapsed_time = ElapsedTime::zero();
@@ -290,16 +292,19 @@ Error Solver::encode_bv_extract(
 
 void Solver::reset()
 {
+  m_assertion_stack_size = 0;
   __reset();
 }
 
 void Solver::push()
 {
+  ++m_assertion_stack_size;
   __push();
 }
 
 void Solver::pop()
 {
+  --m_assertion_stack_size;
   __pop();
 }
 
@@ -335,6 +340,8 @@ std::pair<CheckResult, Bools::SizeType> Solver::check_assumptions(
   const Bools& assumptions,
   Bools& unsat_core)
 {
+  assert(m_assertion_stack_size == 0);
+
   NonReentrantTimer<ElapsedTime> timer(m_stats.check_elapsed_time);
   return __check_assumptions(assumptions.terms, unsat_core.terms);
 }

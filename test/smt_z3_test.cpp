@@ -1329,7 +1329,6 @@ TEST(SmtZ3Test, UnsatCore)
 
   Bools unsat_core;
 
-  s.push();
   {
     Bools assumptions;
     assumptions.push_back(a);
@@ -1353,9 +1352,9 @@ TEST(SmtZ3Test, UnsatCore)
     EXPECT_EQ(1, r.second);
     EXPECT_EQ(not_b.addr(), unsat_core.back().addr());
   }
-  s.pop();
 
-  s.push();
+  s.reset();
+
   {
     // assertion will contradict assumption
     s.add(b);
@@ -1381,9 +1380,9 @@ TEST(SmtZ3Test, UnsatCore)
     EXPECT_EQ(1, r.second);
     EXPECT_EQ(not_b.addr(), unsat_core.back().addr());
   }
-  s.pop();
 
-  s.push();
+  s.reset();
+
   {
     // duplicate in assumption
     Bools assumptions;
@@ -1409,9 +1408,9 @@ TEST(SmtZ3Test, UnsatCore)
     EXPECT_EQ(1, r.second);
     EXPECT_EQ(not_b.addr(), unsat_core.back().addr());
   }
-  s.pop();
 
-  s.push();
+  s.reset();
+
   {
     s.add(smt::implies(a, x < 5));
     s.add(smt::implies(b, y < x));
@@ -1444,9 +1443,9 @@ TEST(SmtZ3Test, UnsatCore)
     EXPECT_EQ(1, r.second);
     EXPECT_EQ(d.addr(), unsat_core.back().addr());
   }
-  s.pop();
 
-  s.push();
+  s.reset();
+
   {
     a = x < 5;
     b = y < x;
@@ -1479,5 +1478,4 @@ TEST(SmtZ3Test, UnsatCore)
     EXPECT_EQ(1, r.second);
     EXPECT_EQ(d.addr(), unsat_core.back().addr());
   }
-  s.pop();
 }

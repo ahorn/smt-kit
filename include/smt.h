@@ -1150,6 +1150,7 @@ private:
 
   Stats m_stats;
   bool m_is_timer_on;
+  unsigned m_assertion_stack_size;
 
 #define SMT_ENCODE_BUILTIN_LITERAL(type)                                       \
 private:                                                                       \
@@ -1461,6 +1462,11 @@ public:
   /// and assumptions[j] are unsatisfiable such that i < j, then unsat_core[0]
   /// is set to assumptions[j], the return value is 1 and assumptions[i] is
   /// disregarded.
+  ///
+  /// Caution: this function is incompatible with the incremental push() and
+  /// pop() interface!
+  ///
+  /// \pre: assertion stack is empty
   ///
   /// \returns number of assumptions written to the end of unsat_core
   std::pair<CheckResult, Bools::SizeType> check_assumptions(
