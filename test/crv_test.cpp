@@ -611,19 +611,19 @@ TEST(CrvTest, Errors)
   DfsChecker checker;
   Encoder encoder;
 
-  EXPECT_TRUE(checker.errors().is_null());
+  EXPECT_TRUE(checker.errors().empty());
   External<int> i = 1;
   checker.add_error(i == 1);
-  EXPECT_FALSE(checker.errors().is_null());
+  EXPECT_FALSE(checker.errors().empty());
   EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
   checker.add_error(i == 3);
-  EXPECT_FALSE(checker.errors().is_null());
+  EXPECT_FALSE(checker.errors().empty());
 
   // disjunction
   EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
 
   // idempotent
-  EXPECT_FALSE(checker.errors().is_null());
+  EXPECT_FALSE(checker.errors().empty());
 }
 
 TEST(CrvTest, EncoderCheck)
@@ -1567,7 +1567,7 @@ TEST(CrvTest, ArrayWithJoinThreads)
   t2.join();
  
   EXPECT_TRUE(checker.assertions().empty());
-  EXPECT_TRUE(checker.errors().is_null());
+  EXPECT_TRUE(checker.errors().empty());
   EXPECT_EQ(smt::unsat, encoder.check(array[0] != 'X' && array[0] != 'Y', tracer(), checker));
   EXPECT_EQ(smt::sat, encoder.check(array[0] != 'X', tracer(), checker));
   EXPECT_EQ(smt::sat, encoder.check(array[0] != 'Y', tracer(), checker));
@@ -1607,7 +1607,7 @@ TEST(CrvTest, ArrayIndex)
   Internal<unsigned> sum(array[0] + array[1] + array[2]);
  
   EXPECT_TRUE(checker.assertions().empty());
-  EXPECT_TRUE(checker.errors().is_null());
+  EXPECT_TRUE(checker.errors().empty());
   EXPECT_EQ(smt::unsat, encoder.check(sum == 4, tracer(), checker));
   EXPECT_EQ(smt::sat, encoder.check(sum == 3, tracer(), checker));
   EXPECT_EQ(smt::sat, encoder.check(sum != 3, tracer(), checker));
@@ -1876,7 +1876,7 @@ TEST(CrvTest, UnsatFlipInSingleThread)
     if (checker.branch(0 < var))
       checker.add_error(var == 0);
 
-    if (!checker.errors().is_null())
+    if (!checker.errors().empty())
     {
       checks++;
       EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
@@ -1911,7 +1911,7 @@ TEST(CrvTest, UnsatFlipInMultipleThread)
       checker.add_error(var == 0);
     tracer().append_thread_end_event();
 
-    if (!checker.errors().is_null())
+    if (!checker.errors().empty())
     {
       checks++;
       EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
@@ -1945,7 +1945,7 @@ TEST(CrvTest, UnsatFlipErrorConditionDueToFalseGuard)
     if (checker.branch(false_bool))
       checker.add_error(true_bool);
 
-    if (!checker.errors().is_null())
+    if (!checker.errors().empty())
     {
       checks++;
       EXPECT_EQ(smt::unsat, encoder.check(tracer(), checker));
@@ -1994,7 +1994,7 @@ TEST(CrvTest, FlipFour)
       checker.add_error(true_bool);
     }
 
-    if (!checker.errors().is_null())
+    if (!checker.errors().empty())
     {
       switch (expect)
       {
@@ -2061,7 +2061,7 @@ TEST(CrvTest, ThreadGuard)
   Thread f(thread_false_guard, checker, false_bool);
   Thread g(thread_true_error, checker, true_bool);
 
-  EXPECT_FALSE(checker.errors().is_null());
+  EXPECT_FALSE(checker.errors().empty());
   EXPECT_EQ(smt::sat, encoder.check(tracer(), checker));
 
   tracer().reset();
@@ -2093,7 +2093,7 @@ TEST(CrvTest, MutexSatSingleWriter1)
   tracer().append_thread_end_event();
 
   EXPECT_TRUE(dfs_checker().assertions().empty());
-  EXPECT_FALSE(dfs_checker().errors().is_null());
+  EXPECT_FALSE(dfs_checker().errors().empty());
   EXPECT_EQ(smt::sat, encoder.check(tracer(), dfs_checker()));
 }
 
@@ -2120,7 +2120,7 @@ TEST(CrvTest, MutexUnsatSingleWriter1)
   tracer().append_thread_end_event();
 
   EXPECT_FALSE(dfs_checker().assertions().empty());
-  EXPECT_FALSE(dfs_checker().errors().is_null());
+  EXPECT_FALSE(dfs_checker().errors().empty());
   EXPECT_EQ(smt::unsat, encoder.check(tracer(), dfs_checker()));
 }
 
@@ -2142,7 +2142,7 @@ TEST(CrvTest, MutexSatSingleWriter2)
   tracer().append_thread_end_event();
 
   EXPECT_TRUE(dfs_checker().assertions().empty());
-  EXPECT_FALSE(dfs_checker().errors().is_null());
+  EXPECT_FALSE(dfs_checker().errors().empty());
   EXPECT_EQ(smt::sat, encoder.check(tracer(), dfs_checker()));
 }
 
@@ -2169,7 +2169,7 @@ TEST(CrvTest, MutexUnsatSingleWriter2)
   tracer().append_thread_end_event();
 
   EXPECT_FALSE(dfs_checker().assertions().empty());
-  EXPECT_FALSE(dfs_checker().errors().is_null());
+  EXPECT_FALSE(dfs_checker().errors().empty());
   EXPECT_EQ(smt::unsat, encoder.check(tracer(), dfs_checker()));
 }
 

@@ -1982,10 +1982,10 @@ public:
   /// permitted to take on nondeterministic values possibly
   /// leading to false alarms.
   ///
-  /// pre: not Checker::errors().is_null()
+  /// pre: not Checker::errors().empty()
   smt::CheckResult check(const Tracer& tracer, const Checker& checker)
   {
-    assert(!checker.errors().is_null());
+    assert(!checker.errors().empty());
 
     m_solver.push();
     encode(tracer, false);
@@ -1993,8 +1993,8 @@ public:
     if (!checker.assertions().empty())
       m_solver.add_all(checker.assertions());
 
-    if (!checker.errors().is_null())
-      unsafe_add(checker.errors());
+    if (!checker.errors().empty())
+      unsafe_add(smt::disjunction(checker.errors()));
 
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();

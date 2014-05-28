@@ -25,24 +25,14 @@ void Checker::add_error(Internal<bool>&& error)
   if (error.is_literal())
   {
     if (error.literal())
-    {
-      if (m_errors.is_null())
-        m_errors = std::move(guard);
-      else
-        m_errors = m_errors or std::move(guard);
-    }
+      m_errors.push_back(std::move(guard));
     else
-    {
-      if (m_errors.is_null())
-        m_errors = smt::literal<smt::Bool>(false);
-    }
+      // see precondition of Checker::check()
+      m_errors.push_back(smt::literal<smt::Bool>(false));
   }
   else
   {
-    if (m_errors.is_null())
-      m_errors = std::move(guard) and Internal<bool>::term(std::move(error));
-    else
-      m_errors = m_errors or (std::move(guard) and Internal<bool>::term(std::move(error)));
+    m_errors.push_back(std::move(guard) and Internal<bool>::term(std::move(error)));
   }
 }
 

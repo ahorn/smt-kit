@@ -1346,7 +1346,7 @@ class Checker
 {
 private:
   smt::Bools m_assertions;
-  smt::Bool m_errors;
+  smt::Bools m_errors;
   smt::Bools m_guards;
 
   void reset_assertions()
@@ -1356,7 +1356,7 @@ private:
 
   void reset_errors()
   {
-    m_errors = smt::Bool();
+    m_errors.clear();
   }
 
   void reset_guards()
@@ -1415,8 +1415,8 @@ public:
     return m_assertions;
   }
 
-  /// is_null() or logical disjunction
-  const smt::Bool& errors() const
+  /// interpret as logical disjunction, or false if empty()
+  const smt::Bools& errors() const
   {
     return m_errors;
   }
@@ -1697,10 +1697,10 @@ public:
   /// Invoke SAT/SMT solver to check the satisfiability of the disjunction of
   /// errors() conjoined with the conjunction of guards() and assertions() (if any)
   ///
-  /// pre: not Checker::errors().is_null()
+  /// pre: not Checker::errors().empty()
   smt::CheckResult check()
   {
-    assert(!Checker::errors().is_null());
+    assert(!Checker::errors().empty());
 
     // in case all branches could be resolved
     // with constant propagation
@@ -1712,7 +1712,7 @@ public:
     if (!Checker::assertions().empty())
       m_solver.add_all(Checker::assertions());
 
-    m_solver.add(Checker::errors());
+    m_solver.add(smt::disjunction(Checker::errors()));
     m_solver.add_all(Checker::guards());
 
     const smt::CheckResult result = m_solver.check();
@@ -1998,10 +1998,10 @@ public:
   /// Invoke SAT/SMT solver to check the satisfiability of the disjunction of
   /// errors() conjoined with the conjunction of guards() and assertions() (if any)
   ///
-  /// pre: not Checker::errors().is_null()
+  /// pre: not Checker::errors().empty()
   smt::CheckResult check()
   {
-    assert(!Checker::errors().is_null());
+    assert(!Checker::errors().empty());
 
     if (!m_is_feasible)
       return smt::unsat;
@@ -2012,7 +2012,7 @@ public:
     if (!m_is_feasible)
       return smt::unsat;
 
-    m_solver.add(Checker::errors());
+    m_solver.add(smt::disjunction(Checker::errors()));
     return m_solver.check();
   }
 };
