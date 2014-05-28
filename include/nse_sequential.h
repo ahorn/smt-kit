@@ -1774,7 +1774,7 @@ private:
   /// regardless whether there are guards or not.
   ///
   /// \pre: m_is_feasible is true and m_unsat_core is a singleton
-  void backtrack_check(const smt::TemporaryAssertions& temp)
+  void backtrack_check()
   {
     assert(m_is_feasible);
     assert(m_unsat_core.size() == 1);
@@ -1974,13 +1974,13 @@ public:
   {
     if (m_is_feasible)
     {
-      smt::TemporaryAssertions temporary_assertions(m_solver);
-      backtrack_check(temporary_assertions);
+      backtrack_check();
     }
 
     const bool found_path = m_dfs.backtrack(m_backtrack_counter);
     if (found_path)
     {
+      reset_solver();   // since we don't use incremental solving
       Checker::reset(); // do not reset m_dfs etc.
 
       if (m_replay_manual_timer.is_active())
@@ -2007,8 +2007,7 @@ public:
       return smt::unsat;
 
     // avoid redundant satisfiability checks
-    smt::TemporaryAssertions temporary_assertions(m_solver);
-    backtrack_check(temporary_assertions);
+    backtrack_check();
     if (!m_is_feasible)
       return smt::unsat;
 
