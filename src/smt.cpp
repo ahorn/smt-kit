@@ -72,6 +72,18 @@ Bool conjunction(const Terms<Bool>& bools)
     internal::sort<Bool>(), bools.terms));
 }
 
+Bool disjunction(Terms<Bool>&& bools)
+{
+  return Bool(make_shared_expr<NaryExpr<LOR>>(
+    internal::sort<Bool>(), std::move(bools.terms)));
+}
+
+Bool disjunction(const Terms<Bool>& bools)
+{
+  return Bool(make_shared_expr<NaryExpr<LOR>>(
+    internal::sort<Bool>(), bools.terms));
+}
+
 SharedExpr select(
   const SharedExpr& array,
   const SharedExpr& index)

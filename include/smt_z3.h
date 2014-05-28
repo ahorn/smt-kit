@@ -690,10 +690,18 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     Opcode opcode,
     const SharedExprs& args) override
   {
-    Error err;
+    switch (opcode)
+    {
+    case NEQ:
+    case LAND:
+    case LOR:
+      break;
 
-    if (opcode != NEQ && opcode != LAND)
+    default:
       return UNSUPPORT_ERROR;
+    }
+
+    Error err;
 
     size_t i = 0, args_size = args.size();
     Z3_ast asts[args_size];
@@ -716,6 +724,9 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     else if (opcode == LAND)
       m_z3_expr = z3::expr(m_z3_context,
         Z3_mk_and(m_z3_context, args_size, asts));
+    else if (opcode == LOR)
+      m_z3_expr = z3::expr(m_z3_context,
+        Z3_mk_or(m_z3_context, args_size, asts));
 
     for (i = 0; i < args_size; i++)
       Z3_dec_ref(m_z3_context, asts[i]);

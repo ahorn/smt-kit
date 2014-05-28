@@ -3730,6 +3730,9 @@ Bool distinct(Terms<T>&& terms)
 Bool conjunction(Terms<Bool>&&);
 Bool conjunction(const Terms<Bool>&);
 
+Bool disjunction(Terms<Bool>&&);
+Bool disjunction(const Terms<Bool>&);
+
 class ConstArrayExpr : public Expr
 #ifdef ENABLE_HASH_CONS
 , public internal::ExprDeleter<ConstArrayExpr>

@@ -423,6 +423,76 @@ TEST(SmtZ3Test, Conjunction)
   s.pop();
 }
 
+TEST(SmtZ3Test, Disjunction)
+{
+  Z3Solver s;
+
+  const Bool x = any<Bool>("x");
+  const Bool y = any<Bool>("y");
+  const Bool z = any<Bool>("z");
+  const Bool w = any<Bool>("w");
+
+  Terms<Bool> operand_terms(3);
+  operand_terms.push_back(x);
+  operand_terms.push_back(y);
+  operand_terms.push_back(z);
+
+  Bool d(disjunction(std::move(operand_terms)));
+
+  EXPECT_EQ(OK, static_cast<SharedExpr>(d).encode(s));
+  std::stringstream out;
+  out << s.expr();
+  EXPECT_EQ("(or x y z)", out.str());
+
+  s.add(d);
+
+  EXPECT_EQ(sat, s.check());
+
+  s.push();
+  {
+    s.add(not x and not y and not z);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(not x);
+    s.add(not y);
+    s.add(not z);
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(not x);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(not y);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(not z);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(not w);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+}
+
 TEST(SmtZ3Test, LogicalImplication)
 {
   Z3Solver s;

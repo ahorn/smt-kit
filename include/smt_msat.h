@@ -948,6 +948,22 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       return OK;
     }
 
+    if (opcode == LOR)
+    {
+      msat_term or_term = msat_make_false(m_env);
+      for (const SharedExpr& arg : args)
+      {
+        err = arg.encode(*this);
+        if (err)
+          return err;
+
+        or_term = msat_make_or(m_env, or_term, m_term);
+      }
+
+      cache_term(expr, or_term);
+      return OK;
+    }
+
     return UNSUPPORT_ERROR;
   }
 

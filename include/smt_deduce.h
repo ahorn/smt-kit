@@ -378,6 +378,7 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     case LAND:
     case LOR:
       break;
+
     default:
       return UNSUPPORT_ERROR;
     }

@@ -630,10 +630,18 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     Opcode opcode,
     const SharedExprs& args) override
   {
-    Error err;
+    switch (opcode)
+    {
+    case NEQ:
+    case LAND:
+    case LOR:
+      break;
 
-    if (opcode != NEQ && opcode != LAND)
+    default:
       return UNSUPPORT_ERROR;
+    }
+
+    Error err;
 
     std::vector<CVC4::Expr> exprs;
     exprs.reserve(args.size());
@@ -650,6 +658,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
       set_expr(m_expr_manager.mkExpr(CVC4::kind::DISTINCT, exprs));
     else if (opcode == LAND)
       set_expr(m_expr_manager.mkExpr(CVC4::kind::AND, exprs));
+    else if (opcode == LOR)
+      set_expr(m_expr_manager.mkExpr(CVC4::kind::OR, exprs));
 
     return OK;
   }

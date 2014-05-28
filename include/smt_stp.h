@@ -811,6 +811,17 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
     if (find_expr(expr))
       return OK;
 
+    switch (opcode)
+    {
+    case NEQ:
+    case LAND:
+    case LOR:
+      break;
+
+    default:
+      return UNSUPPORT_ERROR;
+    }
+
     Error err;
 
     if (opcode == NEQ)
@@ -853,23 +864,27 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
       return OK;
     }
 
-    if (opcode == LAND)
+    size_t i = 0, args_size = args.size();
+    VCExpr exprs[args_size];
+    for (const SharedExpr& arg : args)
     {
-      VCExpr and_expr = vc_trueExpr(m_vc);
-      for (const SharedExpr& arg : args)
-      {
-        err = arg.encode(*this);
-        if (err)
-          return err;
+      err = arg.encode(*this);
+      if (err)
+        return err;
 
-        and_expr = vc_andExpr(m_vc, and_expr, m_expr);
-      }
+      exprs[i] = m_expr;
 
-      cache_expr(expr, and_expr);
-      return OK;
+      assert(i < args_size);
+      i++;
     }
 
-    return UNSUPPORT_ERROR;
+    assert(i == args.size());
+    if (opcode == LAND)
+      cache_expr(expr, vc_andExprN(m_vc, exprs, i));
+    else if (opcode == LOR)
+      cache_expr(expr, vc_orExprN(m_vc, exprs, i));
+
+    return OK;
   }
 
   virtual Error __encode_bv_zero_extend(
