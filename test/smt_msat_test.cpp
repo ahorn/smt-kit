@@ -268,6 +268,9 @@ TEST(SmtMsatTest, BvDeclExpr)
   }
   s.pop();
 
+  // s.check() may return sat if there are no assertions
+  s.add(literal<Bool>(true));
+
   msat_type bv_long_type;
   msat_decl x_decl;
   msat_term x_term, eq_term, neq_term;
@@ -342,6 +345,9 @@ TEST(SmtMsatTest, IntDeclExpr)
     EXPECT_EQ(sat, s.check());
   }
   s.pop();
+
+  // s.check() may return sat if there are no assertions
+  s.add(literal<Bool>(true));
 
   msat_type int_type;
   msat_decl x_decl;
