@@ -1484,6 +1484,9 @@ private:
     if (m_replay_manual_timer.is_active())
       m_replay_manual_timer.stop();
 
+    if (!m_is_feasible)
+      return false;
+
     Timer timer(m_stats.branch_time);
 
     if (direction_hint)
