@@ -8,14 +8,8 @@ internal::Inputs::Counter internal::Inputs::s_counter = 0;
 
 void Checker::add_assertion(Internal<bool>&& assertion)
 {
-  if (assertion.is_literal())
-    assert(assertion.literal());
-
-  smt::Bool assertion_term = Internal<bool>::term(std::move(assertion));
-  if (m_assertions.is_null())
-    m_assertions = std::move(assertion_term);
-  else
-    m_assertions = m_assertions and std::move(assertion_term);
+  assert(!assertion.is_literal() || assertion.literal());
+  m_assertions.push_back(Internal<bool>::term(std::move(assertion)));
 }
 
 void Checker::add_error(Internal<bool>&& error)

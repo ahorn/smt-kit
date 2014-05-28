@@ -1965,8 +1965,8 @@ public:
     m_solver.push();
     encode(tracer, true);
 
-    if (!checker.assertions().is_null())
-      unsafe_add(checker.assertions());
+    if (!checker.assertions().empty())
+      m_solver.add_all(checker.assertions());
 
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
@@ -1990,8 +1990,8 @@ public:
     m_solver.push();
     encode(tracer, false);
 
-    if (!checker.assertions().is_null())
-      unsafe_add(checker.assertions());
+    if (!checker.assertions().empty())
+      m_solver.add_all(checker.assertions());
 
     if (!checker.errors().is_null())
       unsafe_add(checker.errors());
@@ -2016,8 +2016,8 @@ public:
     unsafe_add(tracer.guard() and Internal<bool>::term(std::move(condition)));
     encode(tracer, false);
 
-    if (!checker.assertions().is_null())
-      unsafe_add(checker.assertions());
+    if (!checker.assertions().empty())
+      m_solver.add_all(checker.assertions());
 
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();

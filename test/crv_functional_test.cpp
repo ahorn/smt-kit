@@ -597,7 +597,7 @@ TEST(CrvFunctionalTest, UnsatFib6)
   t0.join();
   t1.join();
 
-  EXPECT_TRUE(crv::dfs_checker().assertions().is_null());
+  EXPECT_TRUE(crv::dfs_checker().assertions().empty());
   EXPECT_FALSE(crv::dfs_checker().errors().is_null());
   EXPECT_TRUE(smt::unsat == encoder.check(crv::tracer(), crv::dfs_checker()));
   EXPECT_FALSE(crv::dfs_checker().find_next_path());
@@ -622,7 +622,7 @@ TEST(CrvFunctionalTest, SatFib6)
   t0.join();
   t1.join();
 
-  EXPECT_TRUE(crv::dfs_checker().assertions().is_null());
+  EXPECT_TRUE(crv::dfs_checker().assertions().empty());
   EXPECT_FALSE(crv::dfs_checker().errors().is_null());
   EXPECT_TRUE(smt::sat == encoder.check(crv::tracer(), crv::dfs_checker()));
   EXPECT_FALSE(crv::dfs_checker().find_next_path());

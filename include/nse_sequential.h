@@ -1345,13 +1345,13 @@ public:
 class Checker
 {
 private:
-  smt::Bool m_assertions;
+  smt::Bools m_assertions;
   smt::Bool m_errors;
   smt::Bools m_guards;
 
   void reset_assertions()
   {
-    m_assertions = smt::Bool();
+    m_assertions.clear();
   }
 
   void reset_errors()
@@ -1409,8 +1409,8 @@ public:
     m_guards.push_back(g);
   }
 
-  /// is_null() or logical conjunction
-  const smt::Bool& assertions() const
+  /// interpret as logical conjunction, or true if empty()
+  const smt::Bools& assertions() const
   {
     return m_assertions;
   }
@@ -1709,8 +1709,8 @@ public:
 
     m_solver.push();
 
-    if (!Checker::assertions().is_null())
-      m_solver.add(Checker::assertions());
+    if (!Checker::assertions().empty())
+      m_solver.add_all(Checker::assertions());
 
     m_solver.add(Checker::errors());
     m_solver.add_all(Checker::guards());
@@ -1782,8 +1782,8 @@ private:
     m_backtrack_counter = 0;
 
     // procedure contract
-    if (!Checker::assertions().is_null())
-      m_solver.add(Checker::assertions());
+    if (!Checker::assertions().empty())
+      m_solver.add_all(Checker::assertions());
 
     // okay, we're done
     if (Checker::guards().empty())
