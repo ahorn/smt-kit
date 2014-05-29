@@ -1427,8 +1427,11 @@ public:
   }
 };
 
+/// Avoids Z3 performance issues
+#define _NSE_ENABLE_GUARDS_ 1
+
 /// Depth-first search checker for sequential code
-class SequentialDfsChecker : public Checker
+class SequentialDfsChecker
 {
 public:
   typedef std::chrono::milliseconds ElapsedTime;
@@ -1452,40 +1455,58 @@ private:
   typedef smt::NonReentrantTimer<ElapsedTime> Timer;
 
   smt::Z3Solver m_solver;
+
+#ifdef _NSE_ENABLE_GUARDS_
+  smt::Bools m_guards;
+#endif
+  smt::Bools m_errors;
   bool m_is_feasible;
   Dfs m_dfs;
   Stats m_stats;
 
   smt::ManualTimer<ElapsedTime> m_replay_manual_timer;
 
-  smt::CheckResult check(const smt::Bool& condition)
+  void add_guard(smt::Bool&& g)
   {
-    m_solver.push();
-    m_solver.add_all(Checker::guards());
-    m_solver.add(condition);
-    const smt::CheckResult r = m_solver.check();
-    m_solver.pop();
-    return r;
+    assert(!g.is_null());
+#ifdef _NSE_ENABLE_GUARDS_
+    m_guards.push_back(std::move(g));
+#else
+    m_solver.add(std::move(g));
+#endif
   }
 
+  smt::CheckResult check(const smt::Bool& condition)
+  {
+    smt::TemporaryAssertions t(m_solver);
+
+#ifdef _NSE_ENABLE_GUARDS_
+    m_solver.add_all(m_guards);
+#endif
+
+    m_solver.add(condition);
+
+    return m_solver.check();
+  }
+
+  /// \pre: not m_is_feasible
   bool branch(smt::Bool&& g_term, const bool direction_hint)
   {
+    assert(m_is_feasible);
+
     if (m_dfs.has_next())
     {
       const bool direction = m_dfs.next();
       if (direction)
-        Checker::add_guard(std::move(g_term));
+        add_guard(std::move(g_term));
       else
-        Checker::add_guard(not std::move(g_term));
+        add_guard(not std::move(g_term));
 
       return direction;
     }
 
     if (m_replay_manual_timer.is_active())
       m_replay_manual_timer.stop();
-
-    if (!m_is_feasible)
-      return false;
 
     Timer timer(m_stats.branch_time);
 
@@ -1497,7 +1518,7 @@ private:
   THEN_BRANCH:
     if (smt::unsat != check(g_term))
     {
-      Checker::add_guard(std::move(g_term));
+      add_guard(std::move(g_term));
       m_dfs.append_flip(true, !direction_hint);
       return true;
     }
@@ -1510,7 +1531,7 @@ private:
   ELSE_BRANCH:
     if (smt::unsat != check(not g_term))
     {
-      Checker::add_guard(not std::move(g_term));
+      add_guard(not std::move(g_term));
       m_dfs.append_flip(false, direction_hint);
       return false;
     }
@@ -1534,6 +1555,18 @@ protected:
     m_dfs.reset();
   }
 
+  void reset_errors()
+  {
+    m_errors.clear();
+  }
+
+#ifdef _NSE_ENABLE_GUARDS_
+  void reset_guards()
+  {
+    m_guards.clear();
+  }
+#endif
+
   void reset_solver()
   {
     m_solver.reset();
@@ -1551,12 +1584,15 @@ protected:
 public:
 
   SequentialDfsChecker()
-  : Checker(),
 #ifdef _BV_THEORY_
-    m_solver(smt::QF_ABV_LOGIC),
+  : m_solver(smt::QF_ABV_LOGIC),
 #else
-    m_solver(smt::QF_AUFLIRA_LOGIC),
+  : m_solver(smt::QF_AUFLIRA_LOGIC),
 #endif
+#ifdef _NSE_ENABLE_GUARDS_
+    m_guards(),
+#endif
+    m_errors(),
     m_is_feasible(true),
     m_dfs(),
     m_stats{},
@@ -1568,11 +1604,27 @@ public:
   void reset()
   {
     reset_dfs();
+#ifdef _NSE_ENABLE_GUARDS_
+    reset_guards();
+#endif
+    reset_errors();
     reset_solver();
     reset_stats();
-
-    Checker::reset();
     internal::Inputs::reset();
+  }
+
+  /// interpret as logical disjunction, or false if empty()
+  const smt::Bools& errors() const
+  {
+    return m_errors;
+  }
+
+  void add_error(Internal<bool>&& error)
+  {
+    if (error.is_literal())
+      assert(!error.is_literal());
+    else
+      m_errors.push_back(Internal<bool>::term(std::move(error)));
   }
 
   const smt::Solver& solver() const
@@ -1596,10 +1648,7 @@ public:
 
   void add_assertion(Internal<bool>&& g)
   {
-    // so we can prune more branches
-    add_guard(Internal<bool>::term(g));
-
-    Checker::add_assertion(std::move(g));
+    add_guard(Internal<bool>::term(std::move(g)));
   }
 
   /// Follow a feasible control flow direction, i.e. prunes infeasible branches
@@ -1633,9 +1682,9 @@ public:
 
     smt::Bool g_term = Internal<bool>::term(g);
     if (direction)
-      Checker::add_guard(g_term);
+      add_guard(std::move(g_term));
     else
-      Checker::add_guard(not g_term);
+      add_guard(not std::move(g_term));
 
     return direction;
   }
@@ -1661,9 +1710,9 @@ public:
 
     smt::Bool g_term = Internal<bool>::term(std::move(g));
     if (direction)
-      Checker::add_guard(std::move(g_term));
+      add_guard(std::move(g_term));
     else
-      Checker::add_guard(not std::move(g_term));
+      add_guard(not std::move(g_term));
 
     return direction;
   }
@@ -1678,7 +1727,13 @@ public:
     const bool found_path = m_dfs.find_next_path();
     if (found_path)
     {
-      Checker::reset(); // do not reset m_dfs etc.
+      // always reset solver regardless whether we invoke
+      // the incremental solving interface or not
+      reset_solver();
+#ifdef _NSE_ENABLE_GUARDS_
+      reset_guards();
+#endif
+      reset_errors();
 
       // in case all branches could be resolved
       // with constant propagation and there is
@@ -1694,30 +1749,25 @@ public:
 
   /// Check for any sequential program safety violations (i.e. bugs)
 
-  /// Invoke SAT/SMT solver to check the satisfiability of the disjunction of
-  /// errors() conjoined with the conjunction of guards() and assertions() (if any)
-  ///
-  /// pre: not Checker::errors().empty()
+  /// If errors() is empty, then return unsat; otherwise, invoke
+  /// SAT/SMT solver to check the satisfiability of the disjunction
+  /// of errors() plus the conjunction of guards and assertions.
   smt::CheckResult check()
   {
-    assert(!Checker::errors().empty());
-
     // in case all branches could be resolved
     // with constant propagation
     if (m_replay_manual_timer.is_active())
        m_replay_manual_timer.stop();
 
-    m_solver.push();
+    if (m_errors.empty())
+      return smt::unsat;
 
-    if (!Checker::assertions().empty())
-      m_solver.add_all(Checker::assertions());
+#ifdef _NSE_ENABLE_GUARDS_
+    m_solver.add_all(m_guards);
+#endif
 
-    m_solver.add(smt::disjunction(Checker::errors()));
-    m_solver.add_all(Checker::guards());
-
-    const smt::CheckResult result = m_solver.check();
-    m_solver.pop();
-    return result;
+    m_solver.add(smt::disjunction(m_errors));
+    return m_solver.check();
   }
 };
 

@@ -27,7 +27,6 @@ void Checker::add_error(Internal<bool>&& error)
     if (error.literal())
       m_errors.push_back(std::move(guard));
     else
-      // see precondition of Checker::check()
       m_errors.push_back(smt::literal<smt::Bool>(false));
   }
   else
