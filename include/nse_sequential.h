@@ -1481,7 +1481,8 @@ private:
     smt::TemporaryAssertions t(m_solver);
 
 #ifdef _NSE_ENABLE_GUARDS_
-    m_solver.add_all(m_guards);
+    if (!m_guards.empty())
+      m_solver.add(smt::conjunction(m_guards));
 #endif
 
     m_solver.add(condition);
@@ -1763,7 +1764,8 @@ public:
       return smt::unsat;
 
 #ifdef _NSE_ENABLE_GUARDS_
-    m_solver.add_all(m_guards);
+    if (!m_guards.empty())
+      m_solver.add(smt::conjunction(m_guards));
 #endif
 
     m_solver.add(smt::disjunction(m_errors));
@@ -1833,7 +1835,7 @@ private:
 
     // procedure contract
     if (!Checker::assertions().empty())
-      m_solver.add_all(Checker::assertions());
+      m_solver.add(smt::conjunction(Checker::assertions()));
 
     // okay, we're done
     if (Checker::guards().empty())

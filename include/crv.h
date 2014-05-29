@@ -1966,7 +1966,7 @@ public:
     encode(tracer, true);
 
     if (!checker.assertions().empty())
-      m_solver.add_all(checker.assertions());
+      m_solver.add(smt::conjunction(checker.assertions()));
 
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();
@@ -1991,7 +1991,7 @@ public:
     encode(tracer, false);
 
     if (!checker.assertions().empty())
-      m_solver.add_all(checker.assertions());
+      m_solver.add(smt::conjunction(checker.assertions()));
 
     if (!checker.errors().empty())
       unsafe_add(smt::disjunction(checker.errors()));
@@ -2017,7 +2017,7 @@ public:
     encode(tracer, false);
 
     if (!checker.assertions().empty())
-      m_solver.add_all(checker.assertions());
+      m_solver.add(smt::conjunction(checker.assertions()));
 
     const smt::CheckResult result = m_solver.check();
     m_solver.pop();

@@ -366,12 +366,6 @@ void Solver::add(Bool&& condition)
   assert(err == OK);
 }
 
-void Solver::add_all(const Bools& conditions)
-{
-  for (const SharedExpr& condition : conditions.terms)
-    unsafe_add(condition);
-}
-
 CheckResult Solver::check()
 {
   NonReentrantTimer<ElapsedTime> timer(m_stats.check_elapsed_time);

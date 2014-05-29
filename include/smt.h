@@ -1452,7 +1452,6 @@ public:
 
   void add(const Bool& condition);
   void add(Bool&& condition);
-  void add_all(const Bools& conditions);
 
   void unsafe_add(const SharedExpr& condition);
 
