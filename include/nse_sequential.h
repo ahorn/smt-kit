@@ -1623,7 +1623,8 @@ public:
   void add_error(Internal<bool>&& error)
   {
     if (error.is_literal())
-      assert(!error.is_literal() && "Found bug without calling decision procedure");
+      assert(!m_is_feasible || (!error.literal() &&
+        "Found bug without calling decision procedure"));
     else
       m_errors.push_back(Internal<bool>::term(std::move(error)));
   }
