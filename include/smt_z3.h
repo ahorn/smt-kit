@@ -803,10 +803,10 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
   virtual Error __unsafe_add(const SharedExpr& condition) override
   {
     const Error err = condition.encode(*this);
-    if (err) {
+    if (err)
       return err;
-    }
-    m_z3_solver.add(expr());
+
+    m_z3_solver.add(m_z3_expr);
     return OK;
   }
 
