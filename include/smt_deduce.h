@@ -43,13 +43,6 @@ private:
   /// Partial assignment of predicates in the Boolean skeleton
   PartialAssignment m_partial_assignment;
 
-  /// Interpreted as logical conjunction
-  SharedExprs m_assertions;
-
-  /// Used to implement incremental solving, i.e. push() and pop()
-  typedef std::stack<unsigned> AssertionStack;
-  AssertionStack m_assertion_stack;
-
   /// Used to interpret the formula in negation normal form
   bool m_is_negation;
 
@@ -427,39 +420,19 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   virtual void __reset() override
   {
     m_partial_assignment.clear();
-    m_assertions.clear();
-
-    while (!m_assertion_stack.empty())
-      m_assertion_stack.pop();
-
     m_is_negation = false;
   }
 
   virtual void __push() override
   {
-    m_assertion_stack.push(0);
   }
 
   virtual void __pop() override
   {
-    assert(!m_assertion_stack.empty());
-
-    unsigned n = m_assertion_stack.top();
-    assert(n <= m_assertions.size());
-
-    for (; 0 != n; --n)
-      m_assertions.pop_back();
-
-    m_assertion_stack.pop();
   }
 
   virtual Error __unsafe_add(const SharedExpr& condition) override
   {
-    m_assertions.push_back(condition);
-
-    if (!m_assertion_stack.empty())
-      ++m_assertion_stack.top();
-
     return OK;
   }
 
@@ -481,7 +454,7 @@ SMT_LATTICE_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     for (;;)
     {
       size = m_partial_assignment.size();
-      err = __encode_nary(nullptr, LAND, m_assertions);
+      err = __encode_nary(nullptr, LAND, Solver::assertions().terms);
 
       if (err == conflict_error())
         return unsat;
@@ -506,15 +479,11 @@ public:
   DeduceSolver()
   : Solver(),
     m_partial_assignment(),
-    m_assertions(),
-    m_assertion_stack(),
     m_is_negation(false) {}
 
   DeduceSolver(Logic logic)
   : Solver(logic),
     m_partial_assignment(),
-    m_assertions(),
-    m_assertion_stack(),
     m_is_negation(false) {}
 };
 

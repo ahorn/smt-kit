@@ -136,7 +136,8 @@ SharedExpr store(
 Solver::Solver()
 : m_stats{0},
   m_is_timer_on(false),
-  m_assertion_stack_size(0)
+  m_assertions(),
+  m_assertion_stack()
 {
   m_stats.encode_elapsed_time = ElapsedTime::zero();
   m_stats.check_elapsed_time = ElapsedTime::zero();
@@ -147,7 +148,8 @@ Solver::Solver()
 Solver::Solver(Logic logic)
 : m_stats{0},
   m_is_timer_on(false),
-  m_assertion_stack_size(0)
+  m_assertions(),
+  m_assertion_stack()
 {
   m_stats.encode_elapsed_time = ElapsedTime::zero();
   m_stats.check_elapsed_time = ElapsedTime::zero();
@@ -292,19 +294,38 @@ Error Solver::encode_bv_extract(
 
 void Solver::reset()
 {
-  m_assertion_stack_size = 0;
+  m_assertions.clear();
+  m_assertion_stack.clear();
+
   __reset();
 }
 
 void Solver::push()
 {
-  ++m_assertion_stack_size;
+  m_assertion_stack.push_back(0);
   __push();
 }
 
 void Solver::pop()
 {
-  --m_assertion_stack_size;
+  assert(!m_assertion_stack.empty());
+
+  // copy value!
+  unsigned n = m_assertion_stack.back();
+  assert(n <= m_assertions.size());
+
+  m_assertion_stack.pop_back();
+  if (m_assertions.size() == n)
+  {
+    // not necessarily m_assertion_stack.empty()
+    m_assertions.clear();
+  }
+  else
+  {
+    assert(m_assertions.size() - n != 0);
+    m_assertions.resize(m_assertions.size() - n);
+  }
+
   __pop();
 }
 
@@ -313,13 +334,35 @@ void Solver::unsafe_add(const SharedExpr& condition)
   NonReentrantTimer<ElapsedTime> timer(m_stats.encode_elapsed_time);
 
   assert(condition.sort().is_bool());
+  m_assertions.terms.push_back(condition);
+  if (!m_assertion_stack.empty())
+    ++m_assertion_stack.back();
+
   const Error err = __unsafe_add(condition);
   assert(err == OK);
 }
 
 void Solver::add(const Bool& condition)
 {
-  const Error err = __unsafe_add(condition);
+  NonReentrantTimer<ElapsedTime> timer(m_stats.encode_elapsed_time);
+
+  m_assertions.push_back(condition);
+  if (!m_assertion_stack.empty())
+    ++m_assertion_stack.back();
+
+  const Error err = __unsafe_add(m_assertions.back());
+  assert(err == OK);
+}
+
+void Solver::add(Bool&& condition)
+{
+  NonReentrantTimer<ElapsedTime> timer(m_stats.encode_elapsed_time);
+
+  m_assertions.push_back(std::move(condition));
+  if (!m_assertion_stack.empty())
+    ++m_assertion_stack.back();
+
+  const Error err = __unsafe_add(m_assertions.back());
   assert(err == OK);
 }
 
@@ -333,6 +376,9 @@ CheckResult Solver::check()
 {
   NonReentrantTimer<ElapsedTime> timer(m_stats.check_elapsed_time);
 
+  if (m_assertions.empty())
+    return sat;
+
   return __check();
 }
 
@@ -340,7 +386,7 @@ std::pair<CheckResult, Bools::SizeType> Solver::check_assumptions(
   const Bools& assumptions,
   Bools& unsat_core)
 {
-  assert(m_assertion_stack_size == 0);
+  assert(m_assertion_stack.size() == 0);
 
   NonReentrantTimer<ElapsedTime> timer(m_stats.check_elapsed_time);
   return __check_assumptions(assumptions.terms, unsat_core.terms);

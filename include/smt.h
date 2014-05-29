@@ -1052,6 +1052,11 @@ public:
     terms.push_back(std::move(term));
   }
 
+  void pop_back()
+  {
+    terms.pop_back();
+  }
+
   size_t size() const noexcept
   {
     return terms.size();
@@ -1150,7 +1155,13 @@ private:
 
   Stats m_stats;
   bool m_is_timer_on;
-  unsigned m_assertion_stack_size;
+
+  /// interpreted as logical conjunction
+  Bools m_assertions;
+
+  /// for incremental solvers, i.e. push() and pop()
+  typedef std::vector<unsigned> AssertionStack;
+  AssertionStack m_assertion_stack;
 
 #define SMT_ENCODE_BUILTIN_LITERAL(type)                                       \
 private:                                                                       \
@@ -1365,6 +1376,11 @@ public:
     __notify_delete(expr);
   }
 
+  const Bools& assertions() const
+  {
+    return m_assertions;
+  }
+
   Error encode_constant(
     const Expr* const expr,
     const UnsafeDecl& decl);
@@ -1435,6 +1451,7 @@ public:
   void pop();
 
   void add(const Bool& condition);
+  void add(Bool&& condition);
   void add_all(const Bools& conditions);
 
   void unsafe_add(const SharedExpr& condition);
