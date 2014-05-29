@@ -1072,9 +1072,91 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   virtual std::pair<CheckResult, SharedExprs::size_type>
   __check_assumptions(
     const SharedExprs& assumptions,
-    SharedExprs& unsate_core) override
+    SharedExprs& unsat_core) override
   {
-    return {unknown, 0};
+    static constexpr char s_msat_prop_prefix[] = "msat_prop!";
+
+    Error err;
+
+    const size_t msat_props_size = assumptions.size();
+    msat_term msat_props[msat_props_size];
+
+    size_t msat_props_index = 0;
+    for (const SharedExpr& assumption : assumptions)
+    {
+      err = assumption.encode(*this);
+      assert(err == OK);
+
+      if (msat_term_is_constant(m_env, m_term))
+      {
+        msat_props[msat_props_index] = m_term;
+      }
+      else
+      {
+        const msat_type bool_type = msat_get_bool_type(m_env);
+        assert(!MSAT_ERROR_TYPE(bool_type));
+
+        const std::string name = s_msat_prop_prefix + std::to_string(msat_props_index);
+        const msat_decl constant_decl = msat_declare_function(m_env, name.c_str(), bool_type);
+        assert(!MSAT_ERROR_DECL(constant_decl));
+
+        const msat_term constant_term = msat_make_constant(m_env, constant_decl);
+        assert(!MSAT_ERROR_TERM(constant_term));
+
+        const msat_term iff_term = msat_make_iff(m_env, constant_term, m_term);
+        assert(!MSAT_ERROR_TERM(iff_term));
+
+        const int status = msat_assert_formula(m_env, iff_term);
+        assert(status == 0);
+
+        msat_props[msat_props_index] = constant_term;
+      }
+
+      assert(msat_props_index < msat_props_size);
+      msat_props_index++;
+    }
+
+    msat_result result = msat_solve_with_assumptions(
+      m_env, msat_props, msat_props_size);
+    switch (result)
+    {
+    case MSAT_SAT:
+      return {sat, 0};
+    case MSAT_UNKNOWN:
+      return {unknown, 0};
+    default:
+      assert(result == MSAT_UNSAT);
+    }
+
+    size_t msat_unsat_core_size;
+    msat_term* msat_unsat_core = msat_get_unsat_assumptions(m_env, &msat_unsat_core_size);
+
+    size_t term_id, i, j;
+    SharedExprs::size_type k = unsat_core.size();
+    for (i = msat_props_size; i != 0 && k != 0; --i)
+    {
+      term_id = msat_term_id(msat_props[i - 1]);
+      for (j = i - 1; j != 0; --j)
+      {
+        if (term_id == msat_term_id(msat_props[j - 1]))
+          goto SKIP_DUPLICATE;
+      }
+
+      // assume arbitrary ordering of assumptions in msat_unsat_core
+      for (j = 0; j < msat_unsat_core_size; ++j)
+      {
+        if (term_id == msat_term_id(msat_unsat_core[j]))
+          unsat_core[--k] = assumptions[i - 1];
+      }
+
+      SKIP_DUPLICATE: continue;
+    }
+
+    msat_free(msat_unsat_core);
+
+    // assume that msat_unsat_core may contain duplicates
+    assert(unsat_core.size() - k <= msat_unsat_core_size);
+    return {unsat, unsat_core.size() - k};
   }
 
 public:
