@@ -1668,6 +1668,58 @@ TEST(SmtMsatTest, BvTruncate)
   s.pop();
 }
 
+TEST(SmtMsatTest, CheckAssumptions)
+{
+  MsatSolver s;
+  std::pair<CheckResult, Bools::SizeType> r;
+
+  // ignore
+  Bools unsat_core;
+  unsat_core.resize(0);
+
+  Bool a;
+  Bool b;
+  Bool c;
+
+  Int x = any<Int>("x");
+
+  {
+    a = x < 7;
+    b = !a;
+
+    Bools assumptions;
+    assumptions.push_back(a);
+    assumptions.push_back(b);
+
+    r = s.check_assumptions(assumptions, unsat_core);
+    EXPECT_EQ(unsat, r.first);
+
+    assumptions.pop_back();
+    assumptions.push_back(a);
+    r = s.check_assumptions(assumptions, unsat_core);
+    EXPECT_EQ(sat, r.first);
+  }
+
+  s.reset();
+
+  {
+    a = x < 7;
+    b = !a;
+
+    Bools assumptions;
+    assumptions.push_back(b);
+
+    s.add(a);
+    r = s.check_assumptions(assumptions, unsat_core);
+    EXPECT_EQ(unsat, r.first);
+
+    assumptions.pop_back();
+    assumptions.push_back(a);
+    r = s.check_assumptions(assumptions, unsat_core);
+    EXPECT_EQ(sat, r.first);
+  }
+}
+
 TEST(SmtMsatTest, UnsatCore)
 {
   MsatSolver s;
@@ -1833,5 +1885,34 @@ TEST(SmtMsatTest, UnsatCore)
     EXPECT_EQ(unsat, r.first);
     EXPECT_EQ(1, r.second);
     EXPECT_EQ(d.addr(), unsat_core.back().addr());
+  }
+
+  s.reset();
+
+  {
+    a = x < 7;
+    b = !(x < 7);
+    c = !(x < 4);
+
+    Bools assumptions;
+    assumptions.push_back(b);
+    assumptions.push_back(c);
+
+    s.add(a);
+
+    unsat_core.resize(7);
+    r = s.check_assumptions(assumptions, unsat_core);
+
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(1, r.second);
+    EXPECT_EQ(b.addr(), unsat_core.back().addr());
+
+    // singleton
+    unsat_core.resize(1);
+    r = s.check_assumptions(assumptions, unsat_core);
+
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(1, r.second);
+    EXPECT_EQ(b.addr(), unsat_core.back().addr());
   }
 }

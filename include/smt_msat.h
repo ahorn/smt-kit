@@ -1081,7 +1081,8 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     const size_t msat_props_size = assumptions.size();
     msat_term msat_props[msat_props_size];
 
-    size_t msat_props_index = 0;
+    msat_term* msat_assertions = nullptr;
+    size_t msat_props_index = 0, msat_assertions_size = 0;
     for (const SharedExpr& assumption : assumptions)
     {
       err = assumption.encode(*this);
@@ -1093,6 +1094,10 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       }
       else
       {
+        // restore assertions later
+        if (msat_assertions == nullptr)
+          msat_assertions = msat_get_asserted_formulas(m_env, &msat_assertions_size);
+
         const msat_type bool_type = msat_get_bool_type(m_env);
         assert(!MSAT_ERROR_TYPE(bool_type));
 
@@ -1154,8 +1159,21 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
     msat_free(msat_unsat_core);
 
+    // restore original assertions
+    if (msat_assertions != nullptr)
+    {
+      int status = msat_reset_env(m_env);
+      assert(status == 0);
+
+      while (msat_assertions_size != 0)
+        msat_assert_formula(m_env, msat_assertions[--msat_assertions_size]);
+
+      msat_free(msat_assertions);
+    }
+
     // assume that msat_unsat_core may contain duplicates
     assert(unsat_core.size() - k <= msat_unsat_core_size);
+    assert(msat_assertions_size == 0);
     return {unsat, unsat_core.size() - k};
   }
 
