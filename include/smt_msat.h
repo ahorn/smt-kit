@@ -1027,7 +1027,8 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
   virtual void __reset() override
   {
     // keeps terms around!
-    msat_reset_env(m_env);
+    int status = msat_reset_env(m_env);
+    assert(status == 0);
     m_term_map.clear();
   }
 
