@@ -100,4 +100,25 @@ TEST(NseSequentialTest, Backtrack)
   EXPECT_TRUE(checker.branch(b < 7));
   EXPECT_TRUE(checker.branch(b < 4));
   EXPECT_FALSE(checker.find_next_path());
+
+  checker.reset();
+
+  // assertion at the end
+  EXPECT_FALSE(checker.branch(b < 7));
+  EXPECT_FALSE(checker.branch(b < 4));
+  checker.add_assertion(a < 7);
+  checker.add_assertion(b < 7);
+  EXPECT_TRUE(checker.find_next_path());
+
+  EXPECT_TRUE(checker.branch(b < 7));
+  EXPECT_FALSE(checker.branch(b < 4));
+  checker.add_assertion(a < 7);
+  checker.add_assertion(b < 7);
+  EXPECT_TRUE(checker.find_next_path());
+
+  EXPECT_TRUE(checker.branch(b < 7));
+  EXPECT_TRUE(checker.branch(b < 4));
+  checker.add_assertion(a < 7);
+  checker.add_assertion(b < 7);
+  EXPECT_FALSE(checker.find_next_path());
 }
