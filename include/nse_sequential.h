@@ -1274,7 +1274,7 @@ public:
   /// Depth-first search strategy
 
   /// \return is there more to explore?
-  bool find_next_path()
+  bool find_next_path(bool enable_counter = true)
   {
     m_flip_index = 0;
 
@@ -1289,22 +1289,18 @@ public:
     Flip& flip = m_flips.back();
     flip.direction = !flip.direction;
     flip.is_frozen = true;
-    m_path_cnt++;
 
-    assert(0 < m_path_cnt);
+    if (enable_counter)
+    {
+      m_path_cnt++;
+
+      // overflow?
+      assert(0 != m_path_cnt);
+    }
+
     assert(!m_flips.empty());
 
     return true;
-  }
-
-  bool backtrack(unsigned backtrack_counter)
-  {
-    assert(backtrack_counter <= m_flips.size());
-
-    while (backtrack_counter--)
-      m_flips.pop_back();
-
-    return find_next_path();
   }
 
   bool has_next() const
@@ -1339,91 +1335,6 @@ public:
     assert(has_next());
 
     return m_flips[m_flip_index];
-  }
-};
-
-class Checker
-{
-private:
-  smt::Bools m_assertions;
-  smt::Bools m_errors;
-  smt::Bools m_guards;
-
-  void reset_assertions()
-  {
-    m_assertions.clear();
-  }
-
-  void reset_errors()
-  {
-    m_errors.clear();
-  }
-
-  void reset_guards()
-  {
-    m_guards.clear();
-  }
-
-protected:
-  // no polymorphic deletes
-  ~Checker() {}
-
-  Checker()
-  : m_assertions(),
-    m_errors(),
-    m_guards() {}
-
-  void reset()
-  {
-    reset_assertions();
-    reset_errors();
-    reset_guards();
-  }
-
-  /// Create an array that only contains the given guard
-  void set_guards(const smt::Bool& guard)
-  {
-    m_guards.clear();
-    m_guards.push_back(guard);
-  }
-
-public:
-  /// Add Boolean term of argument to assertions()
-
-  /// This is similar to evaluating the condition in an
-  /// if-statement except that no further flips are required.
-  void add_assertion(Internal<bool>&&);
-
-  /// Add conjunction of guards() and given Boolean term to errors()
-  void add_error(Internal<bool>&&);
-
-  void add_guard(smt::Bool&& g)
-  {
-    assert(!g.is_null());
-    m_guards.push_back(std::move(g));
-  }
-
-  void add_guard(const smt::Bool& g)
-  {
-    assert(!g.is_null());
-    m_guards.push_back(g);
-  }
-
-  /// interpret as logical conjunction, or true if empty()
-  const smt::Bools& assertions() const
-  {
-    return m_assertions;
-  }
-
-  /// interpret as logical disjunction, or false if empty()
-  const smt::Bools& errors() const
-  {
-    return m_errors;
-  }
-
-  const smt::Bools& guards() const
-  {
-    return m_guards;
   }
 };
 
@@ -1777,6 +1688,91 @@ public:
 /// Symbolic execution of only feasible paths in a depth-first search manner
 extern SequentialDfsChecker& sequential_dfs_checker();
 
+class Checker
+{
+protected:
+  smt::Bools m_assertions;
+  smt::Bools m_errors;
+  smt::Bools m_guards;
+
+  void reset_assertions()
+  {
+    m_assertions.clear();
+  }
+
+  void reset_errors()
+  {
+    m_errors.clear();
+  }
+
+  void reset_guards()
+  {
+    m_guards.clear();
+  }
+
+  // no polymorphic deletes
+  ~Checker() {}
+
+  Checker()
+  : m_assertions(),
+    m_errors(),
+    m_guards() {}
+
+  void reset()
+  {
+    reset_assertions();
+    reset_errors();
+    reset_guards();
+  }
+
+  /// Create an array that only contains the given guard
+  void set_guards(const smt::Bool& guard)
+  {
+    m_guards.clear();
+    m_guards.push_back(guard);
+  }
+
+public:
+  /// Add Boolean term of argument to assertions()
+
+  /// This is similar to evaluating the condition in an
+  /// if-statement except that no further flips are required.
+  void add_assertion(Internal<bool>&&);
+
+  /// Add conjunction of guards() and given Boolean term to errors()
+  void add_error(Internal<bool>&&);
+
+  void add_guard(smt::Bool&& g)
+  {
+    assert(!g.is_null());
+    m_guards.push_back(std::move(g));
+  }
+
+  void add_guard(const smt::Bool& g)
+  {
+    assert(!g.is_null());
+    m_guards.push_back(g);
+  }
+
+  /// interpret as logical conjunction, or true if empty()
+  const smt::Bools& assertions() const
+  {
+    return m_assertions;
+  }
+
+  /// interpret as logical disjunction, or false if empty()
+  const smt::Bools& errors() const
+  {
+    return m_errors;
+  }
+
+  const smt::Bools& guards() const
+  {
+    return m_guards;
+  }
+};
+
+
 /// Non-chronological symbolic execution
 class BacktrackDfsChecker : public Checker
 {
@@ -1805,11 +1801,9 @@ private:
   Dfs m_dfs;
   Stats m_stats;
 
-  // backtrack when flag is false
-  bool m_is_feasible;
-
-  // number of flips to pop of path condition
-  unsigned m_backtrack_counter;
+  // use m_found_path whenever m_allow_backtrack_check is false
+  bool m_allow_backtrack_check;
+  bool m_found_path;
 
   // a singleton vector because we aim to find the latest guard that
   // causes the conjunction of path conditions to be unsatisfiable
@@ -1819,20 +1813,22 @@ private:
 
   /// Checks satisfiability of assertions and guards (if any)
 
-  /// Sets m_is_feasible to false if path condition is unsatisfiable.
-  /// If m_is_feasible is false, it also sets m_backtrack_counter so
-  /// that the deepest unsatisfiable guard can be flipped.
+  /// Sets m_allow_backtrack_check to false if path condition is unsatisfiable.
+  /// If m_allow_backtrack_check is false, m_found_path is set to the return
+  /// value of m_dfs.find_next_path() and this function must not be called
+  /// until symbolic execution has followed the path given by m_dfs.flips().
   ///
-  /// The procedure always add Check::assertions() to m_solver
-  /// regardless whether there are guards or not.
+  /// The procedure always adds Check::assertions() to m_solver regardless
+  //// whether there are guards or not.
   ///
-  /// \pre: m_is_feasible is true and m_unsat_core is a singleton
+  /// \pre: m_allow_backtrack_check is true
   void backtrack_check()
   {
-    assert(m_is_feasible);
-    assert(m_unsat_core.size() == 1);
+    assert(m_allow_backtrack_check);
 
-    m_backtrack_counter = 0;
+    // objects invariants
+    assert(m_unsat_core.size() == 1);
+    assert(Checker::guards().size() == m_dfs.flips().size());
 
     // procedure contract
     if (!Checker::assertions().empty())
@@ -1842,31 +1838,61 @@ private:
     if (Checker::guards().empty())
       return;
 
-    std::pair<smt::CheckResult, smt::Bools::SizeType> r =
-      m_solver.check_assumptions(Checker::guards(), m_unsat_core);
-    if (r.second != 0)
+    std::pair<smt::CheckResult, smt::Bools::SizeType> r;
+    smt::Bool flip_guard;
+    uintptr_t flip_guard_addr;
+
+REPEAT_BACKTRACK_CHECK: // until we've found a path or checked all
+    r = m_solver.check_assumptions(Checker::guards(), m_unsat_core);
+
+    // there isn't an unsat core
+    if (r.second == 0)
+      return;
+
+    // we'll be working with unsat cores
+    assert(r.first == smt::unsat);
+
+    // procedure isn't idempotent so set flag
+    m_allow_backtrack_check = false;
+
+    // address of guard that is the most conservative possible
+    // reason why the path condition is unsatisfiable
+    flip_guard_addr = m_unsat_core.back().addr();
+
+    // find out how many flips can be ignored (i.e. popped) by Dfs
+    // since they were made after flip_guard_addr; the loop modifies
+    // Checker::m_guards because we'll check their feasibility and
+    // this vector will be cleared by find_next_path() anyway.
+    while (flip_guard_addr != Checker::m_guards.back().addr())
     {
-      assert(r.first == smt::unsat);
-      m_is_feasible = false;
+      Checker::m_guards.pop_back();
+      m_dfs.flips().pop_back();
 
-      // address of guard that is the earliest possible reason
-      // why path condition is unsatisfiable
-      const uintptr_t flip_guard_addr = m_unsat_core.back().addr();
-
-      // find out how many flips can be ignored (i.e. popped by Dfs)
-      // because they were made after flip_guard_addr
-      for (unsigned k = Checker::guards().size(); k != 0;)
-      {
-        if (flip_guard_addr == Checker::guards().at(--k).addr())
-        {
-          // Dfs::backtrack() is only allowed to pop the number of
-          // guards which were skipped before finding flip_guard_addr
-          m_backtrack_counter = Checker::guards().size() - (k + 1);
-          break;
-        }
-      }
-      assert(m_backtrack_counter != Checker::guards().size());
+      // loop invariants
+      assert(!Checker::m_guards.empty());
+      assert(Checker::m_guards.size() == m_dfs.flips().size());
     }
+
+    // after this call it may not be the case anymore that
+    // Checker::m_guards.size() == m_dfs.flips().size()
+    m_found_path = m_dfs.find_next_path(false);
+    assert(m_dfs.flips().size() <= Checker::m_guards.size());
+
+    // okay, we're done
+    if (!m_found_path)
+      return;
+
+    // shrink guards if necessary and flip last one
+    Checker::m_guards.resize(m_dfs.flips().size());
+
+    // since Checker::m_guards is empty if and only if
+    // m_found_path is true, the assertion holds
+    assert(!Checker::m_guards.empty());
+
+    flip_guard = Checker::m_guards.back();
+    Checker::m_guards.pop_back();
+    Checker::m_guards.push_back(not flip_guard);
+    goto REPEAT_BACKTRACK_CHECK;
   }
 
 protected:
@@ -1891,8 +1917,8 @@ protected:
 
   void reset_unsat_core()
   {
-    m_is_feasible = true;
-    m_backtrack_counter = 0;
+    // do not reset m_found_path!
+    m_allow_backtrack_check = true;
     m_unsat_core.resize(1);
   }
 
@@ -1907,8 +1933,8 @@ public:
 #endif
     m_dfs(),
     m_stats{},
-    m_is_feasible(true),
-    m_backtrack_counter(0),
+    m_allow_backtrack_check(true),
+    m_found_path(true),
     m_unsat_core(),
     m_replay_manual_timer(m_stats.replay_time)
   {
@@ -1960,7 +1986,7 @@ public:
     bool direction = false;
     if (m_dfs.has_next())
     {
-      assert(m_is_feasible);
+      assert(m_allow_backtrack_check);
       direction = m_dfs.next();
     }
     else
@@ -1968,7 +1994,7 @@ public:
       if (m_replay_manual_timer.is_active())
         m_replay_manual_timer.stop();
 
-      if (!m_is_feasible)
+      if (!m_allow_backtrack_check)
         return false;
 
       m_dfs.append_flip(direction);
@@ -1997,7 +2023,7 @@ public:
     bool direction = false;
     if (m_dfs.has_next())
     {
-      assert(m_is_feasible);
+      assert(m_allow_backtrack_check);
       direction = m_dfs.next();
     }
     else
@@ -2005,7 +2031,7 @@ public:
       if (m_replay_manual_timer.is_active())
         m_replay_manual_timer.stop();
 
-      if (!m_is_feasible)
+      if (!m_allow_backtrack_check)
         return false;
 
       m_dfs.append_flip(direction);
@@ -2025,13 +2051,15 @@ public:
   /// \return is there another path to explore?
   bool find_next_path()
   {
-    if (m_is_feasible)
+    if (m_allow_backtrack_check)
     {
       backtrack_check();
+
+      if (m_allow_backtrack_check)
+        m_found_path = m_dfs.find_next_path();
     }
 
-    const bool found_path = m_dfs.backtrack(m_backtrack_counter);
-    if (found_path)
+    if (m_found_path)
     {
       reset_solver();   // since we don't use incremental solving
       Checker::reset(); // do not reset m_dfs etc.
@@ -2042,8 +2070,9 @@ public:
       m_replay_manual_timer.start();
     }
 
+    // doesn't reset m_found_path
     reset_unsat_core();
-    return found_path;
+    return m_found_path;
   }
 
   /// Check for any sequential program safety violations (i.e. bugs)
@@ -2056,12 +2085,12 @@ public:
   {
     assert(!Checker::errors().empty());
 
-    if (!m_is_feasible)
+    if (!m_allow_backtrack_check)
       return smt::unsat;
 
     // avoid redundant satisfiability checks
     backtrack_check();
-    if (!m_is_feasible)
+    if (!m_allow_backtrack_check)
       return smt::unsat;
 
     m_solver.add(smt::disjunction(Checker::errors()));
