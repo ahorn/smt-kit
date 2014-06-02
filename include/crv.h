@@ -2127,8 +2127,16 @@ EventMap Encoder::immediate_dominator_map(const Tracer& tracer,
 
 class DfsChecker : public Checker
 {
+public:
+  struct Stats
+  {
+    // number of explored execution paths
+    unsigned long long path_cnt;
+  };
+
 protected:
   Tracer& m_tracer;
+  Stats m_stats;
   Dfs m_dfs;
 
   void force_branch(const Internal<bool>& g, const bool direction)
@@ -2151,11 +2159,13 @@ public:
   DfsChecker()
   : Checker(),
     m_tracer(tracer()),
+    m_stats{},
     m_dfs() {}
 
   DfsChecker(Tracer& tracer)
   : Checker(),
     m_tracer(tracer),
+    m_stats{},
     m_dfs() {}
 
   /// \post: dfs().flips().empty(), assertions().empty() and errors.empty()
@@ -2163,7 +2173,13 @@ public:
   {
     m_dfs.reset();
     m_tracer.reset();
+    m_stats = {0};
     Checker::reset();
+  }
+
+  const Stats& stats() const
+  {
+    return m_stats;
   }
 
   /// Use DFS to find an unexplored path, if any
@@ -2171,6 +2187,9 @@ public:
   /// \return is there another path to explore?
   bool find_next_path()
   {
+    ++m_stats.path_cnt;
+    assert(m_stats.path_cnt != 0);
+
     const bool found_path = m_dfs.find_next_path();
     if (found_path)
     {
@@ -2213,11 +2232,6 @@ public:
   Dfs& dfs()
   {
     return m_dfs;
-  }
-
-  unsigned long long path_cnt() const
-  {
-    return m_dfs.path_cnt();
   }
 };
 

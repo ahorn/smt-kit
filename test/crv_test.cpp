@@ -366,7 +366,7 @@ TEST(CrvTest, DfsChecker)
   EXPECT_TRUE(checker.branch(v < 1));
   EXPECT_FALSE(checker.find_next_path());
 
-  EXPECT_EQ(2, checker.path_cnt());
+  EXPECT_EQ(3, checker.stats().path_cnt);
 
   checker.reset();
 
@@ -387,7 +387,7 @@ TEST(CrvTest, DfsChecker)
   EXPECT_TRUE(checker.branch(v < 1));
   EXPECT_FALSE(checker.find_next_path());
 
-  EXPECT_EQ(3, checker.path_cnt());
+  EXPECT_EQ(4, checker.stats().path_cnt);
 
   checker.reset();
   tracer().reset();
@@ -1774,7 +1774,7 @@ TEST(CrvTest, SatFlipWithNondeterminsticGuardInSingleThread)
   }
   while (checker.find_next_path());
 
-  EXPECT_EQ(1, checker.path_cnt());
+  EXPECT_EQ(2, checker.stats().path_cnt);
   EXPECT_TRUE(r0);
   EXPECT_TRUE(r1);
   EXPECT_TRUE(r2);
@@ -1815,7 +1815,7 @@ TEST(CrvTest, SatFlipWithNondeterminsticGuardAndArrayInSingleThread)
   }
   while (checker.find_next_path());
 
-  EXPECT_EQ(1, checker.path_cnt());
+  EXPECT_EQ(2, checker.stats().path_cnt);
   EXPECT_TRUE(r0);
   EXPECT_TRUE(r1);
   EXPECT_TRUE(r2);
@@ -1854,7 +1854,7 @@ TEST(CrvTest, SatFlipWithDeterminsticGuardAndArrayInSingleThread)
   }
   while (checker.find_next_path());
 
-  EXPECT_EQ(1, checker.path_cnt());
+  EXPECT_EQ(2, checker.stats().path_cnt);
   EXPECT_TRUE(r0);
   EXPECT_TRUE(r1);
   EXPECT_TRUE(r2);
@@ -1888,7 +1888,7 @@ TEST(CrvTest, UnsatFlipInSingleThread)
   }
   while (checker.find_next_path());
 
-  EXPECT_EQ(1, checker.path_cnt());
+  EXPECT_EQ(2, checker.stats().path_cnt);
   EXPECT_EQ(1, checks);
   EXPECT_EQ(1, unchecks);
 }
@@ -1923,7 +1923,7 @@ TEST(CrvTest, UnsatFlipInMultipleThread)
   }
   while (checker.find_next_path());
 
-  EXPECT_EQ(1, checker.path_cnt());
+  EXPECT_EQ(2, checker.stats().path_cnt);
   EXPECT_EQ(1, checks);
   EXPECT_EQ(1, unchecks);
 }
@@ -1957,7 +1957,7 @@ TEST(CrvTest, UnsatFlipErrorConditionDueToFalseGuard)
   }
   while (checker.find_next_path());
 
-  EXPECT_EQ(1, checker.path_cnt());
+  EXPECT_EQ(2, checker.stats().path_cnt);
   EXPECT_EQ(1, checks);
   EXPECT_EQ(1, unchecks);
 }
@@ -2011,7 +2011,7 @@ TEST(CrvTest, FlipFour)
   }
   while (checker.find_next_path());
 
-  EXPECT_EQ(3, checker.path_cnt());
+  EXPECT_EQ(4, checker.stats().path_cnt);
   EXPECT_EQ(1, sat_checks);
   EXPECT_EQ(2, unsat_checks);
   EXPECT_EQ(0, unknown_checks);

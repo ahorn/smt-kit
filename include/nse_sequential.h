@@ -1239,26 +1239,18 @@ class Dfs
 private:
   typedef Flips::size_type FlipIndex;
 
-  unsigned long long m_path_cnt;
   Flips m_flips;
   FlipIndex m_flip_index;
 
 public:
   Dfs()
-  : m_path_cnt(0),
-    m_flips(),
+  : m_flips(),
     m_flip_index(0) {}
 
   void reset()
   {
-    m_path_cnt = 0;
     m_flips.clear();
     m_flip_index = 0;
-  }
-
-  unsigned long long path_cnt() const
-  {
-    return m_path_cnt;
   }
 
   const Flips& flips() const
@@ -1274,7 +1266,7 @@ public:
   /// Depth-first search strategy
 
   /// \return is there more to explore?
-  bool find_next_path(bool enable_counter = true)
+  bool find_next_path()
   {
     m_flip_index = 0;
 
@@ -1289,14 +1281,6 @@ public:
     Flip& flip = m_flips.back();
     flip.direction = !flip.direction;
     flip.is_frozen = true;
-
-    if (enable_counter)
-    {
-      m_path_cnt++;
-
-      // overflow?
-      assert(0 != m_path_cnt);
-    }
 
     assert(!m_flips.empty());
 
@@ -1360,6 +1344,9 @@ public:
 
     // number of branch(c) calls where c is a literal
     unsigned long long branch_literal_cnt;
+
+    // number of explored execution paths
+    unsigned long long path_cnt;
   };
 
 private:
@@ -1550,15 +1537,6 @@ public:
     return m_stats;
   }
 
-  unsigned long long path_cnt() const
-  {
-    unsigned long long path_cnt = m_dfs.path_cnt() + 1;
-
-    // overflow?
-    assert(path_cnt != 0);
-    return path_cnt;
-  }
-
   void add_assertion(Internal<bool>&& g)
   {
     add_guard(Internal<bool>::term(std::move(g)));
@@ -1636,6 +1614,9 @@ public:
   bool find_next_path()
   {
     m_is_feasible = true;
+
+    ++m_stats.path_cnt;
+    assert(m_stats.path_cnt != 0);
 
     const bool found_path = m_dfs.find_next_path();
     if (found_path)
@@ -1792,6 +1773,9 @@ public:
 
     // number of branch(c) calls where c is a literal
     unsigned long long branch_literal_cnt;
+
+    // number of explored execution paths
+    unsigned long long path_cnt;
   };
 
 private:
@@ -1875,7 +1859,7 @@ REPEAT_BACKTRACK_CHECK: // until we've found a path or checked all
 
     // after this call it may not be the case anymore that
     // Checker::m_guards.size() == m_dfs.flips().size()
-    m_found_path = m_dfs.find_next_path(false);
+    m_found_path = m_dfs.find_next_path();
     assert(m_dfs.flips().size() <= Checker::m_guards.size());
 
     // okay, we're done
@@ -1963,15 +1947,6 @@ public:
     return m_stats;
   }
 
-  unsigned long long path_cnt() const
-  {
-    unsigned long long path_cnt = m_dfs.path_cnt() + 1;
-
-    // overflow?
-    assert(path_cnt != 0);
-    return path_cnt;
-  }
-
   bool force_branch(const Internal<bool>& g)
   {
     return branch(g);
@@ -2051,12 +2026,17 @@ public:
   /// \return is there another path to explore?
   bool find_next_path()
   {
+    ++m_stats.path_cnt;
+    assert(m_stats.path_cnt != 0);
+
     if (m_allow_backtrack_check)
     {
       backtrack_check();
 
       if (m_allow_backtrack_check)
+      {
         m_found_path = m_dfs.find_next_path();
+      }
     }
 
     if (m_found_path)
