@@ -65,6 +65,7 @@ pkginclude_HEADERS = \
   include/smt_stp.h \
   include/smt_cvc4.h \
   include/nse_sequential.h \
+  include/nse_report.h \
   include/crv.h
 
 # Build rules for functional and unit tests.
