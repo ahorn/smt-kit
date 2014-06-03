@@ -640,6 +640,39 @@ public:
   }
 };
 
+// McCarthy array with constant propagation and explicit size
+template<typename T, size_t N>
+class Internal<T[N]>
+{
+private:
+  typedef size_t Size;
+  typedef Internal<T[]> Forward;
+  Forward m_forward;
+
+  template<typename _T, size_t _N>
+  friend void make_any(Internal<_T[_N]>& arg);
+
+  template<typename _T>
+  friend class Internal;
+
+public:
+  Internal() : m_forward() {}
+
+  template<typename U>
+  _Internal<T, Size> operator[](const Internal<U>& offset)
+  {
+    if (offset.is_literal())
+      assert(offset.literal() < N);
+
+    return m_forward[offset];
+  }
+
+  _Internal<T, Size> operator[](Size offset)
+  {
+    return m_forward[offset];
+  }
+};
+
 // Pointer to symbolic array
 template<typename T>
 class Internal<T*>
@@ -654,6 +687,11 @@ private:
 public:
   Internal(Internal<T[]>& array)
   : m_array_ptr(&array),
+    m_offset(0) {}
+
+  template<Size N>
+  Internal(Internal<T[N]>& array)
+  : m_array_ptr(&array.m_forward),
     m_offset(0) {}
 
   Internal(const Internal& other)
@@ -677,6 +715,21 @@ public:
     return *this;
   }
 
+  Internal& operator=(Internal<T[]>& other)
+  {
+    m_array_ptr = &other;
+    m_offset = 0;
+    return *this;
+  }
+
+  template<Size N>
+  Internal& operator=(Internal<T[N]>& other)
+  {
+    m_array_ptr = &other.m_forward;
+    m_offset = 0;
+    return *this;
+  }
+
   Internal& operator++();
 
   Internal operator++(int)
@@ -693,36 +746,6 @@ public:
     Internal copy(*this);
     operator--();
     return std::move(copy);
-  }
-};
-
-// McCarthy array with constant propagation and explicit size
-template<typename T, size_t N>
-class Internal<T[N]>
-{
-private:
-  typedef size_t Size;
-  typedef Internal<T[]> Forward;
-  Forward m_forward;
-
-  template<typename _T, size_t _N>
-  friend void make_any(Internal<_T[_N]>& arg);
-
-public:
-  Internal() : m_forward() {}
-
-  template<typename U>
-  _Internal<T, Size> operator[](const Internal<U>& offset)
-  {
-    if (offset.is_literal())
-      assert(offset.literal() < N);
-
-    return m_forward[offset];
-  }
-
-  _Internal<T, Size> operator[](Size offset)
-  {
-    return m_forward[offset];
   }
 };
 

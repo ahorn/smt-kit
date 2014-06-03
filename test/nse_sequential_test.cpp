@@ -72,6 +72,37 @@ TEST(NseSequentialTest, Pointer)
 
   EXPECT_TRUE(ptr_copy[index].is_literal());
   EXPECT_EQ('C', ptr_copy[index].literal());
+
+  constexpr size_t N = 5;
+  Internal<char[N]> n_array;
+
+  n_array[0] = 'A';
+  n_array[1] = 'B';
+  n_array[2] = 'C';
+
+  Internal<char*> n_ptr = n_array;
+
+  EXPECT_TRUE(n_ptr[0].is_literal());
+  EXPECT_EQ('A', n_ptr[0].literal());
+
+  EXPECT_TRUE((*n_ptr).is_literal());
+  EXPECT_EQ('A', (*n_ptr).literal());
+
+  EXPECT_TRUE(n_ptr[1].is_literal());
+  EXPECT_EQ('B', n_ptr[1].literal());
+
+  EXPECT_TRUE(n_ptr[index].is_literal());
+  EXPECT_EQ('B', n_ptr[index].literal());
+
+  array[1] = 'Y';
+  n_array[1] = 'Y';
+
+   // assignment operators
+  n_ptr = n_array;
+  EXPECT_EQ('Y', (*(++n_ptr)).literal());
+
+  ptr = array;
+  EXPECT_EQ('Y', (*(++ptr)).literal());
 }
 
 TEST(NseSequentialTest, PointerChecks)
