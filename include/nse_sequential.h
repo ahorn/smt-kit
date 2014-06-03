@@ -1290,14 +1290,20 @@ template<typename U>
 _Internal<T, typename Internal<T*>::Size>
 Internal<T*>::operator[](const Internal<U>& offset)
 {
-  return (*m_array_ptr)[m_offset + offset];
+  if (m_offset.is_literal() && m_offset.literal() == 0)
+    return (*m_array_ptr)[offset];
+  else
+    return (*m_array_ptr)[m_offset + offset];
 }
 
 template<typename T>
 _Internal<T, typename Internal<T*>::Size>
 Internal<T*>::operator[](Size offset)
 {
-  return (*m_array_ptr)[m_offset + offset];
+  if (m_offset.is_literal() && m_offset.literal() == 0)
+    return (*m_array_ptr)[offset];
+  else
+    return (*m_array_ptr)[m_offset + offset];
 }
 
 template<typename T>
