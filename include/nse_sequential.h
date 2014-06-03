@@ -5,6 +5,8 @@
 #ifndef __NSE_SEQUENTIAL_H_
 #define __NSE_SEQUENTIAL_H_
 
+#define NSE_VERSION 201405UL
+
 #include <smt>
 #include <list>
 #include <vector>
