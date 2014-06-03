@@ -640,6 +640,62 @@ public:
   }
 };
 
+// Pointer to symbolic array
+template<typename T>
+class Internal<T*>
+{
+private:
+  typedef size_t Size;
+  typedef Internal<T[]> Array;
+
+  Array* m_array_ptr;
+  Internal<Size> m_offset;
+
+public:
+  Internal(Internal<T[]>& array)
+  : m_array_ptr(&array),
+    m_offset(0) {}
+
+  Internal(const Internal& other)
+  : m_array_ptr(other.m_array_ptr),
+    m_offset(other.m_offset) {}
+
+  template<typename U>
+  _Internal<T, Size> operator[](const Internal<U>& offset);
+
+  _Internal<T, Size> operator[](Size offset);
+
+  _Internal<T, Size> operator*()
+  {
+    return (*m_array_ptr)[m_offset];
+  }
+
+  Internal& operator=(const Internal& other)
+  {
+    m_array_ptr = other.m_array_ptr;
+    m_offset = other.m_offset;
+    return *this;
+  }
+
+  Internal& operator++();
+
+  Internal operator++(int)
+  {
+    Internal copy(*this);
+    operator++();
+    return std::move(copy);
+  }
+
+  Internal& operator--();
+
+  Internal operator--(int)
+  {
+    Internal copy(*this);
+    operator--();
+    return std::move(copy);
+  }
+};
+
 // McCarthy array with constant propagation and explicit size
 template<typename T, size_t N>
 class Internal<T[N]>
@@ -1204,6 +1260,35 @@ template<typename T, size_t N>
 void make_any(Internal<T[N]>& arg)
 {
   make_any(arg.m_forward);
+}
+
+template<typename T>
+template<typename U>
+_Internal<T, typename Internal<T*>::Size>
+Internal<T*>::operator[](const Internal<U>& offset)
+{
+  return (*m_array_ptr)[m_offset + offset];
+}
+
+template<typename T>
+_Internal<T, typename Internal<T*>::Size>
+Internal<T*>::operator[](Size offset)
+{
+  return (*m_array_ptr)[m_offset + offset];
+}
+
+template<typename T>
+Internal<T*>& Internal<T*>::operator++()
+{
+  m_offset = m_offset + static_cast<Size>(1);
+  return *this;
+}
+
+template<typename T>
+Internal<T*>& Internal<T*>::operator--()
+{
+  m_offset = m_offset - static_cast<Size>(1);
+  return *this;
 }
 
 template<typename T,
