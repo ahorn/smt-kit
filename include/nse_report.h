@@ -38,7 +38,8 @@ void report_statistics(
     std::chrono::duration_cast<std::chrono::seconds>(checker_stats.replay_time);
 
   std::cout << "-----------------------:" << std::endl;
-  std::cout << "Number of paths exlored: " <<  checker_stats.path_cnt << std::endl;
+  std::cout << "Number of paths explored: " <<  checker_stats.number_of_paths << std::endl;
+  std::cout << "Number of solver calls: " <<  checker_stats.number_of_checks << std::endl;
 
   if (checker_stats.branch_cnt == 0)
     std::cout << "Literal branch percentage: 'undefined'" << std::endl;

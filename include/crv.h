@@ -2131,7 +2131,7 @@ public:
   struct Stats
   {
     // number of explored execution paths
-    unsigned long long path_cnt;
+    unsigned long long number_of_paths;
   };
 
 protected:
@@ -2187,8 +2187,8 @@ public:
   /// \return is there another path to explore?
   bool find_next_path()
   {
-    ++m_stats.path_cnt;
-    assert(m_stats.path_cnt != 0);
+    ++m_stats.number_of_paths;
+    assert(m_stats.number_of_paths != 0);
 
     const bool found_path = m_dfs.find_next_path();
     if (found_path)

@@ -1346,7 +1346,10 @@ public:
     unsigned long long branch_literal_cnt;
 
     // number of explored execution paths
-    unsigned long long path_cnt;
+    unsigned long long number_of_paths;
+
+    // number of solver calls
+    unsigned long long number_of_checks;
   };
 
 private:
@@ -1385,6 +1388,8 @@ private:
 
     m_solver.add(condition);
 
+    ++m_stats.number_of_checks;
+    assert(m_stats.number_of_checks != 0);
     return m_solver.check();
   }
 
@@ -1615,8 +1620,8 @@ public:
   {
     m_is_feasible = true;
 
-    ++m_stats.path_cnt;
-    assert(m_stats.path_cnt != 0);
+    ++m_stats.number_of_paths;
+    assert(m_stats.number_of_paths != 0);
 
     const bool found_path = m_dfs.find_next_path();
     if (found_path)
@@ -1662,6 +1667,8 @@ public:
 #endif
 
     m_solver.add(smt::disjunction(m_errors));
+    ++m_stats.number_of_checks;
+    assert(m_stats.number_of_checks != 0);
     return m_solver.check();
   }
 };
@@ -1775,7 +1782,10 @@ public:
     unsigned long long branch_literal_cnt;
 
     // number of explored execution paths
-    unsigned long long path_cnt;
+    unsigned long long number_of_paths;
+
+    // number of solver calls
+    unsigned long long number_of_checks;
   };
 
 private:
@@ -1827,6 +1837,9 @@ private:
     uintptr_t flip_guard_addr;
 
 REPEAT_BACKTRACK_CHECK: // until we've found a path or checked all
+    ++m_stats.number_of_checks;
+    assert(m_stats.number_of_checks != 0);
+
     r = m_solver.check_assumptions(Checker::guards(), m_unsat_core);
 
     // there isn't an unsat core
@@ -2026,8 +2039,8 @@ public:
   /// \return is there another path to explore?
   bool find_next_path()
   {
-    ++m_stats.path_cnt;
-    assert(m_stats.path_cnt != 0);
+    ++m_stats.number_of_paths;
+    assert(m_stats.number_of_paths != 0);
 
     if (m_allow_backtrack_check)
     {
@@ -2074,6 +2087,8 @@ public:
       return smt::unsat;
 
     m_solver.add(smt::disjunction(Checker::errors()));
+    ++m_stats.number_of_checks;
+    assert(m_stats.number_of_checks != 0);
     return m_solver.check();
   }
 };
