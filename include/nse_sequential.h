@@ -765,8 +765,11 @@ public:
   typedef Internal<T[]> InternalArray;
 
 private:
-  // !m_term_ref.is_null() if and only if s_empty is referenced by m_vector_ref
+  // !m_term_ref.is_null() if s_empty is referenced by m_vector_ref
   static typename InternalArray::Vector s_empty;
+
+  // used when an overflow is detected
+  static typename InternalArray::Sort s_overflow;
 
   typename InternalArray::Sort& m_term_ref;
   typename InternalArray::Vector& m_vector_ref;
@@ -774,6 +777,22 @@ private:
 
   template<typename V>
   friend _Internal<T, U> Internal<T[]>::operator[](const Internal<V>&);
+
+  /// Out-of-bounds
+
+  /// Reads are now nondeterministic and writes are disallowed
+  _Internal()
+  : Internal<T>(),
+    m_term_ref(s_overflow),
+    m_vector_ref(s_empty),
+    m_offset(0)
+  {
+    assert(m_term_ref.is_null());
+    assert(!Internal<T>::term().is_null());
+
+    // we don't simplify any longer
+    assert(m_vector_ref.empty());
+  }
 
   // McCarthy array without simplifications
   _Internal(
@@ -784,7 +803,7 @@ private:
     m_vector_ref(s_empty),
     m_offset(offset)
   {
-    assert(!term_ref.is_null());
+    assert(!m_term_ref.is_null());
     assert(!Internal<T>::term().is_null());
 
     // we don't simplify any longer
@@ -803,7 +822,7 @@ private:
     m_vector_ref(vector_ref),
     m_offset(literal_offset)
   {
-    assert(term_ref.is_null());
+    assert(m_term_ref.is_null());
     assert(!m_vector_ref.empty());
     assert(m_offset.is_literal());
     assert(m_offset.literal() == literal_offset);
@@ -811,11 +830,13 @@ private:
 
   void store(typename InternalArray::RangeSort&& term)
   {
+    assert(&m_term_ref != &s_overflow);
     m_term_ref = smt::store(m_term_ref, Internal<U>::term(m_offset), term);
   }
 
   bool is_simplified() const
   {
+    assert(&m_term_ref != &s_overflow);
     return &m_vector_ref != &s_empty;
   }
 
@@ -865,6 +886,9 @@ public:
 template<typename T, typename U>
 typename Internal<T[]>::Vector _Internal<T, U>::s_empty;
 
+template<typename T, typename U>
+typename Internal<T[]>::Sort _Internal<T, U>::s_overflow;
+
 template<typename T>
 template<typename U>
 _Internal<T, size_t> Internal<T[]>::operator[](const Internal<U>& offset)
@@ -880,7 +904,8 @@ _Internal<T, size_t> Internal<T[]>::operator[](const Internal<U>& offset)
         VectorSize new_size = static_cast<VectorSize>(offset_literal) + 1;
 
         // overflow?
-        assert(new_size != 0);
+        if (new_size == 0)
+          return _Internal<T, Size>();
 
         // fill in nondeterministic array elements by
         // using Internal<T> default constructor
