@@ -592,6 +592,12 @@ public:
   {
     return std::move(source);
   }
+
+  Internal& operator++();
+  Internal operator++(int);
+
+  Internal& operator--();
+  Internal operator--(int);
 };
 
 template<typename T, typename U> class _Internal;
@@ -1322,12 +1328,42 @@ Internal<T*>& Internal<T*>::operator--()
   return *this;
 }
 
-template<typename T,
-  class Enable = typename std::enable_if<std::is_arithmetic<T>::value>::type>
-inline Internal<T>& post_increment(Internal<T>& arg)
+template<typename T>
+Internal<T>& Internal<T>::operator++()
 {
-  arg = simplifier::apply<smt::ADD, T>(arg, static_cast<T>(1));
-  return arg;
+  static_assert(std::is_arithmetic<T>::value, "T must be be an arithmetic type");
+
+  *this = simplifier::apply<smt::ADD, T>(*this, static_cast<T>(1));
+  return *this;
+}
+
+template<typename T>
+Internal<T> Internal<T>::operator++(int)
+{
+  static_assert(std::is_arithmetic<T>::value, "T must be be an arithmetic type");
+
+  Internal<T> copy(*this);
+  *this = simplifier::apply<smt::ADD, T>(*this, static_cast<T>(1));
+  return std::move(copy);
+}
+
+template<typename T>
+Internal<T>& Internal<T>::operator--()
+{
+  static_assert(std::is_arithmetic<T>::value, "T must be be an arithmetic type");
+
+  *this = simplifier::apply<smt::SUB, T>(*this, static_cast<T>(1));
+  return *this;
+}
+
+template<typename T>
+Internal<T> Internal<T>::operator--(int)
+{
+  static_assert(std::is_arithmetic<T>::value, "T must be be an arithmetic type");
+
+  Internal<T> copy(*this);
+  *this = simplifier::apply<smt::SUB, T>(*this, static_cast<T>(1));
+  return std::move(copy);
 }
 
 /// Control flow decision along symbolic path

@@ -105,6 +105,36 @@ TEST(NseSequentialTest, Pointer)
   EXPECT_EQ('Y', (*(++ptr)).literal());
 }
 
+TEST(NseSequentialTest, UnaryIncrement)
+{
+  Internal<int> a = 5;
+  Internal<int> b = a++;
+  Internal<int> c = ++a;
+
+  EXPECT_TRUE(a.is_literal());
+  EXPECT_TRUE(b.is_literal());
+  EXPECT_TRUE(c.is_literal());
+
+  EXPECT_EQ(7, a.literal());
+  EXPECT_EQ(5, b.literal());
+  EXPECT_EQ(7, c.literal());
+}
+
+TEST(NseSequentialTest, UnaryDecrement)
+{
+  Internal<int> a = 5;
+  Internal<int> b = a--;
+  Internal<int> c = --a;
+
+  EXPECT_TRUE(a.is_literal());
+  EXPECT_TRUE(b.is_literal());
+  EXPECT_TRUE(c.is_literal());
+
+  EXPECT_EQ(3, a.literal());
+  EXPECT_EQ(5, b.literal());
+  EXPECT_EQ(3, c.literal());
+}
+
 TEST(NseSequentialTest, PointerChecks)
 {
   SequentialDfsChecker c0;

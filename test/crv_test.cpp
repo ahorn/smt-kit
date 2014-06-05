@@ -3414,7 +3414,7 @@ TEST(CrvTest, LazyGroup)
   EXPECT_EQ(-2U, c.op().right_cancel(5U, 7U));
 }
 
-TEST(CrvTest, PostIncrement)
+TEST(CrvTest, PreIncrement)
 {
   tracer().reset();
   DfsChecker checker;
@@ -3425,13 +3425,13 @@ TEST(CrvTest, PostIncrement)
   EXPECT_TRUE(a.is_literal());
   EXPECT_EQ(3, a.literal());
 
-  post_increment(a);
+  ++a;
   EXPECT_FALSE(a.is_lazy());
   EXPECT_TRUE(a.is_literal());
   EXPECT_EQ(4, a.literal());
 
   External<short> b(7);
-  post_increment(b);
+  ++b;
 
   EXPECT_EQ(smt::unsat, encoder.check(!(b == 8), tracer(), checker));
   EXPECT_EQ(smt::sat, encoder.check(b == 8, tracer(), checker));

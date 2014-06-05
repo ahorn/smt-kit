@@ -778,6 +778,24 @@ public:
   template<typename U = T, class Enable =
     typename std::enable_if<std::is_array<U>::value>::type>
   __External<Range> operator[](const Internal<size_t>& offset);
+
+  External& operator++();
+
+  External operator++(int)
+  {
+    Internal<T> copy(*this);
+    operator++();
+    return {std::move(copy)};
+  }
+
+  External& operator--();
+
+  External operator--(int)
+  {
+    External copy(*this);
+    operator--();
+    return {std::move(copy)};
+  }
 };
 
 template<typename T>
@@ -1063,13 +1081,24 @@ namespace crv
 template<typename T> void make_any(External<T>& arg) { arg = any<T>(); }
 template<typename T> void make_any(__External<T>&& arg) { arg = any<T>(); }
 
-template<typename T,
-  class Enable = typename std::enable_if<std::is_arithmetic<T>::value>::type>
-inline External<T>& post_increment(External<T>& arg)
+template<typename T>
+External<T>& External<T>::operator++()
 {
-  Internal<T> arg_internal(append_input_event(arg));
-  arg = simplifier::apply<smt::ADD, T>(std::move(arg_internal), static_cast<T>(1));
-  return arg;
+  static_assert(std::is_arithmetic<T>::value, "T must be be an arithmetic type");
+
+  Internal<T> arg_internal(append_input_event(*this));
+  *this = simplifier::apply<smt::ADD, T>(std::move(arg_internal), static_cast<T>(1));
+  return *this;
+}
+
+template<typename T>
+External<T>& External<T>::operator--()
+{
+  static_assert(std::is_arithmetic<T>::value, "T must be be an arithmetic type");
+
+  Internal<T> arg_internal(append_input_event(*this));
+  *this = simplifier::apply<smt::SUB, T>(std::move(arg_internal), static_cast<T>(1));
+  return *this;
 }
 
 #ifdef _REAL_TIME_
