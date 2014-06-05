@@ -615,6 +615,9 @@ public:
   // Used for simplifications
   typedef std::vector<Internal<T>> Vector;
 
+  template<typename _T, size_t N>
+  friend void make_zero(Internal<_T[N]>&);
+
 private:
   typedef typename Vector::size_type VectorSize;
 
@@ -658,7 +661,10 @@ private:
   Forward m_forward;
 
   template<typename _T, size_t _N>
-  friend void make_any(Internal<_T[_N]>& arg);
+  friend void make_any(Internal<_T[_N]>&);
+
+  template<typename _T, size_t _N>
+  friend void make_zero(Internal<_T[_N]>&);
 
   template<typename _T>
   friend class Internal;
@@ -1308,6 +1314,9 @@ Internal<T> any()
 
 template<typename T> void make_any(Internal<T>& arg) { arg = any<T>(); }
 
+/// Initialize argument to zero
+template<typename T> void make_zero(Internal<T>& arg) { arg = 0; }
+
 /// Make an array nondeterministic (i.e. symbolic)
 template<typename T> void make_any(Internal<T[]>& arg) { arg.clear(); }
 
@@ -1316,6 +1325,15 @@ template<typename T, size_t N>
 void make_any(Internal<T[N]>& arg)
 {
   make_any(arg.m_forward);
+}
+
+/// Initialize each element in a fixed-size array to zero
+template<typename T, size_t N>
+void make_zero(Internal<T[N]>& arg)
+{
+  arg.m_forward.m_vector.resize(N);
+  for (size_t i = 0; i < N; ++i)
+    make_zero(arg.m_forward.m_vector[i]);
 }
 
 template<typename T>
