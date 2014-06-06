@@ -642,6 +642,15 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     }
 
     Error err;
+    if (args.size() == 1)
+    {
+      err = args.front().encode(*this);
+      if (err)
+        return err;
+
+      set_expr(m_expr);
+      return OK;
+    }
 
     std::vector<CVC4::Expr> exprs;
     exprs.reserve(args.size());
