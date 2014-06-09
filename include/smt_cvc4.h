@@ -742,7 +742,9 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
 
   virtual void __notify_delete(const Expr* const expr) override
   {
-    // do nothing
+#ifdef ENABLE_HASH_CONS
+    m_expr_map.erase(reinterpret_cast<uintptr_t>(expr));
+#endif
   }
 
   virtual void __reset() override
