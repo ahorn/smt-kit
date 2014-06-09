@@ -32,11 +32,15 @@ private:
   CVC4::SmtEngine* m_smt_engine;
   CVC4::Expr m_expr;
 
-  // Cache CVC4 expressions
-
+#ifdef ENABLE_HASH_CONS
+  typedef std::unordered_map<uintptr_t, const CVC4::Expr> ExprMap;
+#else
   // We should not use symbol names as key because these need not be unique
   // across different SMT-LIB 2.0 namespaces such as sorts, bindings etc.
   typedef std::unordered_map<std::string, const CVC4::Expr> ExprMap;
+#endif
+
+  // Cache CVC4 expressions
   ExprMap m_expr_map;
 
   void set_expr(const CVC4::Expr& expr)
@@ -174,7 +178,14 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     Error err;
 
     const std::string& const_symbol = decl.symbol();
-    ExprMap::const_iterator it = m_expr_map.find(const_symbol);
+
+#ifdef ENABLE_HASH_CONS
+    uintptr_t key = reinterpret_cast<uintptr_t>(expr);
+#else
+    const std::string& key = const_symbol;
+#endif
+
+    ExprMap::const_iterator it = m_expr_map.find(key);
     if (it == m_expr_map.cend()) {
       CVC4::Type type;
       err = build_type(decl.sort(), type);
@@ -183,7 +194,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
       }
 
       set_expr(m_expr_manager.mkVar(const_symbol, type));
-      m_expr_map.insert(ExprMap::value_type(const_symbol, m_expr));
+      m_expr_map.insert(ExprMap::value_type(key, m_expr));
     } else {
       set_expr(it->second);
     }
@@ -200,7 +211,14 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
     Error err;
     CVC4::Expr func_expr;
     const std::string& func_symbol = decl.symbol();
-    ExprMap::const_iterator it = m_expr_map.find(func_symbol);
+
+#ifdef ENABLE_HASH_CONS
+    uintptr_t key = reinterpret_cast<uintptr_t>(expr);
+#else
+    const std::string& key = func_symbol;
+#endif
+
+    ExprMap::const_iterator it = m_expr_map.find(key);
     if (it == m_expr_map.cend()) {
       CVC4::Type func_type;
       err = build_type(decl.sort(), func_type);
@@ -208,7 +226,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
         return err;
       }
       func_expr = m_expr_manager.mkVar(func_symbol, func_type);
-      m_expr_map.insert(ExprMap::value_type(func_symbol, func_expr));
+      m_expr_map.insert(ExprMap::value_type(key, func_expr));
     } else {
       func_expr = it->second;
     }
