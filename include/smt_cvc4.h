@@ -26,7 +26,10 @@ class CVC4Solver : public Solver
 {
 private:
   CVC4::ExprManager m_expr_manager;
-  CVC4::SmtEngine m_smt_engine;
+
+  // SmtEngine is not intended to be copy-constructed so
+  // we keep a pointer in order to implement __reset()
+  CVC4::SmtEngine* m_smt_engine;
   CVC4::Expr m_expr;
 
   // Cache CVC4 expressions
@@ -726,18 +729,22 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
 
   virtual void __reset() override
   {
-    // currently unsupported
-    assert(false);
+    // free memory first
+    m_expr_map.clear();
+    m_expr = CVC4::Expr();
+
+    delete m_smt_engine;
+    m_smt_engine = new CVC4::SmtEngine(&m_expr_manager);
   }
 
   virtual void __push() override
   {
-    m_smt_engine.push();
+    m_smt_engine->push();
   }
 
   virtual void __pop() override
   {
-    m_smt_engine.pop();
+    m_smt_engine->pop();
   }
 
   virtual Error __unsafe_add(const SharedExpr& condition) override
@@ -747,7 +754,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
       return err;
     }
     // unclear how to use assertFormula()'s return value
-    m_smt_engine.assertFormula(m_expr);
+    m_smt_engine->assertFormula(m_expr);
     return OK;
   }
 
@@ -758,7 +765,7 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
 
   virtual CheckResult __check() override
   {
-    switch (m_smt_engine.checkSat().isSat()) {
+    switch (m_smt_engine->checkSat().isSat()) {
     case CVC4::Result::Sat::UNSAT:
       return unsat;
     case CVC4::Result::Sat::SAT:
@@ -781,34 +788,39 @@ public:
   CVC4Solver()
   : Solver(),
     m_expr_manager(),
-    m_smt_engine(&m_expr_manager),
+    m_smt_engine(new CVC4::SmtEngine(&m_expr_manager)),
     m_expr(),
     m_expr_map()
   {
-    m_smt_engine.setOption("incremental", true);
-    m_smt_engine.setOption("output-language", "smt2");
+    m_smt_engine->setOption("incremental", true);
+    m_smt_engine->setOption("output-language", "smt2");
   }
 
   CVC4Solver(const CVC4::Options& options)
   : Solver(),
     m_expr_manager(options),
-    m_smt_engine(&m_expr_manager),
+    m_smt_engine(new CVC4::SmtEngine(&m_expr_manager)),
     m_expr(),
     m_expr_map()
   {
-    m_smt_engine.setOption("incremental", true);
+    m_smt_engine->setOption("incremental", true);
   }
 
   CVC4Solver(Logic logic)
   : Solver(logic),
     m_expr_manager(),
-    m_smt_engine(&m_expr_manager),
+    m_smt_engine(new CVC4::SmtEngine(&m_expr_manager)),
     m_expr(),
     m_expr_map()
   {
-    m_smt_engine.setOption("incremental", true);
-    m_smt_engine.setOption("output-language", "smt2");
-    m_smt_engine.setLogic(Logics::acronyms[logic]);
+    m_smt_engine->setOption("incremental", true);
+    m_smt_engine->setOption("output-language", "smt2");
+    m_smt_engine->setLogic(Logics::acronyms[logic]);
+  }
+
+  ~CVC4Solver()
+  {
+    delete m_smt_engine;
   }
 
   CVC4::ExprManager& expr_manager()
@@ -818,7 +830,7 @@ public:
 
   CVC4::SmtEngine& smt_engine()
   {
-    return m_smt_engine;
+    return *m_smt_engine;
   }
 
   CVC4::Expr expr() const
