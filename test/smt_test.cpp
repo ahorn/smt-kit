@@ -418,6 +418,85 @@ TEST(SmtTest, Apply)
   EXPECT_FALSE(app5.sort().is_array());
 }
 
+TEST(SmtTest, ApplyOperator)
+{
+  const Decl<Func<Bv<long>, Real>> bv_unary_func_decl("f");
+  const Decl<Func<Int, Real>> math_unary_func_decl("g");
+  const Decl<Func<Bv<long>, Int, Real>> binary_func_decl("h");
+  const Bv<long> larg_term(make_shared_expr<LiteralExpr<long>>(
+    internal::sort<Bv<long>>(), 7L));
+  const Int rarg_term(any<Int>("x"));
+
+  const Real app_term0 = binary_func_decl(larg_term, rarg_term);
+  const Expr& app0 = app_term0.ref();
+
+  EXPECT_EQ(FUNC_APP_EXPR_KIND, app0.expr_kind());
+  EXPECT_FALSE(app0.sort().is_bool());
+  EXPECT_FALSE(app0.sort().is_int());
+  EXPECT_TRUE(app0.sort().is_real());
+  EXPECT_FALSE(app0.sort().is_bv());
+  EXPECT_FALSE(app0.sort().is_func());
+  EXPECT_FALSE(app0.sort().is_array());
+
+  const Real app_term1 = bv_unary_func_decl(larg_term);
+  const Expr& app1 = app_term1.ref();
+
+  EXPECT_EQ(FUNC_APP_EXPR_KIND, app1.expr_kind());
+  EXPECT_FALSE(app1.sort().is_bool());
+  EXPECT_FALSE(app1.sort().is_int());
+  EXPECT_TRUE(app1.sort().is_real());
+  EXPECT_FALSE(app1.sort().is_bv());
+  EXPECT_FALSE(app1.sort().is_func());
+  EXPECT_FALSE(app1.sort().is_array());
+
+  const Bv<long> seven_bv = smt::literal<smt::Bv<long>>(7L);
+  const Real app_term2 = bv_unary_func_decl(seven_bv);
+  const Expr& app2 = app_term2.ref();
+
+  EXPECT_EQ(FUNC_APP_EXPR_KIND, app2.expr_kind());
+  EXPECT_FALSE(app2.sort().is_bool());
+  EXPECT_FALSE(app2.sort().is_int());
+  EXPECT_TRUE(app2.sort().is_real());
+  EXPECT_FALSE(app2.sort().is_bv());
+  EXPECT_FALSE(app2.sort().is_func());
+  EXPECT_FALSE(app2.sort().is_array());
+
+  const Int seven_int = smt::literal<smt::Int>(7);
+  const Real app_term3 = math_unary_func_decl(seven_int);
+  const Expr& app3 = app_term3.ref();
+
+  EXPECT_EQ(FUNC_APP_EXPR_KIND, app3.expr_kind());
+  EXPECT_FALSE(app3.sort().is_bool());
+  EXPECT_FALSE(app3.sort().is_int());
+  EXPECT_TRUE(app3.sort().is_real());
+  EXPECT_FALSE(app3.sort().is_bv());
+  EXPECT_FALSE(app3.sort().is_func());
+  EXPECT_FALSE(app3.sort().is_array());
+
+  const Int seven_long_int = smt::literal<smt::Int>(7L);
+  const Real app_term4 = math_unary_func_decl(seven_long_int);
+  const Expr& app4 = app_term4.ref();
+
+  EXPECT_EQ(FUNC_APP_EXPR_KIND, app4.expr_kind());
+  EXPECT_FALSE(app4.sort().is_bool());
+  EXPECT_FALSE(app4.sort().is_int());
+  EXPECT_TRUE(app4.sort().is_real());
+  EXPECT_FALSE(app4.sort().is_bv());
+  EXPECT_FALSE(app4.sort().is_func());
+  EXPECT_FALSE(app4.sort().is_array());
+
+  const Real app_term5 = binary_func_decl(larg_term, rarg_term);
+  const Expr& app5 = app_term5.ref();
+
+  EXPECT_EQ(FUNC_APP_EXPR_KIND, app5.expr_kind());
+  EXPECT_FALSE(app5.sort().is_bool());
+  EXPECT_FALSE(app5.sort().is_int());
+  EXPECT_TRUE(app5.sort().is_real());
+  EXPECT_FALSE(app5.sort().is_bv());
+  EXPECT_FALSE(app5.sort().is_func());
+  EXPECT_FALSE(app5.sort().is_array());
+}
+
 TEST(SmtTest, Literal)
 {
   const Bool ffexpr_term = literal<Bool>(false);

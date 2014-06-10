@@ -847,9 +847,8 @@ public:
 };
 
 template<typename T>
-class Decl : public UnsafeDecl 
+struct Decl : public UnsafeDecl
 {
-public:
   /// Counter must be globally unique
 
   /// Prefix won't be freed; so it is (preferably) statically allocated
@@ -862,6 +861,26 @@ public:
 
   Decl(const Decl& other)
   : UnsafeDecl(other) {}
+};
+
+template<typename... T>
+struct Decl<Func<T...>> : public UnsafeDecl
+{
+  /// Counter must be globally unique
+
+  /// Prefix won't be freed; so it is (preferably) statically allocated
+  Decl(const char* const prefix, const unsigned counter)
+  : UnsafeDecl(prefix, counter, internal::sort<Func<T...>>()) {}
+
+  /// Symbol name must be globally unique and nonempty
+  Decl(std::string&& symbol_name)
+  : UnsafeDecl(std::move(symbol_name), internal::sort<Func<T...>>()) {}
+
+  Decl(const Decl& other)
+  : UnsafeDecl(other) {}
+
+  template<typename... Args>
+  typename Func<T...>::Range operator()(Args&&... args) const;
 };
 
 class SharedExpr;
@@ -3376,6 +3395,13 @@ typename Func<T...>::Range apply(
   return typename Func<T...>::Range(
     make_shared_expr<FuncAppExpr<Func<T...>::arity>>(func_decl,
     internal::to_array<SharedExpr, typename Func<T...>::Args>(args)));
+}
+
+template<typename... T>
+template<typename... Args>
+typename Func<T...>::Range Decl<Func<T...>>::operator()(Args&&... args) const
+{
+  return apply(*this, std::make_tuple(std::forward<Args>(args)...));
 }
 
 /// Counter must be globally unique
