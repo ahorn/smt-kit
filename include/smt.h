@@ -3272,6 +3272,7 @@ public:
 
 namespace internal
 {
+  // TODO: use std::make_index_sequence in C++14
   template<size_t... seqs>
   struct __Sequence
   {
@@ -3297,6 +3298,7 @@ namespace internal
     return {{ std::get<seqs>(tuple)... }};
   }
 
+  // inspired by Luc Danton post about 'std::tuple to std::array' on stackoverflow
   template<typename Result, typename Tuple>
   std::array<Result, std::tuple_size<Tuple>::value> to_array(const Tuple& tuple)
   {
