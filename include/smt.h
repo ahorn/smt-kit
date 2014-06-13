@@ -1812,6 +1812,14 @@ namespace internal
   class ExprStore
   {
   private:
+    // maintainer note: it is tempting to use std::unordered_set.
+    // For one, we would not be able to store T objects in sets
+    // because they return iterators with constant references to T;
+    // otherwise, the hash table would not when to rehash objects.
+    // More importantly, sets are ill-suited here because we cannot
+    // erase an element from the set as the element is being destructed
+    // since this would require calling its is_equal() function on
+    // an object that is undergoing destruction.
     typedef std::unordered_multimap<Expr::Hash, T* const> Multimap;
     Multimap m_multimap;
 
