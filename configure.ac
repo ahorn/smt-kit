@@ -37,6 +37,17 @@ AC_MSG_RESULT([$CLANG])
 
 AS_IF([test x$CLANG = xyes], [CXXFLAGS="$CXXFLAGS -stdlib=libc++"])
 
+AC_MSG_CHECKING(for --with-address-sanitizer)
+AC_ARG_WITH(address_sanitizer,
+            AS_HELP_STRING([--with-address-sanitizer],
+                           [enable AddressSanitizer]),
+[
+AC_MSG_RESULT($withval)
+CXXFLAGS="-fsanitize=address -fno-omit-frame-pointer $CXXFLAGS"
+LDFLAGS="-fsanitize=address $LDFLAGS"
+],
+[AC_MSG_RESULT(no)])
+
 Z3_DIR="solvers/z3"
 MSAT_DIR="solvers/msat"
 STP_DIR="solvers/stp"
