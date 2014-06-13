@@ -1289,6 +1289,13 @@ TEST(SmtTest, Timer)
 // Guard against memory leaks
 TEST(SmtTest, SharedExpr)
 {
+  const Decl<Bv<int>> x("x");
+  Expr::s_counter = 0;
+  {
+    SharedExpr e(make_shared_expr<ConstantExpr>(x));
+  }
+  EXPECT_EQ(0, Expr::s_counter);
+
   const UnsafeDecl const_decl("x", internal::sort<Bv<int>>());
   Expr::s_counter = 0;
   {
