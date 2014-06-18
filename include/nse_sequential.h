@@ -2267,13 +2267,9 @@ public:
 
   /// Invoke SAT/SMT solver to check the satisfiability of the disjunction of
   /// errors() conjoined with the conjunction of guards() and assertions() (if any)
-  ///
-  /// pre: not Checker::errors().empty()
   smt::CheckResult check()
   {
-    assert(!Checker::errors().empty());
-
-    if (!m_allow_backtrack_check)
+    if (m_errors.empty() || !m_allow_backtrack_check)
       return smt::unsat;
 
     // avoid redundant satisfiability checks
