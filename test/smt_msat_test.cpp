@@ -1915,4 +1915,25 @@ TEST(SmtMsatTest, UnsatCore)
     EXPECT_EQ(1, r.second);
     EXPECT_EQ(b.addr(), unsat_core.back().addr());
   }
+
+  Bv<char> letter = any<Bv<char>>("letter");
+
+  s.reset();
+
+  {
+    a = letter <= 'A';
+    b = 'Z' <= letter;
+    c = 'Z' <= letter;
+    Bools assumptions;
+    assumptions.push_back(a);
+    assumptions.push_back(b);
+    assumptions.push_back(c);
+
+    unsat_core.resize(7);
+    r = s.check_assumptions(assumptions, unsat_core);
+
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(2, r.second);
+    EXPECT_EQ(b.addr(), unsat_core.back().addr());
+  }
 }
