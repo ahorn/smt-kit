@@ -1979,4 +1979,54 @@ TEST(SmtMsatTest, UnsatCore)
     EXPECT_EQ(2, r.second);
     EXPECT_EQ(c.addr(), unsat_core.back().addr());
   }
+
+  s.reset();
+
+  {
+    Bool d;
+
+    a = letter <= 'A';
+    b = letter <= 'Z';
+    c = (letter + '\1') > 'Z';
+    d = (letter + '\1') > 'Z';
+
+    Bools assumptions;
+    assumptions.push_back(a);
+    assumptions.push_back(b);
+    assumptions.push_back(c);
+    assumptions.push_back(d);
+
+    unsat_core.resize(7);
+    r = s.check_assumptions(assumptions, unsat_core);
+
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(2, r.second);
+    EXPECT_EQ(c.addr(), unsat_core.back().addr());
+  }
+
+  s.reset();
+
+  {
+    Bool d, e;
+
+    a = letter <= 'A';
+    b = letter <= 'Z';
+    c = (letter + '\1') > 'Z';
+    d = (letter + '\2') > 'Z';
+    e = (letter + '\2') > 'Z';
+
+    Bools assumptions;
+    assumptions.push_back(a);
+    assumptions.push_back(b);
+    assumptions.push_back(c);
+    assumptions.push_back(d);
+    assumptions.push_back(e);
+
+    unsat_core.resize(7);
+    r = s.check_assumptions(assumptions, unsat_core);
+
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(2, r.second);
+    EXPECT_EQ(c.addr(), unsat_core.back().addr());
+  }
 }
