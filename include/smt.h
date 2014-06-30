@@ -3407,12 +3407,14 @@ typename Func<T...>::Range apply(
     internal::to_array<SharedExpr, typename Func<T...>::Args>(args)));
 }
 
+#ifdef __clang__
 template<typename... T>
 template<typename... Args>
 typename Func<T...>::Range Decl<Func<T...>>::operator()(Args&&... args) const
 {
   return apply(*this, std::make_tuple(std::forward<Args>(args)...));
 }
+#endif
 
 /// Counter must be globally unique
 

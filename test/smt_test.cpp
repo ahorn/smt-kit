@@ -418,6 +418,7 @@ TEST(SmtTest, Apply)
   EXPECT_FALSE(app5.sort().is_array());
 }
 
+#ifdef __clang__
 TEST(SmtTest, ApplyOperator)
 {
   const Decl<Func<Bv<long>, Real>> bv_unary_func_decl("f");
@@ -496,6 +497,7 @@ TEST(SmtTest, ApplyOperator)
   EXPECT_FALSE(app5.sort().is_func());
   EXPECT_FALSE(app5.sort().is_array());
 }
+#endif
 
 TEST(SmtTest, Literal)
 {
