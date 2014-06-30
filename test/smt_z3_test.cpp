@@ -1676,4 +1676,31 @@ TEST(SmtZ3Test, UnsatCore)
     EXPECT_EQ(4, r.second);
     EXPECT_EQ(e.addr(), unsat_core.back().addr());
   }
+
+  s.reset();
+
+  {
+    Bool d, e;
+
+    a = !('A' < letter);
+    b = letter < 'Z';
+    c = (letter + '\1') < 'Z';
+    d = (letter + '\2') > 'Z';
+    e = (letter + '\2') > 'Z';
+
+    Bools assumptions;
+    assumptions.push_back(a);
+    assumptions.push_back(b);
+    assumptions.push_back(c);
+    assumptions.push_back(d);
+    assumptions.push_back(e);
+
+    unsat_core.resize(7);
+    r = s.check_assumptions(assumptions, unsat_core);
+
+    /// unsat_core.back() should be ideally "d"
+    EXPECT_EQ(unsat, r.first);
+    EXPECT_EQ(3, r.second);
+    EXPECT_EQ(e.addr(), unsat_core.back().addr());
+  }
 }
