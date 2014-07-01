@@ -1998,7 +1998,33 @@ private:
   // causes the conjunction of path conditions to be unsatisfiable
   smt::Bools m_unsat_core;
 
-  smt::ManualTimer<ElapsedTime> m_replay_manual_timer;
+  typedef smt::ManualTimer<ElapsedTime> ReplayTimer;
+  ReplayTimer m_replay_timer;
+
+  /// Pause an active timer while PauseTimer is alive
+  template<typename T>
+  class PauseTimer
+  {
+  private:
+    bool m_is_active;
+    T& m_timer_ref;
+
+  public:
+    PauseTimer(T& timer_ref) noexcept
+    : m_is_active(timer_ref.is_active()),
+      m_timer_ref(timer_ref)
+    {
+      if (m_is_active)
+        m_timer_ref.stop();
+    }
+
+    /// Restart timer if it had been previously active.
+    ~PauseTimer() noexcept
+    {
+      if (m_is_active)
+        m_timer_ref.start();
+    }
+  };
 
   /// Checks satisfiability of assertions and guards (if any)
 
@@ -2008,7 +2034,9 @@ private:
   /// until symbolic execution has followed the path given by m_dfs.flips().
   ///
   /// The procedure always adds Check::assertions() to m_solver regardless
-  //// whether there are guards or not.
+  /// whether there are guards or not.
+  ///
+  /// If the replay timer is active, it will be disabled during backtracking.
   ///
   /// \pre: m_allow_backtrack_check is true
   void backtrack_check()
@@ -2018,6 +2046,9 @@ private:
     // objects invariants
     assert(m_unsat_core.size() == 1);
     assert(Checker::guards().size() == m_dfs.flips().size());
+
+    // restarts replay timer (if necessary) on procedure exit
+    PauseTimer<ReplayTimer> pause_timer(m_replay_timer);
 
     // procedure contract
     if (!Checker::assertions().empty())
@@ -2103,8 +2134,8 @@ protected:
     m_stats.replay_time = m_stats.branch_time = ElapsedTime::zero();
     m_stats.branch_cnt = m_stats.branch_literal_cnt = 0;
 
-    if (m_replay_manual_timer.is_active())
-      m_replay_manual_timer.stop();
+    if (m_replay_timer.is_active())
+      m_replay_timer.stop();
   }
 
   void reset_unsat_core()
@@ -2128,7 +2159,7 @@ public:
     m_allow_backtrack_check(true),
     m_found_path(true),
     m_unsat_core(),
-    m_replay_manual_timer(m_stats.replay_time)
+    m_replay_timer(m_stats.replay_time)
   {
     reset_stats();
     reset_unsat_core();
@@ -2170,12 +2201,13 @@ public:
     if (m_dfs.has_next())
     {
       assert(m_allow_backtrack_check);
+      assert(m_replay_timer.is_active());
       direction = m_dfs.next();
     }
     else
     {
-      if (m_replay_manual_timer.is_active())
-        m_replay_manual_timer.stop();
+      if (m_replay_timer.is_active())
+        m_replay_timer.stop();
 
       if (!m_allow_backtrack_check)
         return false;
@@ -2207,12 +2239,13 @@ public:
     if (m_dfs.has_next())
     {
       assert(m_allow_backtrack_check);
+      assert(m_replay_timer.is_active());
       direction = m_dfs.next();
     }
     else
     {
-      if (m_replay_manual_timer.is_active())
-        m_replay_manual_timer.stop();
+      if (m_replay_timer.is_active())
+        m_replay_timer.stop();
 
       if (!m_allow_backtrack_check)
         return false;
@@ -2252,10 +2285,8 @@ public:
       reset_solver();   // since we don't use incremental solving
       Checker::reset(); // do not reset m_dfs etc.
 
-      if (m_replay_manual_timer.is_active())
-         m_replay_manual_timer.stop();
-
-      m_replay_manual_timer.start();
+      if (!m_replay_timer.is_active())
+        m_replay_timer.start();
     }
 
     // doesn't reset m_found_path
