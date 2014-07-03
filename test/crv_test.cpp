@@ -3650,3 +3650,18 @@ TEST(CrvTest, InternalArrayWithExplicitSize)
   EXPECT_EQ(smt::sat, encoder.check(c != 'A', tracer(), checker));
   EXPECT_EQ(smt::unsat, encoder.check(c != 'A' && i == 1, tracer(), checker));
 }
+
+TEST(CrvTest, Cast)
+{
+  Internal<int> x;
+  Internal<char> y;
+  Internal<long> literal = 42;
+
+  y = Internal<char>::cast(x);
+  x = Internal<int>::cast(literal);
+
+  EXPECT_TRUE(x.is_literal());
+  EXPECT_EQ(42, x.literal());
+
+  EXPECT_FALSE(y.is_literal());
+}

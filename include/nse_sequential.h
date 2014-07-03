@@ -580,6 +580,9 @@ public:
   template<typename S>
   static Internal<T> cast(const Internal<S>& source)
   {
+    if (source.is_literal())
+      return {static_cast<T>(source.literal())};
+
     return Internal<T>(term<S>(source));
   }
 
@@ -1149,6 +1152,45 @@ namespace simplifier
 
 } // end library namespace
 
+template<typename T>
+inline auto operator -(const crv::Internal<T>& arg)
+-> crv::Internal<typename crv::internal::Return<smt::SUB, T>::Type>
+{
+  typedef typename crv::internal::Return<smt::SUB, T>::Type ReturnType;
+  return crv::Internal<ReturnType>(- crv::Internal<T>::term(arg));
+}
+template<typename T>
+inline auto operator -(crv::Internal<T>&& arg)
+-> crv::Internal<typename crv::internal::Return<smt::SUB, T>::Type>
+{
+  typedef typename crv::internal::Return<smt::SUB, T>::Type ReturnType;
+  return crv::Internal<ReturnType>(- crv::Internal<T>::term(std::move(arg)));
+}
+
+template<typename T>
+inline crv::Internal<bool> operator !(const crv::Internal<T>& arg)
+{
+  return crv::Internal<bool>(
+    crv::Internal<T>::term(arg) == static_cast<T>(0));
+}
+template<typename T>
+inline crv::Internal<bool> operator !(crv::Internal<T>&& arg)
+{
+  return crv::Internal<bool>(
+    crv::Internal<T>::term(std::move(arg)) == static_cast<T>(0));
+}
+
+inline crv::Internal<bool> operator !(const crv::Internal<bool>& arg)
+{
+  return crv::Internal<bool>(! crv::Internal<bool>::term(arg));
+}
+
+inline crv::Internal<bool> operator !(crv::Internal<bool>&& arg)
+{
+  return crv::Internal<bool>(! crv::Internal<bool>::term(std::move(arg)));
+}
+
+#ifdef _BV_THEORY_
 #define NSE_UNARY_OP(op, opcode)                                                \
   template<typename T>                                                          \
   inline auto operator op(const crv::Internal<T>& arg)                          \
@@ -1166,10 +1208,6 @@ namespace simplifier
     return crv::Internal<ReturnType>(op crv::Internal<T>::term(std::move(arg)));\
   }                                                                             \
 
-NSE_UNARY_OP(-, SUB)
-NSE_UNARY_OP(!, LNOT)
-
-#ifdef _BV_THEORY_
 NSE_UNARY_OP(~, NOT)
 #endif
 
@@ -1752,6 +1790,12 @@ public:
   /// The second direction argument is only a suggestion that may be ignored.
   bool branch(Internal<bool>&&, const bool direction_hint = false);
 
+  template<typename T>
+  bool branch(const Internal<T>& numeric)
+  {
+    return branch(numeric != static_cast<T>(0));
+  }
+
   /// Follow both control flow directions regardless of their feasibility
   bool force_branch(const Internal<bool>& g)
   {
@@ -2260,6 +2304,12 @@ public:
       Checker::add_guard(not std::move(g_term));
 
     return direction;
+  }
+
+  template<typename T>
+  bool branch(const Internal<T>& numeric)
+  {
+    return branch(numeric != static_cast<T>(0));
   }
 
   /// Use DFS with backtracking to find an unexplored path, if any

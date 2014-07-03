@@ -305,3 +305,21 @@ TEST(NseSequentialTest, Backtrack)
   checker.add_assertion(b < 7);
   EXPECT_FALSE(checker.find_next_path());
 }
+
+TEST(NseSequentialTest, NumericConditional)
+{
+  BacktrackDfsChecker c0;
+  SequentialDfsChecker c1;
+
+  Internal<int> x;
+
+  c0.branch(x);
+  EXPECT_TRUE(c0.find_next_path());
+  c0.branch(x);
+  EXPECT_FALSE(c0.find_next_path());
+
+  c1.branch(x);
+  EXPECT_TRUE(c1.find_next_path());
+  c1.branch(x);
+  EXPECT_FALSE(c1.find_next_path());
+}
