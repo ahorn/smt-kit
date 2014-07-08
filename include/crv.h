@@ -2315,18 +2315,20 @@ namespace ThisThread
 /// from being simultaneously accessed by multiple threads.
 class Mutex {
 private:
-  ThreadIdentifier m_lock_thread_id;
+  std::stack<ThreadIdentifier> m_lock_thread_id_stack;
   External<ThreadIdentifier> m_thread_id;
 
 public:
-  Mutex() :
-  m_lock_thread_id(/* no thread */ 0),
-  m_thread_id(/* no thread */ 0) {}
+  Mutex()
+  : m_lock_thread_id_stack(),
+    m_thread_id(/* no thread */ 0) {}
 
   /// Acquire lock
-  void lock() {
-    m_lock_thread_id = ThisThread::thread_id();
-    m_thread_id = m_lock_thread_id;
+  void lock()
+  {
+    ThreadIdentifier lock_thread_id = ThisThread::thread_id();
+    m_lock_thread_id_stack.push(lock_thread_id);
+    m_thread_id = lock_thread_id;
   }
 
   /// Release lock
@@ -2334,11 +2336,14 @@ public:
   /// \pre: ThisThread is the same as the one that called lock()
   void unlock()
   {
+    ThreadIdentifier lock_thread_id = m_lock_thread_id_stack.top();
+    m_lock_thread_id_stack.pop();
+
     // TODO: ensure that lock() and unlock() are in preserved program order
-    assert(m_lock_thread_id == ThisThread::thread_id());
+    assert(lock_thread_id == ThisThread::thread_id());
 
     // TODO: use polymorphism?
-    dfs_checker().add_assertion(m_thread_id == m_lock_thread_id);
+    dfs_checker().add_assertion(m_thread_id == lock_thread_id);
   }
 };
 
