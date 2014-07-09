@@ -3665,3 +3665,46 @@ TEST(CrvTest, Cast)
 
   EXPECT_FALSE(y.is_literal());
 }
+
+void test_write_a(External<char>& test_global)
+{
+  test_global = 'A';
+}
+
+void test_write_b(External<char>& test_global)
+{
+  test_global = 'B';
+}
+
+TEST(CrvTest, Chord)
+{
+  tracer().reset();
+  DfsChecker checker;
+  Encoder encoder;
+
+  External<char> test_global = '\0';
+
+  Chord chord;
+  chord.run(test_write_a, test_global);
+  chord.run(test_write_b, test_global);
+
+  Internal<char> x = test_global;
+  Internal<char> y = test_global;
+
+  // if global variable equals 'B', then it cannot change.
+  EXPECT_EQ(smt::unsat, encoder.check(x == 'B' && y != 'B', tracer(), checker));
+
+  tracer().reset();
+  checker.reset();
+
+  test_global = '\0';
+
+  Thread thread_a(test_write_a, test_global);
+  Thread thread_b(test_write_b, test_global);
+
+  x = test_global;
+  y = test_global;
+
+  // the use of normal threads make the next formula satisfiable
+  EXPECT_EQ(smt::sat, encoder.check(x == 'B' && y != 'B', tracer(), checker));
+}

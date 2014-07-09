@@ -2275,6 +2275,19 @@ private:
   ThreadIdentifier m_thread_id;
 
 public:
+  Thread()
+  : m_parent_thread_id(0),
+    m_thread_id(0) {}
+
+  // delete copy constructor, only allow move semantics
+  //
+  // \see std::thread API
+  Thread(const Thread&) = delete;
+
+  Thread(Thread&& other)
+  : m_parent_thread_id(other.m_parent_thread_id),
+    m_thread_id(other.m_thread_id) {}
+
   /// Symbolically spawn `f(args...)` as a new thread of execution
 
   /// \param f non-member function to be executed as a new symbolic thread
@@ -2287,11 +2300,18 @@ public:
     m_thread_id(0)
   {
     m_parent_thread_id = tracer().append_thread_begin_event();
-    f(args...);
+    f(std::forward<Args>(args)...);
     m_thread_id = tracer().append_thread_end_event();
   }
 
-  bool joinable() const
+  Thread& operator=(Thread&& other)
+  {
+    m_parent_thread_id = other.m_parent_thread_id;
+    m_thread_id = other.m_thread_id;
+    return *this;
+  }
+
+  bool joinable() const noexcept
   {
     return 0 < m_thread_id;
   }
@@ -2308,6 +2328,43 @@ namespace ThisThread
 {
   ThreadIdentifier thread_id();
 }
+
+/// A chord is like a chain of threads `f, g, ...` where `f`
+/// must terminate before `g` can start to run, and so forth.
+class Chord
+{
+private:
+  Thread thread;
+
+  template<typename F, typename... Args>
+  static void chord_start_routine(Thread&& thread, F f, Args&&... args)
+  {
+    if (thread.joinable())
+      thread.join();
+
+    f(std::forward<Args>(args)...);
+  }
+
+public:
+  /// Throws a std::system_error if the thread could not be started.
+  template<typename F, typename... Args>
+  void run(F f, Args&&... args)
+  {
+    thread = Thread(chord_start_routine<F, Args...>,
+      std::move(thread), f, std::forward<Args>(args)...);
+  }
+
+  bool joinable() const noexcept
+  {
+    return thread.joinable();
+  }
+
+  /// Wait for entire chain of threads to terminate
+  void join()
+  {
+    thread.join();
+  }
+};
 
 /// Symbolic spinlock
 
