@@ -1344,6 +1344,30 @@ TEST(CrvTest, Array)
   EXPECT_EQ(4, tracer().per_address_index().at(xs.address).stores().size());
 }
 
+TEST(CrvTest, InitializerList)
+{
+  Internal<int> x;
+  Internal<int[]> a = {1, x, 3};
+
+  EXPECT_TRUE(a[0].is_literal());
+  EXPECT_EQ(1, a[0].literal());
+
+  EXPECT_FALSE(a[1].is_literal());
+
+  EXPECT_TRUE(a[2].is_literal());
+  EXPECT_EQ(3, a[2].literal());
+
+  Internal<int[5]> b = {1, x, 3};
+
+  EXPECT_TRUE(b[0].is_literal());
+  EXPECT_EQ(1, b[0].literal());
+
+  EXPECT_FALSE(b[1].is_literal());
+
+  EXPECT_TRUE(b[2].is_literal());
+  EXPECT_EQ(3, b[2].literal());
+}
+
 TEST(CrvTest, CompareArrayElements)
 {
   tracer().reset();

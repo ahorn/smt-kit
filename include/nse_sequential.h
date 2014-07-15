@@ -645,6 +645,9 @@ private:
 public:
   Internal() : m_term(), m_vector() {}
 
+  Internal(std::initializer_list<Internal<T>> elements)
+  : m_term(), m_vector(elements) {}
+
   template<typename U>
   _Internal<T, Size> operator[](const Internal<U>& offset);
 
@@ -674,6 +677,12 @@ private:
 
 public:
   Internal() : m_forward() {}
+
+  Internal(std::initializer_list<Internal<T>> elements)
+  : m_forward(elements)
+  {
+    assert(elements.size() <= N);
+  }
 
   template<typename U>
   _Internal<T, Size> operator[](const Internal<U>& offset)
