@@ -101,6 +101,8 @@ namespace internal
   EVAL_BINARY_ONLY      (&, smt::AND)
   EVAL_BINARY_ONLY      (|, smt::OR)
   EVAL_BINARY_ONLY      (^, smt::XOR)
+  EVAL_BINARY_ONLY      (<<, smt::LSHL)
+  EVAL_BINARY_ONLY      (>>, smt::LSHR)
 
   template<smt::Opcode opcode, typename ...U> struct Return;
 
@@ -1347,6 +1349,8 @@ NSE_BINARY_OP(||, LOR)
 NSE_BINARY_OP(&, AND)
 NSE_BINARY_OP(|, OR)
 NSE_BINARY_OP(^, XOR)
+NSE_BINARY_OP(<<, LSHL)
+NSE_BINARY_OP(>>, LSHR)
 #endif
 
 namespace crv
