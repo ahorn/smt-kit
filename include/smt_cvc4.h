@@ -425,6 +425,24 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
       CVC4::kind::BITVECTOR_XOR, larg, rarg);
   }
 
+  virtual Error __encode_binary_lshl(
+    const Expr* const expr,
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
+  {
+    return encode_binary(expr,
+      CVC4::kind::BITVECTOR_SHL, larg, rarg);
+  }
+
+  virtual Error __encode_binary_lshr(
+    const Expr* const expr,
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
+  {
+    return encode_binary(expr,
+      CVC4::kind::BITVECTOR_LSHR, larg, rarg);
+  }
+
   virtual Error __encode_binary_land(
     const Expr* const expr,
     const SharedExpr& larg,

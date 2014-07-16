@@ -1704,3 +1704,54 @@ TEST(SmtZ3Test, UnsatCore)
     EXPECT_EQ(e.addr(), unsat_core.back().addr());
   }
 }
+
+TEST(SmtZ3Test, LogicalShifts)
+{
+  Z3Solver s;
+
+  Bv<unsigned> x = any<Bv<unsigned>>("x");
+  Bv<unsigned> one = literal<Bv<unsigned>>(1);
+  Bv<unsigned> two = literal<Bv<unsigned>>(2);
+
+  s.push();
+  {
+    s.add(two * x != (x << one));
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(two * x == (x << one));
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x != ((x << one) >> one));
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(x == ((x << one) >> one));
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(one != (two >> one));
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(one == (two >> one));
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+}

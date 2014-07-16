@@ -404,6 +404,62 @@ SMT_STP_ENCODE_BV_LITERAL(unsigned long long)
     return OK;
   }
 
+  virtual Error __encode_binary_lshl(
+    const Expr* const expr,
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
+  {
+    if (!larg.sort().is_bv() || !rarg.sort().is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    cache_expr(expr, bvLeftShiftExprExpr(m_vc, expr->sort().bv_size(), lexpr, rexpr));
+    return OK;
+  }
+
+  virtual Error __encode_binary_lshr(
+    const Expr* const expr,
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
+  {
+    if (!larg.sort().is_bv() || !rarg.sort().is_bv())
+      return UNSUPPORT_ERROR;
+
+    if (find_expr(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr lexpr = m_expr;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const VCExpr rexpr = m_expr;
+
+    cache_expr(expr, vc_bvRightShiftExprExpr(m_vc, expr->sort().bv_size(), lexpr, rexpr));
+    return OK;
+  }
+
   virtual Error __encode_binary_land(
     const Expr* const expr,
     const SharedExpr& larg,

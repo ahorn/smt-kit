@@ -349,6 +349,8 @@ enum Opcode : unsigned char
   AND,  // &
   OR,   // |
   XOR,  // ^
+  LSHL,  // <<, logical left shift
+  LSHR,  // >>, logical right shift
   LAND, // &&
   LOR,  // ||
   IMP,  // logical implication
@@ -1276,6 +1278,16 @@ private:
     const SharedExpr& larg,
     const SharedExpr& rarg) = 0;
 
+  virtual Error __encode_binary_lshl(
+    const Expr* const expr,
+    const SharedExpr& larg,
+    const SharedExpr& rarg) = 0;
+
+  virtual Error __encode_binary_lshr(
+    const Expr* const expr,
+    const SharedExpr& larg,
+    const SharedExpr& rarg) = 0;
+
   virtual Error __encode_binary_land(
     const Expr* const expr,
     const SharedExpr& larg,
@@ -2034,6 +2046,48 @@ namespace internal
       const SharedExpr& rarg)
     {
       return solver->__encode_binary_xor(expr, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<LSHL>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const SharedExpr& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const SharedExpr& larg,
+      const SharedExpr& rarg)
+    {
+      return solver->__encode_binary_lshl(expr, larg, rarg);
+    }
+  };
+
+  template<>
+  struct EncodeDispatch<LSHR>
+  {
+    static Error encode_unary(
+      Solver* const solver,
+      const Expr* const expr,
+      const SharedExpr& arg)
+    {
+      return OPCODE_ERROR;
+    }
+
+    static Error encode_binary(
+      Solver* const solver,
+      const Expr* const expr,
+      const SharedExpr& larg,
+      const SharedExpr& rarg)
+    {
+      return solver->__encode_binary_lshr(expr, larg, rarg);
     }
   };
 
@@ -4324,6 +4378,8 @@ SMT_BUILTIN_BV_UNARY_OP(~, NOT)
 SMT_BUILTIN_BV_BINARY_OP(&, AND)
 SMT_BUILTIN_BV_BINARY_OP(|, OR)
 SMT_BUILTIN_BV_BINARY_OP(^, XOR)
+SMT_BUILTIN_BV_BINARY_OP(<<, LSHL)
+SMT_BUILTIN_BV_BINARY_OP(>>, LSHR)
 
 #define SMT_BUILTIN_BOOL_UNARY_OP(op, opcode)                                  \
   inline smt::Bool operator op(const smt::Bool& arg)                           \
@@ -4488,6 +4544,8 @@ SMT_UNSAFE_BINARY_OP(%, REM)
 SMT_UNSAFE_BINARY_OP(&, AND)
 SMT_UNSAFE_BINARY_OP(|, OR)
 SMT_UNSAFE_BINARY_OP(^, XOR)
+SMT_UNSAFE_BINARY_OP(<<, LSHL)
+SMT_UNSAFE_BINARY_OP(>>, LSHR)
 
 SMT_UNSAFE_BINARY_REL(<, LSS)
 SMT_UNSAFE_BINARY_REL(>, GTR)

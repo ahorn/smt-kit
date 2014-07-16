@@ -388,6 +388,56 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     return OK;
   }
 
+  virtual Error __encode_binary_lshl(
+    const Expr* const expr,
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+
+    m_z3_expr = z3::expr(m_z3_context,
+      Z3_mk_bvshl(m_z3_context, lexpr, rexpr));
+
+    return OK;
+  }
+
+  virtual Error __encode_binary_lshr(
+    const Expr* const expr,
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
+  {
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr lexpr(m_z3_expr);
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const z3::expr rexpr(m_z3_expr);
+
+
+    m_z3_expr = z3::expr(m_z3_context,
+      Z3_mk_bvlshr(m_z3_context, lexpr, rexpr));
+
+    return OK;
+  }
+
   virtual Error __encode_binary_land(
     const Expr* const expr,
     const SharedExpr& larg,

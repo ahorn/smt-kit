@@ -457,6 +457,56 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
     return OK;
   }
 
+  virtual Error __encode_binary_lshl(
+    const Expr* const expr,
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    cache_term(expr, msat_make_bv_lshl(m_env, lterm, rterm));
+    return OK;
+  }
+
+  virtual Error __encode_binary_lshr(
+    const Expr* const expr,
+    const SharedExpr& larg,
+    const SharedExpr& rarg) override
+  {
+    if (find_term(expr))
+      return OK;
+
+    Error err;
+    err = larg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term lterm = m_term;
+
+    err = rarg.encode(*this);
+    if (err)
+      return err;
+
+    const msat_term rterm = m_term;
+
+    cache_term(expr, msat_make_bv_lshr(m_env, lterm, rterm));
+    return OK;
+  }
+
   virtual Error __encode_binary_land(
     const Expr* const expr,
     const SharedExpr& larg,
