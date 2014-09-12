@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<!DOCTYPE specification SYSTEM "seed.dtd">
+
+<!-- Context-free grammar for the syntax of star-free CKA expressions -->
+<specification>
+  <start idref="StarFree"/> 
+
+  <union id="StarFree">
+    <child idref="Symbol"/>
+    <child idref="SequentialComposition"/>
+    <child idref="ConcurrentComposition"/>
+    <child idref="NondeterministicChoiceComposition"/>
+  </union>
+
+  <constants id="Symbol">
+    <symbol value="A"/>
+    <symbol value="B"/>
+    <symbol value="C"/>
+    <symbol value="D"/>
+    <symbol value="E"/>
+    <symbol value="F"/>
+    <symbol value="G"/>
+    <symbol value="H"/>
+    <symbol value="I"/>
+    <symbol value="J"/>
+    <symbol value="K"/>
+    <symbol value="L"/>
+    <symbol value="M"/>
+    <symbol value="N"/>
+    <symbol value="O"/>
+    <symbol value="P"/>
+    <symbol value="Q"/>
+    <symbol value="R"/>
+    <symbol value="S"/>
+    <symbol value="T"/>
+    <symbol value="U"/>
+    <symbol value="V"/>
+    <symbol value="W"/>
+    <symbol value="X"/>
+    <symbol value="Y"/>
+    <symbol value="Z"/>
+  </constants>
+
+  <binary_sym id="ConcurrentComposition">
+    <symbol value="|"/>
+    <child idref="StarFree"/>
+  </binary_sym>
+
+  <binary_sym id="SequentialComposition">
+    <symbol value=","/>
+    <child idref="StarFree"/>
+  </binary_sym>
+  
+  <binary_sym_neq id="NondeterministicChoiceComposition">
+    <symbol value="+"/>
+    <child idref="StarFree"/>
+  </binary_sym_neq>
+
+</specification>

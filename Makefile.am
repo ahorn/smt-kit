@@ -55,11 +55,13 @@ lib_LTLIBRARIES = lib/libsmt.la
 lib_libsmt_la_SOURCES = \
   src/smt.cpp \
   src/nse_sequential.cpp \
+  src/cka.cpp \
   src/crv.cpp
 
 pkginclude_HEADERS = \
   include/smt \
   include/smt.h \
+  include/cka.h \
   include/smt_z3.h \
   include/smt_msat.h \
   include/smt_stp.h \
@@ -93,6 +95,8 @@ check_PROGRAMS = test/smt
 
 test_smt_SOURCES = \
   test/smt_test.cpp \
+  test/cka_test.cpp \
+  test/cka_performance_test.cpp \
   test/smt_z3_test.cpp \
   test/smt_msat_test.cpp \
   test/smt_stp_test.cpp \
