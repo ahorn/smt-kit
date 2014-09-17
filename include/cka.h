@@ -204,6 +204,17 @@ public:
     assert(e < m_length);
     return m_maximals[e] == IS_EXTREMAL_EVENT;
   }
+
+  /// Checks equality of two partial strings, not their isomorphism!
+  friend bool operator==(const PartialString& x, const PartialString& y)
+  {
+    return x.m_label_function == y.m_label_function and
+      x.m_strict_partial_order == y.m_strict_partial_order and
+      x.m_length == y.m_length and
+      x.m_incomparables == y.m_incomparables and
+      x.m_minimals == y.m_minimals and
+      x.m_maximals == y.m_maximals;
+  }
 };
 
 /// Concurrent composition of two partial strings
@@ -231,12 +242,26 @@ private:
   : m_partial_strings{std::move(partial_strings)} {}
 
 public:
+  static Program& identity()
+  {
+    static Program s_identity{PartialStrings()};
+    return s_identity;
+  }
+
   /// A single partial string whose only event is labelled by `label`
   Program(const Label label)
   : m_partial_strings{}
   {
     m_partial_strings.emplace_back(label);
   }
+
+  /// Convert a partial string to a program
+  Program(const PartialString& x)
+  : m_partial_strings{x} {}
+
+  /// Moves a partial string into a new program
+  Program(PartialString&& x)
+  : m_partial_strings{std::move(x)} {}
 
   /// Finite set of finite partial strings
   const PartialStrings& partial_strings() const noexcept
@@ -322,10 +347,14 @@ public:
   }
 };
 
-/// Utility class for program operators
+/// Utility class for partial string and program operators
 template<Opchar opchar>
 struct Eval
 {
+  /// Compose two partial strings
+  static PartialString bowtie(const PartialString&, const PartialString&);
+
+  /// Compose two finite programs
   static Program bowtie(const Program&, const Program&);
 };
 
@@ -333,6 +362,11 @@ struct Eval
 template<>
 struct Eval<'|'>
 {
+  static PartialString bowtie(const PartialString& x, const PartialString& y)
+  {
+    return {(x | y)};
+  }
+
   static Program bowtie(const Program& X, const Program& Y)
   {
     return {(X | Y)};
@@ -343,6 +377,11 @@ struct Eval<'|'>
 template<>
 struct Eval<','>
 {
+  static PartialString bowtie(const PartialString& x, const PartialString& y)
+  {
+    return {(x , y)};
+  }
+
   static Program bowtie(const Program& X, const Program& Y)
   {
     return {(X , Y)};
@@ -353,6 +392,138 @@ template<Opchar opchar>
 LfpProgram<opchar> lfp(const Program& P)
 {
   return {P};
+}
+
+namespace internal
+{
+  /// Raise `base` to the power of `exp`, i.e. `base^exp`
+  unsigned uint_pow(unsigned base, unsigned exp);
+
+  /// A nonstandard single-pass input iterator for constant partial strings
+
+  /// \warning at most one `PartialStringIterator` object for a `Program`
+  ///   must be instantiated at a given time
+  ///
+  /// \remark we do not implement a more standard iterator such as
+  ///   `std::iterator<std::input_iterator_tag, const PartialString>`
+  ///   because this would require copies of possibly long vectors
+  ///
+  /// \see LazyProgram<opchar>
+  template<Opchar opchar>
+  class PartialStringIterator
+  {
+  private:
+    const Program* m_program_ptr;
+    std::vector<unsigned>& m_vector;
+
+  public:
+    PartialStringIterator(
+      const Program* program_ptr,
+      std::vector<unsigned>& vector)
+    : m_program_ptr{program_ptr},
+      m_vector{vector} {}
+
+    bool has_next_partial_string() const noexcept
+    {
+      return m_program_ptr != nullptr;
+    }
+
+    /// \pre: `has_next_partial_string()`
+    PartialString next_partial_string()
+    {
+      assert(has_next_partial_string());
+
+      PartialString p{PartialString::empty()};
+      for (unsigned i : m_vector)
+      {
+        assert(i < m_program_ptr->size());
+
+        // compose `p` with `i`th partial string in `*m_program_ptr`
+        p = Eval<opchar>::bowtie(p, m_program_ptr->partial_strings().at(i));
+      }
+
+      // detect whether another partial string can be generated
+      bool is_end = true;
+
+      // similar to a ripple-carry adder that computes
+      // `m_vector + 1` modulus `m_program_ptr->size()`
+      for (unsigned& i : m_vector)
+      {
+        ++i;
+
+        // Need to carry over to next index?
+        if (m_program_ptr->size() == i)
+        {
+          i = 0;
+        }
+        else
+        {
+          is_end = false;
+
+          break;
+        }
+      }
+
+      if (is_end)
+        m_program_ptr = nullptr;
+
+      // good compilers will use RVO
+      return p;
+    }
+  };
+
+  /// Defer the computation of program compositions, strictly internal
+
+  /// Asymptotically, the `n`-repeated composition of `Program` requires
+  /// exponential space in `n`. The purpose of `LazyProgram` is to reduce
+  /// this to an asymptotic linear space requirement.
+  template<Opchar opchar>
+  class LazyProgram
+  {
+  private:
+    // iteratively compose `m_program_ref` under `opchar`
+    const Program& m_program_ref;
+
+    // array of indexes into `m_program_ref.partial_strings()`
+    std::vector<unsigned> m_vector;
+
+  public:
+    LazyProgram(const Program& program_ref)
+    : m_program_ref{program_ref},
+      m_vector{0}
+    {
+      assert(m_vector.size() == 1);
+      assert(m_vector[0] == 0);
+    }
+
+    const Program& P() const noexcept
+    {
+      return m_program_ref;
+    }
+
+    /// Program size grows exponentially with every call to `extend()`
+    unsigned size() const noexcept
+    {
+      return uint_pow(m_program_ref.size(), m_vector.size());
+    }
+
+    /// Conceptually computes `Eval<opchar>::bowtie(*this, P())`
+    void extend()
+    {
+      static constexpr unsigned zero = 0;
+
+      for (unsigned& i : m_vector)
+        i = zero;
+
+      m_vector.push_back(zero);
+    }
+
+    /// \warning at most one iterator can be used at a given time
+    PartialStringIterator<opchar> partial_string_iterator() noexcept
+    {
+      return {&m_program_ref, m_vector};
+    }
+  };
 }
 
 /// Iterate over each `event` and its `label` in a partial string `p`
@@ -523,6 +694,32 @@ private:
     }
   }
 
+  template<Opchar opchar>
+  bool check(const Program& X, internal::LazyProgram<opchar>& Y)
+  {
+    bool is_refine;
+    internal::PartialStringIterator<opchar> iter{Y.partial_string_iterator()};
+    while (iter.has_next_partial_string())
+    {
+      PartialString y{iter.next_partial_string()};
+      for (const PartialString& x : X.partial_strings())
+      {
+        is_refine = false;
+
+        if (check(x, y))
+        {
+          is_refine = true;
+          break;
+        }
+      }
+
+      if (not is_refine)
+        return false;
+    }
+
+    return true;
+  }
+
 public:
   Refinement()
   : m_solver(smt::QF_UFLIA_LOGIC),
@@ -588,10 +785,10 @@ public:
   bool check(const Program& X, const Program& Y)
   {
     bool is_refine;
-    for (const PartialString& x : X.partial_strings())
+    for (const PartialString& y : Y.partial_strings())
     {
       is_refine = false;
-      for (const PartialString& y : Y.partial_strings())
+      for (const PartialString& x : X.partial_strings())
         if (check(x, y))
         {
           is_refine = true;
@@ -612,8 +809,14 @@ public:
     const Program& Y = lfpY.P();
     const unsigned j = Programs::max_length(X) / Programs::min_length(Y);
 
-    Program K = Y;
+/// \warning if programs are composed eagerly, you're likely to run out of memory!
+#ifdef _CKA_EAGER_
+    Program K{Y};
     for (unsigned k{0}; k <= j; ++k, K = Eval<opchar>::bowtie(K, Y))
+#else
+    internal::LazyProgram<opchar> K{Y};
+    for (unsigned k{0}; k <= j; ++k, K.extend())
+#endif
       if (check(X, K))
         return true;
 

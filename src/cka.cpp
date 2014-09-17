@@ -3,6 +3,31 @@
 namespace cka
 {
 
+namespace internal
+{
+  unsigned uint_pow(unsigned base, unsigned exp)
+  {
+    // exponentiation by squaring, see Wikipedia
+    unsigned result = 1U;
+
+    // is exponent positive?
+    while (exp)
+    {
+      // is exponent odd?
+      if (exp & 1U)
+        result *= base;
+
+      // halve exponent
+      exp >>= 1;
+
+      // square
+      base *= base;
+    }
+
+    return result;
+  }
+}
+
 PartialString operator|(const PartialString& x, const PartialString& y)
 {
   PartialString z{x, y};

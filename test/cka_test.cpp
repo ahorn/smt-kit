@@ -9,6 +9,20 @@ TEST(CkaTest, EmptyPartialString)
   EXPECT_EQ(0, PartialString::empty().length());
 }
 
+TEST(CkaTest, InitPartialString)
+{
+  PartialString x{'x'};
+
+  EXPECT_EQ('x', x.label_function().at(0));
+  EXPECT_TRUE(x.strict_partial_order().empty());
+  EXPECT_EQ(1, x.length());
+  EXPECT_TRUE(x.incomparables().empty());
+  EXPECT_EQ(1, x.minimals().size());
+  EXPECT_EQ(0, x.minimals().front());
+  EXPECT_EQ(1, x.maximals().size());
+  EXPECT_EQ(0, x.maximals().front());
+}
+
 TEST(CkaTest, PartialStringConcurrentComposition)
 {
   PartialString x{'x'};
@@ -17,6 +31,16 @@ TEST(CkaTest, PartialStringConcurrentComposition)
 
   EXPECT_EQ(2, z.length());
   EXPECT_EQ(0, z.strict_partial_order().size());
+
+  EXPECT_EQ('x', z.label_function().at(0));
+  EXPECT_EQ('y', z.label_function().at(1));
+  EXPECT_EQ(1, z.incomparables().size());
+  EXPECT_EQ(2, z.minimals().size());
+  EXPECT_EQ(0, z.minimals().front());
+  EXPECT_EQ(1, z.minimals().back());
+  EXPECT_EQ(2, z.maximals().size());
+  EXPECT_EQ(0, z.maximals().front());
+  EXPECT_EQ(1, z.maximals().back());
 }
 
 TEST(CkaTest, SequentialPartialStringComposition)
@@ -29,6 +53,14 @@ TEST(CkaTest, SequentialPartialStringComposition)
   EXPECT_EQ(1, z.strict_partial_order().size());
   EXPECT_EQ(0, z.strict_partial_order().front().first);
   EXPECT_EQ(1, z.strict_partial_order().front().second);
+
+  EXPECT_EQ('x', z.label_function().at(0));
+  EXPECT_EQ('y', z.label_function().at(1));
+  EXPECT_TRUE(z.incomparables().empty());
+  EXPECT_EQ(1, z.minimals().size());
+  EXPECT_EQ(0, z.minimals().front());
+  EXPECT_EQ(1, z.maximals().size());
+  EXPECT_EQ(1, z.maximals().front());
 }
 
 TEST(CkaTest, PartialStringMinimals)
@@ -346,6 +378,274 @@ TEST(CkaTest, IncomparableSymmetric)
 
   EXPECT_FALSE(p <= q);
   EXPECT_FALSE(q <= p);
+}
+
+TEST(CkaTest, Equality)
+{
+  PartialString a{'x'};
+  PartialString b{'x'};
+  EXPECT_TRUE(a == b);
+
+  PartialString c{(a , b)};
+  PartialString d{(a , b)};
+  EXPECT_TRUE(c == d);
+
+  PartialString e{(a | b)};
+  PartialString f{(a | b)};
+  EXPECT_TRUE(e == f);
+}
+
+TEST(CkaTest, UintPower)
+{
+  EXPECT_EQ(5, internal::uint_pow(5, 1));
+  EXPECT_EQ(25, internal::uint_pow(5, 2));
+  EXPECT_EQ(125, internal::uint_pow(5, 3));
+  EXPECT_EQ(625, internal::uint_pow(5, 4));
+  EXPECT_EQ(3125, internal::uint_pow(5, 5));
+}
+
+TEST(CkaTest, ConvertPartialStringToProgram)
+{
+  PartialString x{'x'};
+  PartialString y{'y'};
+  PartialString p{((x | x) , y)};
+  Program P{p};
+
+  EXPECT_EQ(1, P.size());
+  EXPECT_TRUE(p == P.partial_strings().front());
+}
+
+TEST(CkaTest, MovesPartialStringIntoProgram)
+{
+  PartialString x{'x'};
+  PartialString y{'y'};
+  Program P{((x | x) , y)};
+
+  EXPECT_EQ(1, P.size());
+  EXPECT_TRUE(((x | x) , y) == P.partial_strings().front());
+}
+
+TEST(CkaTest, IdentityProgram)
+{
+  EXPECT_EQ(0, Program::identity().size());
+}
+
+TEST(CkaTest, InitLazyProgram)
+{
+  Program X{'x'};
+  Program Y{'y'};
+  Program Z{'z'};
+
+  EXPECT_EQ(1, X.size());
+  EXPECT_EQ(1, Y.size());
+  EXPECT_EQ(1, Z.size());
+
+  PartialString x{'x'};
+  PartialString y{'y'};
+  PartialString z{'z'};
+
+  // sanity check on `X`
+  EXPECT_TRUE(x == X.partial_strings().front());
+
+  Program P{X + (Y , Z)};
+  EXPECT_EQ(2, P.size());
+
+  internal::LazyProgram<','> Q{P};
+  EXPECT_EQ(2, Q.size());
+
+  internal::PartialStringIterator<','> iter{Q.partial_string_iterator()};
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE(x == p);
+  }
+
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE(p == (y , z));
+  }
+
+  EXPECT_FALSE(iter.has_next_partial_string());
+
+  // modify reference in `Q`
+  P = P + (X | Z);
+  EXPECT_EQ(3, P.size());
+  EXPECT_EQ(3, Q.size());
+}
+
+TEST(CkaTest, BinaryLazyProgram)
+{
+  Program X{'x'};
+  Program Y{'y'};
+  Program Z{'z'};
+
+  EXPECT_EQ(1, X.size());
+  EXPECT_EQ(1, Y.size());
+  EXPECT_EQ(1, Z.size());
+
+  PartialString x{'x'};
+  PartialString y{'y'};
+  PartialString z{'z'};
+
+  Program P{X + (Y , Z)};
+  EXPECT_EQ(2, P.size());
+
+  internal::LazyProgram<','> Q{P};
+  Q.extend();
+
+  EXPECT_EQ(4, Q.size());
+
+  internal::PartialStringIterator<','> iter{Q.partial_string_iterator()};
+
+  // 1
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE((x , x) == p);
+  }
+
+  // 2
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE(((y , z) , x) == p);
+  }
+
+  // 3
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE((x , (y , z)) == p);
+  }
+
+  // 4
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE(((y , z) , (y , z)) == p);
+  }
+
+  EXPECT_FALSE(iter.has_next_partial_string());
+}
+
+TEST(CkaTest, LazyProgramThree)
+{
+  Program X{'x'};
+  Program Y{'y'};
+  Program Z{'z'};
+
+  EXPECT_EQ(1, X.size());
+  EXPECT_EQ(1, Y.size());
+  EXPECT_EQ(1, Z.size());
+
+  PartialString x{'x'};
+  PartialString y{'y'};
+  PartialString z{'z'};
+
+  Program P{X + (Y , Z)};
+  EXPECT_EQ(2, P.size());
+
+  internal::LazyProgram<','> Q{P};
+  Q.extend();
+  Q.extend();
+
+  EXPECT_EQ(8, Q.size());
+
+  internal::PartialStringIterator<','> iter{Q.partial_string_iterator()};
+
+  // 1
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE(((x , x) , x) == p);
+  }
+
+  // 2
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE((((y , z) , x) , x) == p);
+  }
+
+  // 3
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE(((x , (y , z)) , x) == p);
+  }
+
+  // 4
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE((((y , z) , (y , z)) , x) == p);
+  }
+
+  // 5
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE(((x , x) , (y , z)) == p);
+  }
+
+  // 6
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE((((y , z) , x) , (y , z)) == p);
+  }
+
+  // 7
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE(((x , (y , z)) , (y , z)) == p);
+  }
+
+  // 8
+  EXPECT_TRUE(iter.has_next_partial_string());
+  {
+    PartialString p{iter.next_partial_string()};
+    EXPECT_TRUE((((y , z) , (y , z)) , (y , z)) == p);
+  }
+
+  EXPECT_FALSE(iter.has_next_partial_string());
+}
+
+TEST(CkaTest, LazyProgramSymbolic)
+{
+  Program X{'x'};
+  Program Y{'y'};
+  Program Z{'z'};
+
+  Program P{X + (Y | Z) + (Z , X)};
+  Program K{P};
+
+  // Eager "P , P , P"
+  K = (K , P);
+  K = (K , P);
+
+  // size of `P` (i.e. 3) cubed
+  EXPECT_EQ(27, K.size());
+
+  // Lazy "P , P , P"
+  internal::LazyProgram<','> Q{P};
+  Q.extend();
+  Q.extend();
+
+  EXPECT_EQ(K.size(), Q.size());
+
+  Program R{Program::identity()};
+  internal::PartialStringIterator<','> iter{Q.partial_string_iterator()};
+
+  // `R` is the union of all partial strings in `Q`
+  while (iter.has_next_partial_string())
+    R = R + Program(iter.next_partial_string());
+
+  EXPECT_EQ(K.size(), R.size());
+  EXPECT_TRUE(K <= R);
+  EXPECT_TRUE(R <= K);
 }
 
 TEST(CkaTest, ProgramExchangeLaw)
