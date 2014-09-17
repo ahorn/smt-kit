@@ -1,8 +1,7 @@
 #!/bin/bash
 
-END_BENCHMARK_NUM=${1:-3}
+BENCHMARK_NUM=${1:-3}
 PROG_SIZE=${2:-7}
-BEGIN_BENCHMARK_NUM=${3:-1}
 
 JAVA=java
 
@@ -12,7 +11,7 @@ SEED_JAR="seed.jar"
 SEED="${JAVA} -jar ${SEED_JAR} test/CKA-benchmark.xml ${PROG_SIZE} -text"
 
 usage() {
-  echo "Usage: $0 [end-benchmark-number=3] [program-size=7] [begin-benchmark-number=1]"
+  echo "Usage: $0 [end-benchmark-number=3] [program-size=7]"
   exit 1
 }
 
@@ -36,6 +35,8 @@ cat <<EOF
 #include <cka.h>
 
 using namespace cka;
+
+typedef std::vector<std::pair<Program, Program>> ProgramBenchmarks;
 
 void cka_benchmark()
 {
@@ -76,36 +77,41 @@ void cka_benchmark()
 
   file << "\\\\begin{table}" << std::endl;
   file << "\\\\begin{center}" << std::endl;
-  file << "\\\\begin{tabular}{l|l|l|l}" << std::endl;
+  file << "\\\\begin{tabular}{r|r|r|r}" << std::endl;
   file << "\\\\toprule" << std::endl;
   file << "Benchmark & Number of Checks & Numer of Solver Calls & Time (s) \\\\\\\\ \\\\midrule" << std::endl;
 
+  // program size: ${PROG_SIZE}
+  ProgramBenchmarks benchmarks = {
 EOF
 
-  echo "  // program size: ${PROG_SIZE}"
-for i in $(seq -f "%05g" ${BEGIN_BENCHMARK_NUM} ${END_BENCHMARK_NUM})
+for i in $(seq -f 1 1 ${BENCHMARK_NUM})
 do
   LHS=`${SEED}`
   RHS=`${SEED}`
 
-  echo "  {"
-  echo "    file << \"${i} & \";"
-  echo "    start = std::chrono::system_clock::now();"
-  echo "    r.check(lfp<','>(${LHS}), lfp<','>(${RHS}));"
-  echo "    end = std::chrono::system_clock::now();"
-  echo ""
-  echo "    seconds = std::chrono::duration_cast<std::chrono::seconds>(end - start);"
-  echo ""
-  echo "    file << r.number_of_checks() << \" & \";"
-  echo "    file << r.number_of_solver_calls() << \" & \";"
-  echo "    file << seconds.count() << \"\\\\\\\\\" << std::endl;"
-  echo ""
-  echo "    r.reset_number_of_checks();"
-  echo "    r.reset_number_of_solver_calls();"
-  echo "  }"
+  echo "    {{ ${LHS} }, { ${RHS} }},"
 done
 
 cat <<EOF
+  };
+
+  for (std::size_t n = 0; n < benchmarks.size(); ++n)
+  {
+    file << n << " & ";
+    start = std::chrono::system_clock::now();
+    r.check(lfp<','>(benchmarks[n].first), lfp<','>(benchmarks[n].second));
+    end = std::chrono::system_clock::now();
+
+    seconds = std::chrono::duration_cast<std::chrono::seconds>(end - start);
+
+    file << r.number_of_checks() << " & ";
+    file << r.number_of_solver_calls() << " & ";
+    file << seconds.count() << "\\\\\\\\" << std::endl;
+
+    r.reset_number_of_checks();
+    r.reset_number_of_solver_calls();
+  }
 
   file << "\\\\bottomrule" << std::endl;
   file << "\\\\end{tabular}" << std::endl;
