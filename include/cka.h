@@ -644,8 +644,9 @@ private:
       EventSort e_first, e_second;
       smt::Bools partial_order;
 
-      // It suffices to only check strict monotonicity for the transitive reduction of
-      // the strict partial ordering of `y` because `m_order_pred_x` is transitive.
+      // It suffices to check the strict monotonicity of the
+      // transitive reduction of the strict partial ordering
+      // of `y` because `m_order_pred_x` is transitive.
       for (const PartialString::EventPair& y_pair : y.strict_partial_order())
       {
         e_first = smt::apply(m_event_func, y_pair.first);
