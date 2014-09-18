@@ -648,6 +648,64 @@ TEST(CkaTest, LazyProgramSymbolic)
   EXPECT_TRUE(R <= K);
 }
 
+TEST(CkaTest, ProgramAssociativity)
+{
+  Program X{'x'};
+  Program Y{'y'};
+  Program Z{'z'};
+
+  EXPECT_TRUE(((X | Y) | Z) <= (X | (Y | Z)));
+  EXPECT_TRUE((X | (Y | Z)) <= ((X | Y) | Z));
+
+  EXPECT_TRUE(((X , Y) , Z) <= (X , (Y , Z)));
+  EXPECT_TRUE((X , (Y , Z)) <= ((X , Y) , Z));
+
+  EXPECT_TRUE(((X + Y) + Z) <= (X + (Y + Z)));
+  EXPECT_TRUE((X + (Y + Z)) <= ((X + Y) + Z));
+}
+
+TEST(CkaTest, ProgramNondeterministicChoiceIdempotence)
+{
+  Program X{'x'};
+
+  EXPECT_TRUE((X + X) <= X);
+  EXPECT_TRUE(X <= (X + X));
+}
+
+TEST(CkaTest, ProgramNondeterministicChoiceCommutativity)
+{
+  Program X{'x'};
+  Program Y{'y'};
+
+  EXPECT_TRUE((X + Y) <= (Y + X));
+  EXPECT_TRUE((Y + X) <= (X + Y));
+}
+
+TEST(CkaTest, ProgramNondeterministicChoiceIdentity)
+{
+  Program X{'x'};
+
+  EXPECT_TRUE((X + Program::zero()) <= X);
+  EXPECT_TRUE(X <= (X + Program::zero()));
+}
+
+TEST(CkaTest, ProgramSequentialAnnihilator)
+{
+  Program X{'x'};
+
+  EXPECT_TRUE((X , Program::zero()) <= Program::zero());
+  EXPECT_TRUE(Program::zero() <= (X , Program::zero()));
+}
+
+TEST(CkaTest, ProgramConcurrentCommutativity)
+{
+  Program X{'x'};
+  Program Y{'y'};
+
+  EXPECT_TRUE((X | Y) <= (Y | X));
+  EXPECT_TRUE((Y | X) <= (X | Y));
+}
+
 TEST(CkaTest, ProgramExchangeLaw)
 {
   Program U{'u'};
@@ -727,6 +785,101 @@ TEST(CkaTest, Reductions)
   EXPECT_TRUE(lfp<'|'>(P) <= lfp<'|'>(Q));
   EXPECT_FALSE(lfp<','>((P , P)) <= lfp<','>((Q , Q  , Q , Q)));
   EXPECT_TRUE(lfp<','>((P , P , P , P)) <= lfp<','>((Q , Q)));
+}
+
+TEST(CkaTest, ProgramSequentialLeftDistributivity)
+{
+  Program X{'x'};
+  Program Y{'y'};
+  Program Z{'z'};
+
+  Program P{((X + Y) , Z)};
+  Program Q{((X , Z) + (Y , Z))};
+
+  EXPECT_TRUE(P <= Q);
+  EXPECT_TRUE(Q <= P);
+}
+
+TEST(CkaTest, ProgramSequentialRightDistributivity)
+{
+  Program X{'x'};
+  Program Y{'y'};
+  Program Z{'z'};
+
+  Program P{(Z , (X + Y))};
+  Program Q{((Z , X) + (Z , Y))};
+
+  EXPECT_TRUE(P <= Q);
+  EXPECT_TRUE(Q <= P);
+}
+
+TEST(CkaTest, ProgramConcurrentLeftDistributivity)
+{
+  Program X{'x'};
+  Program Y{'y'};
+  Program Z{'z'};
+
+  Program P{((X + Y) | Z)};
+  Program Q{((X | Z) + (Y | Z))};
+  Program R{((Z | X) + (Z | Y))};
+
+  EXPECT_TRUE(P <= Q);
+  EXPECT_TRUE(Q <= P);
+
+  EXPECT_TRUE(P <= R);
+  EXPECT_TRUE(R <= P);
+}
+
+TEST(CkaTest, ProgramConcurrentRightDistributivity)
+{
+  Program X{'x'};
+  Program Y{'y'};
+  Program Z{'z'};
+
+  Program P{(Z | (X + Y))};
+  Program Q{((X | Z) + (Y | Z))};
+  Program R{((Z | X) + (Z | Y))};
+
+  EXPECT_TRUE(P <= Q);
+  EXPECT_TRUE(Q <= P);
+
+  EXPECT_TRUE(P <= R);
+  EXPECT_TRUE(R <= P);
+}
+
+TEST(CkaTest, ProgramSequentialNondistributivity)
+{
+  Program X{'x'};
+  Program Y{'y'};
+  Program Z{'z'};
+
+  Program P{((X , Y) + Z)};
+  Program Q{((X + Z) , (Y + Z))};
+
+  // `P` contains "z" but `Q` contains only partial strings
+  // whose length is at most two.
+  EXPECT_FALSE(P <= Q);
+
+  // `Q` contains "x , z" (among others) but `P` does not,
+  // even partial strings such as "x | z".
+  EXPECT_FALSE(Q <= P);
+}
+
+TEST(CkaTest, ProgramConcurentNondistributivity)
+{
+  Program X{'x'};
+  Program Y{'y'};
+  Program Z{'z'};
+
+  Program P{((X | Y) + Z)};
+  Program Q{((X + Z) | (Y + Z))};
+
+  // `P` contains "z" but `Q` contains only partial strings
+  // whose length is at most two.
+  EXPECT_FALSE(P <= Q);
+
+  // `Q` contains "x | z" (among others) but `P` does not.
+  EXPECT_FALSE(Q <= P);
 }
 
 /*
