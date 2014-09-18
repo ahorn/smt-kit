@@ -425,9 +425,9 @@ TEST(CkaTest, MovesPartialStringIntoProgram)
   EXPECT_TRUE(((x | x) , y) == P.partial_strings().front());
 }
 
-TEST(CkaTest, IdentityProgram)
+TEST(CkaTest, ZeroProgram)
 {
-  EXPECT_EQ(0, Program::identity().size());
+  EXPECT_EQ(0, Program::zero().size());
 }
 
 TEST(CkaTest, InitLazyProgram)
@@ -636,7 +636,7 @@ TEST(CkaTest, LazyProgramSymbolic)
 
   EXPECT_EQ(K.size(), Q.size());
 
-  Program R{Program::identity()};
+  Program R{Program::zero()};
   internal::PartialStringIterator<','> iter{Q.partial_string_iterator()};
 
   // `R` is the union of all partial strings in `Q`

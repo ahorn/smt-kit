@@ -242,10 +242,10 @@ private:
   : m_partial_strings{std::move(partial_strings)} {}
 
 public:
-  static Program& identity()
+  static Program& zero()
   {
-    static Program s_identity{PartialStrings()};
-    return s_identity;
+    static Program s_zero{PartialStrings()};
+    return s_zero;
   }
 
   /// A single partial string whose only event is labelled by `label`
