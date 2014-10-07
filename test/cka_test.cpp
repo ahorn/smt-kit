@@ -21,6 +21,8 @@ TEST(CkaTest, InitPartialString)
   EXPECT_EQ(0, x.minimals().front());
   EXPECT_EQ(1, x.maximals().size());
   EXPECT_EQ(0, x.maximals().front());
+  EXPECT_EQ('x', x.min_label());
+  EXPECT_EQ('x', x.max_label());
 }
 
 TEST(CkaTest, PartialStringConcurrentComposition)
@@ -41,6 +43,8 @@ TEST(CkaTest, PartialStringConcurrentComposition)
   EXPECT_EQ(2, z.maximals().size());
   EXPECT_EQ(0, z.maximals().front());
   EXPECT_EQ(1, z.maximals().back());
+  EXPECT_EQ('x', z.min_label());
+  EXPECT_EQ('y', z.max_label());
 }
 
 TEST(CkaTest, SequentialPartialStringComposition)
@@ -61,6 +65,8 @@ TEST(CkaTest, SequentialPartialStringComposition)
   EXPECT_EQ(0, z.minimals().front());
   EXPECT_EQ(1, z.maximals().size());
   EXPECT_EQ(1, z.maximals().front());
+  EXPECT_EQ('x', z.min_label());
+  EXPECT_EQ('y', z.max_label());
 }
 
 TEST(CkaTest, PartialStringMinimals)

@@ -11,6 +11,7 @@
 #include <limits>
 #include <utility>
 #include <cassert>
+#include <algorithm>
 
 #define _CKA_OPTIMIZE_
 
@@ -55,6 +56,9 @@ private:
   // initially, all events are deemed to be extremals
   EventSet m_minimals, m_maximals;
 
+  // smallest and largest label, undefined whenever `m_length` is zero
+  Label m_min_label, m_max_label;
+
   /// Empty partial string
 
   /// \post: `length()` is zero
@@ -64,7 +68,9 @@ private:
     m_length{0},
     m_incomparables{},
     m_minimals{},
-    m_maximals{} {}
+    m_maximals{},
+    m_min_label{0},
+    m_max_label{0} {}
 
   friend PartialString operator|(const PartialString&, const PartialString&);
   friend PartialString operator,(const PartialString&, const PartialString&);
@@ -80,7 +86,9 @@ private:
     m_length{x.length() + y.length()},
     m_incomparables{x.m_incomparables},
     m_minimals(m_length),
-    m_maximals(m_length)
+    m_maximals(m_length),
+    m_min_label{std::min(x.min_label(), y.min_label())},
+    m_max_label{std::max(x.max_label(), y.max_label())}
   {
     // point-wise union with labelling function of `y`
     m_label_function.reserve(m_length);
@@ -133,7 +141,9 @@ public:
     m_length{1},
     m_incomparables{},
     m_minimals(1),
-    m_maximals(1)
+    m_maximals(1),
+    m_min_label{label},
+    m_max_label{label}
   {
     recompute_extremals();
   }
@@ -203,6 +213,22 @@ public:
   {
     assert(e < m_length);
     return m_maximals[e] == IS_EXTREMAL_EVENT;
+  }
+
+  /// Smallest label
+
+  /// \warning undefined whenever `length()` is zero
+  Label min_label() const noexcept
+  {
+    return m_min_label;
+  }
+
+  /// Largest label
+
+  /// \warning undefined whenever `length()` is zero
+  Label max_label() const noexcept
+  {
+    return m_max_label;
   }
 
   /// Checks equality of two partial strings, not their isomorphism!
