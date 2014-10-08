@@ -48,8 +48,7 @@ PartialString operator,(const PartialString& x, const PartialString& y)
   PartialString z{x, y};
 
   const Length x_len{x.length()};
-  const PartialString::Events x_maximals{x.maximals()},
-    y_minimals{y.minimals()};
+  const Events x_maximals{x.maximals()}, y_minimals{y.minimals()};
 
   for (Event maximal : x_maximals)
     for (Event minimal : y_minimals)

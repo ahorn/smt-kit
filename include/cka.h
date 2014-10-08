@@ -26,11 +26,12 @@ typedef unsigned Label;
 typedef unsigned Event;
 typedef unsigned Length;
 
+typedef std::list<const Event> Events;
+
 /// Finite partial string
 class PartialString
 {
 public:
-  typedef std::list<const Event> Events;
   typedef std::pair<const Event, const Event> EventPair;
   typedef std::list<const EventPair> EventPairs;
   typedef std::vector<Label> LabelFunction;
