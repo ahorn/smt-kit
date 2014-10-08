@@ -562,8 +562,89 @@ namespace internal
     cend{(p).label_function().cend()};                                  \
   for (label = *citer; citer != cend; ++citer, ++event, label = *citer) \
 
+namespace internal
+{
+  /// Iterative algorithm to check the refinement of two elementary programs
+
+  /// This template class implements an iterative algorithm that repeatably calls
+  /// `PartialStringChecker::check(const PartialString&, const PartialString&)`
+  /// for each pair of partial strings in two elementary programs.
+  template<class PartialStringChecker>
+  class ProgramChecker
+  {
+  private:
+    template<Opchar opchar>
+    bool lazy_check(const Program& X, internal::LazyProgram<opchar>& Y)
+    {
+      bool is_refine;
+      internal::PartialStringIterator<opchar> iter{Y.partial_string_iterator()};
+      while (iter.has_next_partial_string())
+      {
+        PartialString y{iter.next_partial_string()};
+        for (const PartialString& x : X.partial_strings())
+        {
+          is_refine = false;
+
+          if (check(x, y))
+          {
+            is_refine = true;
+            break;
+          }
+        }
+
+        if (not is_refine)
+          return false;
+      }
+
+      return true;
+    }
+
+  public:
+    bool check(const Program& X, const Program& Y)
+    {
+      bool is_refine;
+      for (const PartialString& y : Y.partial_strings())
+      {
+        is_refine = false;
+        for (const PartialString& x : X.partial_strings())
+          if (static_cast<PartialStringChecker*>(this)->check(x, y))
+          {
+            is_refine = true;
+            break;
+          }
+
+        if (not is_refine)
+          return false;
+      }
+
+      return true;
+    }
+
+    template<Opchar opchar>
+    bool check(const LfpProgram<opchar>& lfpX, const LfpProgram<opchar>& lfpY)
+    {
+      const Program& X = lfpX.P();
+      const Program& Y = lfpY.P();
+      const unsigned j = Programs::max_length(X) / Programs::min_length(Y);
+
+/// \warning if programs are composed eagerly, you're likely to run out of memory!
+#ifdef _CKA_EAGER_
+      Program K{Y};
+      for (unsigned k{0}; k <= j; ++k, K = Eval<opchar>::bowtie(K, Y))
+#else
+      internal::LazyProgram<opchar> K{Y};
+      for (unsigned k{0}; k <= j; ++k, K.extend())
+#endif
+        if (ProgramChecker::lazy_check(X, K))
+          return true;
+
+      return false;
+    }
+  };
+}
+
 /// Symbolic decision procedure for certain CKA language containment problems
-class Refinement
+class Refinement : public internal::ProgramChecker<Refinement>
 {
 private:
   typedef smt::Int EventSort;
@@ -722,33 +803,9 @@ private:
     }
   }
 
-  template<Opchar opchar>
-  bool check(const Program& X, internal::LazyProgram<opchar>& Y)
-  {
-    bool is_refine;
-    internal::PartialStringIterator<opchar> iter{Y.partial_string_iterator()};
-    while (iter.has_next_partial_string())
-    {
-      PartialString y{iter.next_partial_string()};
-      for (const PartialString& x : X.partial_strings())
-      {
-        is_refine = false;
-
-        if (check(x, y))
-        {
-          is_refine = true;
-          break;
-        }
-      }
-
-      if (not is_refine)
-        return false;
-    }
-
-    return true;
-  }
-
 public:
+  using internal::ProgramChecker<Refinement>::check;
+
   Refinement()
   : m_solver(smt::QF_UFLIA_LOGIC),
     m_event_func{"event"},
@@ -810,46 +867,7 @@ public:
     return r == smt::sat;
   }
 
-  bool check(const Program& X, const Program& Y)
-  {
-    bool is_refine;
-    for (const PartialString& y : Y.partial_strings())
-    {
-      is_refine = false;
-      for (const PartialString& x : X.partial_strings())
-        if (check(x, y))
-        {
-          is_refine = true;
-          break;
-        }
 
-      if (not is_refine)
-        return false;
-    }
-
-    return true;
-  }
-
-  template<Opchar opchar>
-  bool check(const LfpProgram<opchar>& lfpX, const LfpProgram<opchar>& lfpY)
-  {
-    const Program& X = lfpX.P();
-    const Program& Y = lfpY.P();
-    const unsigned j = Programs::max_length(X) / Programs::min_length(Y);
-
-/// \warning if programs are composed eagerly, you're likely to run out of memory!
-#ifdef _CKA_EAGER_
-    Program K{Y};
-    for (unsigned k{0}; k <= j; ++k, K = Eval<opchar>::bowtie(K, Y))
-#else
-    internal::LazyProgram<opchar> K{Y};
-    for (unsigned k{0}; k <= j; ++k, K.extend())
-#endif
-      if (check(X, K))
-        return true;
-
-    return false;
-  }
 };
 
 /// Does `x` refine `y`?
