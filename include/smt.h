@@ -1729,6 +1729,11 @@ public:
     return reinterpret_cast<uintptr_t>(m_ptr);
   }
 
+  void reset() noexcept
+  {
+    m_ptr = nullptr;
+  }
+
   SharedExpr& operator=(const SharedExpr& other) noexcept
   {
     other.inc();
@@ -2458,6 +2463,11 @@ namespace internal
     : m_ptr(std::move(other.m_ptr))
     {
       assert(is_null() || internal::sort<T>() == sort());
+    }
+
+    void reset() noexcept
+    {
+      m_ptr.reset();
     }
 
     Term& operator=(const Term& other) 
