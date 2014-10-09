@@ -26,14 +26,20 @@ typedef unsigned Label;
 typedef unsigned Event;
 typedef unsigned Length;
 
-typedef std::list<const Event> Events;
+/// Treated as a list of `const Event`
+typedef std::list<Event> Events;
 
 /// Finite partial string
 class PartialString
 {
 public:
-  typedef std::pair<const Event, const Event> EventPair;
-  typedef std::list<const EventPair> EventPairs;
+  /// Treated as a pair of `const Event`
+  typedef std::pair<Event, Event> EventPair;
+
+  /// Treated as a `const EventPair`
+  typedef std::list<EventPair> EventPairs;
+
+  /// A map from `Event` to `Label`
   typedef std::vector<Label> LabelFunction;
 
 private:
@@ -448,7 +454,7 @@ namespace internal
       const Program* program_ptr,
       std::vector<unsigned>& vector)
     : m_program_ptr{program_ptr},
-      m_vector{vector} {}
+      m_vector(vector) {}
 
     bool has_next_partial_string() const noexcept
     {
@@ -508,15 +514,15 @@ namespace internal
   class LazyProgram
   {
   private:
-    // iteratively compose `m_program_ref` under `opchar`
-    const Program& m_program_ref;
+    // iteratively compose `*m_program_ptr` under `opchar`
+    const Program* m_program_ptr;
 
-    // array of indexes into `m_program_ref.partial_strings()`
+    // array of indexes into `m_program_ptr->partial_strings()`
     std::vector<unsigned> m_vector;
 
   public:
     LazyProgram(const Program& program_ref)
-    : m_program_ref{program_ref},
+    : m_program_ptr{&program_ref},
       m_vector{0}
     {
       assert(m_vector.size() == 1);
@@ -525,13 +531,13 @@ namespace internal
 
     const Program& P() const noexcept
     {
-      return m_program_ref;
+      return *m_program_ptr;
     }
 
     /// Program size grows exponentially with every call to `extend()`
     unsigned size() const noexcept
     {
-      return uint_pow(m_program_ref.size(), m_vector.size());
+      return uint_pow(m_program_ptr->size(), m_vector.size());
     }
 
     /// Conceptually computes `Eval<opchar>::bowtie(*this, P())`
@@ -548,7 +554,7 @@ namespace internal
     /// \warning at most one iterator can be used at a given time
     PartialStringIterator<opchar> partial_string_iterator() noexcept
     {
-      return {&m_program_ref, m_vector};
+      return {m_program_ptr, m_vector};
     }
   };
 }
