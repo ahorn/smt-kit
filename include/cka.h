@@ -13,8 +13,6 @@
 #include <cassert>
 #include <algorithm>
 
-#define _CKA_OPTIMIZE_
-
 #ifdef _CKA_DEBUG_
 #include <iostream>
 #endif
@@ -847,11 +845,6 @@ public:
 
     if (x.length() != y.length())
       return false;
-
-#ifdef _CKA_OPTIMIZE_
-    if (x.strict_partial_order().size() < y.strict_partial_order().size())
-      return false;
-#endif
 
     encode_label(m_label_func_x, x);
     encode_strict_partial_order(m_order_pred_x, x);

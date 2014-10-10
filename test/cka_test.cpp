@@ -898,6 +898,21 @@ TEST(CkaTest, ForAllThereExists)
   EXPECT_TRUE(P <= (P + Q));
 }
 
+// Since we only keep the transitive reduction of a strict partial
+// ordering, it would be wrong to optimize refinement checks based
+// on the number of partial order constraints.
+TEST(CkaTest, NumberOfStrictPartialOrderConstraints)
+{
+  PartialString u{'\0'};
+  PartialString v{'\1'};
+  PartialString x{'\2'};
+  PartialString y{'\3'};
+
+  // size of strict partial ordering on the LHS: 3
+  // size of strict partial ordering on the RHS: 4
+  EXPECT_TRUE((v , y , x , u) <= (v , (x | y) , u));
+}
+
 /*
  * For illustrative purposes, we also used Seed to randomly
  * generate tests according to the context-free grammar shown
