@@ -913,6 +913,15 @@ TEST(CkaTest, NumberOfStrictPartialOrderConstraints)
   EXPECT_TRUE((v , y , x , u) <= (v , (x | y) , u));
 }
 
+TEST(CkaTest, LfpWithNondeterministicChoice)
+{
+  Program P{'\1'};
+  Program Q{'\2'};
+
+  EXPECT_TRUE(lfp<','>(P) <= lfp<','>(P + Q));
+  EXPECT_TRUE(lfp<','>(Q) <= lfp<','>(P + Q));
+}
+
 /*
  * For illustrative purposes, we also used Seed to randomly
  * generate tests according to the context-free grammar shown

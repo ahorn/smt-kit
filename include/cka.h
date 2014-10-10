@@ -549,7 +549,7 @@ namespace internal
       m_vector.push_back(zero);
     }
 
-    /// \warning at most one iterator can be used at a given time
+    /// \warning cheap but at most one iterator can be used at a given time
     PartialStringIterator<opchar> partial_string_iterator() noexcept
     {
       return {m_program_ptr, m_vector};
@@ -581,15 +581,15 @@ namespace internal
     bool lazy_check(const Program& X, internal::LazyProgram<opchar>& Y)
     {
       bool is_refine;
-      internal::PartialStringIterator<opchar> iter{Y.partial_string_iterator()};
-      while (iter.has_next_partial_string())
+      for (const PartialString& x : X.partial_strings())
       {
-        PartialString y{iter.next_partial_string()};
-        for (const PartialString& x : X.partial_strings())
+        internal::PartialStringIterator<opchar> iter{Y.partial_string_iterator()};
+        is_refine = false;
+        while (iter.has_next_partial_string())
         {
-          is_refine = false;
+          PartialString y{iter.next_partial_string()};
 
-          if (check(x, y))
+          if (static_cast<PartialStringChecker*>(this)->check(x, y))
           {
             is_refine = true;
             break;
@@ -635,11 +635,12 @@ namespace internal
 #ifdef _CKA_EAGER_
       Program K{Y};
       for (unsigned k{0}; k <= j; ++k, K = Eval<opchar>::bowtie(K, Y))
+        if (ProgramChecker::check(X, K))
 #else
       internal::LazyProgram<opchar> K{Y};
       for (unsigned k{0}; k <= j; ++k, K.extend())
-#endif
         if (ProgramChecker::lazy_check(X, K))
+#endif
           return true;
 
       return false;
