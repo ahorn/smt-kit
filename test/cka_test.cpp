@@ -306,6 +306,8 @@ TEST(CkaTest, PartialStringTransitiveReduction)
   EXPECT_TRUE((x , y , z) <= ((x , z) | y));
   EXPECT_TRUE((x , z , y) <= ((x , z) | y));
   EXPECT_TRUE(((x | y) , z) <= ((x , z) | y));
+
+  EXPECT_FALSE((y , z , x) <= ((x , y) | z));
 }
 
 TEST(CkaTest, PartialStringYes)
