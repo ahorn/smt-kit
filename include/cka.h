@@ -459,6 +459,11 @@ namespace internal
       return m_program_ptr != nullptr;
     }
 
+    void reset()
+    {
+      std::fill(m_vector.begin(), m_vector.end(), 0);
+    }
+
     /// \pre: `has_next_partial_string()`
     PartialString next_partial_string()
     {
@@ -543,13 +548,14 @@ namespace internal
     {
       static constexpr unsigned zero = 0;
 
-      for (unsigned& i : m_vector)
-        i = zero;
-
+      std::fill(m_vector.begin(), m_vector.end(), zero);
       m_vector.push_back(zero);
     }
 
     /// \warning cheap but at most one iterator can be used at a given time
+
+    /// The iterator is in the same state the previous owner left it in.
+    /// \see also PartialStringIterator<opchar>::reset()
     PartialStringIterator<opchar> partial_string_iterator() noexcept
     {
       return {m_program_ptr, m_vector};
@@ -591,6 +597,9 @@ namespace internal
 
           if (static_cast<PartialStringChecker*>(this)->check(x, y))
           {
+            // relinquish ownership
+            iter.reset();
+
             is_refine = true;
             break;
           }

@@ -922,6 +922,25 @@ TEST(CkaTest, LfpWithNondeterministicChoice)
   EXPECT_TRUE(lfp<','>(Q) <= lfp<','>(P + Q));
 }
 
+TEST(CkaTest, ResetPartialStringIterator)
+{
+  Program A{'\0'};
+  Program B{'\1'};
+  Program C{'\2'};
+  Program D{'\3'};
+  Program E{'\6'};
+  Program F{'\7'};
+
+  Program G{(((E | F), (C | D)) + (E, B, F, C) + (F, A, E, D) +
+              (E, (C | B), F) + (A, (E | F), D) + ((A | B), (E | F)))};
+
+  Program H{(F, E, C, D)};
+  Program I{(E, B, C, F)};
+  Program J{(F, E, C, D)};
+
+  EXPECT_TRUE(lfp<','>(H + I + J) <= lfp<','>(G));
+}
+
 /*
  * For illustrative purposes, we also used Seed to randomly
  * generate tests according to the context-free grammar shown
