@@ -609,10 +609,10 @@ namespace internal
     bool check(const Program& X, const Program& Y)
     {
       bool is_refine;
-      for (const PartialString& y : Y.partial_strings())
+      for (const PartialString& x : X.partial_strings())
       {
         is_refine = false;
-        for (const PartialString& x : X.partial_strings())
+        for (const PartialString& y : Y.partial_strings())
           if (static_cast<PartialStringChecker*>(this)->check(x, y))
           {
             is_refine = true;

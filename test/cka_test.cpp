@@ -888,6 +888,14 @@ TEST(CkaTest, ProgramConcurentNondistributivity)
   EXPECT_FALSE(Q <= P);
 }
 
+TEST(CkaTest, ForAllThereExists)
+{
+  Program P{'\1'};
+  Program Q{'\2'};
+
+  EXPECT_TRUE(P <= (P + Q));
+}
+
 /*
  * For illustrative purposes, we also used Seed to randomly
  * generate tests according to the context-free grammar shown
