@@ -890,6 +890,104 @@ TEST(CkaTest, ProgramConcurentNondistributivity)
   EXPECT_FALSE(Q <= P);
 }
 
+/*
+ * Consider the following program consistent of two threads T1 and T2:
+ * "[a] := 0; [b] := 0; (T1 || T2)" where 'a' and 'b' are shared memory
+ * addresses, T1 = "[a] := 1; r1 := [b]" and T2 = "[b] := 1; r2 := [a]".
+ *
+ * Let P0 = "[a] := 0",
+ *     P1 = "[b] := 0",
+ *     P2 = "[a] := 1",
+ *     P3 = "r1 := [b]",
+ *     P4 = "[b] := 1",
+ *     P5 = "r2 := [a]".
+ *
+ * In this test we ignore that "P2" is sequenced-before "P3",
+ * and "P4" is sequenced-before "P5". In that case, we aim to
+ * explicitly consider the potential executions of the system.
+ */
+TEST(CkaTest, HandwrittenProgramIgnorePerThreadOrdering)
+{
+  Program P0{'\0'};
+  Program P1{'\1'};
+  Program P2{'\2'};
+  Program P3{'\3'};
+  Program P4{'\4'};
+  Program P5{'\5'};
+
+  Program A{(P0 , P5 , P2) + (P0 , P2 , P5) + (P2 , P5 , P0) + (P2 , P0 , P5)};
+  Program B{(P1 , P3 , P4) + (P1 , P4 , P3) + (P4 , P3 , P1) + (P4 , P1 , P3)};
+
+  Program R0{((P0 , P1 ) , ((P2 , P3) | (P4 , P5)))};
+  Program R1{(P0 | P1 | ((P2 , P3) | (P4 , P5)))};
+  Program R2{(P0 | P1 | P2 | P3 | P4 | P5)};
+
+  // For example, "P2" and "P3" are ordered in "R0" and "R1", but not in "A | B".
+  EXPECT_FALSE((A | B) <= R0);
+  EXPECT_FALSE((A | B) <= R1);
+
+  EXPECT_TRUE((A | B) <= R2);
+
+  // Since "P0" and "P2", as well as "P1" and "P4" can commute,
+  // let's simplify "A" and "B (note that this would violate
+  // the write serialization axiom which stipulates that all
+  // writes to the same memory address are totally ordered).
+  Program C{(P0 , P5 , P2) + ((P0 | P2) , P5) + (P2 , P5 , P0)};
+  Program D{(P1 , P3 , P4) + ((P1 | P4) , P3) + (P4 , P3 , P1)};
+
+  // For example, "P2" and "P3" are ordered in "R0" and "R1", but not in "C | D".
+  EXPECT_FALSE((C | D) <= R0);
+  EXPECT_FALSE((C | D) <= R1);
+
+  EXPECT_TRUE((C | D) <= R2);
+}
+
+/*
+ * Consider the following program consistent of two threads T1 and T2:
+ * "[a] := 0; [b] := 0; (T1 || T2)" where 'a' and 'b' are shared memory
+ * addresses, T1 = "[a] := 1; r1 := [b]" and T2 = "[b] := 1; r2 := [a]".
+ *
+ * Let P0 = "[a] := 0",
+ *     P1 = "[b] := 0",
+ *     P2 = "[a] := 1",
+ *     P3 = "r1 := [b]",
+ *     P4 = "[b] := 1",
+ *     P5 = "r2 := [a]".
+ *
+ * Sequential consistency can be achieved by requiring that
+ * "P2" is sequenced-before "P3", and "P4" is sequenced-before "P5".
+ */
+TEST(CkaTest, HandwrittenProgramSequentialConsistency)
+{
+  Program P0{'\0'};
+  Program P1{'\1'};
+  Program P2{'\2'};
+  Program P3{'\3'};
+  Program P4{'\4'};
+  Program P5{'\5'};
+
+  Program A{((P2 | P4) , (P3 | P5))};
+  Program B{(P4 , P5 , P2 , P3)};
+  Program C{(P2 , P3 , P4 , P5)};
+
+  Program P{((P0 | P1) , (A + B + C))};
+  Program Q{((P0 , P1) , (A + B + C))};
+
+  Program R0{((P0 , P1 ) , ((P2 , P3) | (P4 , P5)))};
+  Program R1{(P0 | P1 | ((P2 , P3) | (P4 , P5)))};
+  Program R2{(P0 | P1 | P2 | P3 | P4 | P5)};
+
+  // Both "P0" and "P1" are unsequenced in "P", but sequenced in "R0"
+  EXPECT_FALSE(P <= R0);
+
+  EXPECT_TRUE(P <= R1);
+  EXPECT_TRUE(P <= R2);
+
+  EXPECT_TRUE(Q <= R0);
+  EXPECT_TRUE(Q <= R1);
+  EXPECT_TRUE(Q <= R2);
+}
+
 TEST(CkaTest, ForAllThereExists)
 {
   Program P{'\1'};
@@ -1005,4 +1103,368 @@ TEST(CkaTest, Random)
   EXPECT_FALSE((lfp<'|'>(((G | A) + (W , (B | (G + (D + (C + ((W | (L + J)) + (V , (K + (D | S))))))))))) <= lfp<'|'>(H)));
   EXPECT_FALSE((lfp<','>(((O + V) + (G , H))) <= lfp<','>((A | (W , ((V | N) , ((B + C) , (J , (W , (F + (S | Q)))))))))));
   EXPECT_FALSE((lfp<'|'>(((D , (G , D)) , (V + ((Z | (W | O)) , (Q | (H + (Z , P))))))) <= lfp<'|'>((T + (P , (C | O))))));
+}
+
+TEST(CkaTest, MemoryLabels)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  EXPECT_EQ(0U, memory::relaxed_store_label(a));
+  EXPECT_EQ(1U, memory::relaxed_load_label(a));
+
+  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::relaxed_store_label(b));
+  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::relaxed_store_label(b, '\1'));
+  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::relaxed_load_label(b));
+}
+
+TEST(CkaTest, MemoryStoreAddressMonotonicity)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+  constexpr memory::Address c = 2U;
+
+  EXPECT_TRUE(memory::relaxed_store_label(a, '\0') < memory::relaxed_store_label(b));
+  EXPECT_TRUE(memory::relaxed_store_label(a, '\1') < memory::relaxed_store_label(b));
+  EXPECT_TRUE(memory::relaxed_store_label(a, '\2') < memory::relaxed_store_label(b));
+  EXPECT_TRUE(memory::relaxed_store_label(a, '\3') < memory::relaxed_store_label(b));
+
+  EXPECT_TRUE(memory::relaxed_store_label(b, '\0') < memory::relaxed_store_label(c));
+  EXPECT_TRUE(memory::relaxed_store_label(b, '\1') < memory::relaxed_store_label(c));
+  EXPECT_TRUE(memory::relaxed_store_label(b, '\2') < memory::relaxed_store_label(c));
+  EXPECT_TRUE(memory::relaxed_store_label(b, '\3') < memory::relaxed_store_label(c));
+}
+
+TEST(CkaTest, IsShared)
+{
+  EXPECT_TRUE(memory::is_shared(memory::relaxed_store_label(0U), memory::relaxed_load_label(0U)));
+  EXPECT_TRUE(memory::is_shared(memory::relaxed_store_label(1U), memory::relaxed_load_label(1U)));
+  EXPECT_TRUE(memory::is_shared(memory::relaxed_store_label(2U), memory::relaxed_load_label(2U)));
+
+  EXPECT_FALSE(memory::is_shared(memory::relaxed_store_label(0U), memory::relaxed_load_label(1U)));
+  EXPECT_FALSE(memory::is_shared(memory::relaxed_store_label(1U), memory::relaxed_load_label(3U)));
+  EXPECT_FALSE(memory::is_shared(memory::relaxed_store_label(2U), memory::relaxed_load_label(4U)));
+  EXPECT_FALSE(memory::is_shared(memory::relaxed_store_label(3U), memory::relaxed_load_label(4U)));
+  EXPECT_FALSE(memory::is_shared(memory::relaxed_store_label(4U), memory::relaxed_load_label(5U)));
+}
+
+TEST(CkaTest, IsStore)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+  constexpr memory::Address c = 2U;
+
+  EXPECT_TRUE(memory::is_relaxed_store(memory::relaxed_store_label(a)));
+  EXPECT_TRUE(memory::is_relaxed_store(memory::relaxed_store_label(b)));
+  EXPECT_TRUE(memory::is_relaxed_store(memory::relaxed_store_label(c)));
+
+  EXPECT_FALSE(memory::is_relaxed_store(memory::relaxed_load_label(a)));
+  EXPECT_FALSE(memory::is_relaxed_store(memory::relaxed_load_label(b)));
+  EXPECT_FALSE(memory::is_relaxed_store(memory::relaxed_load_label(c)));
+}
+
+TEST(CkaTest, IsLoad)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+  constexpr memory::Address c = 2U;
+
+  EXPECT_TRUE(memory::is_relaxed_load(memory::relaxed_load_label(a)));
+  EXPECT_TRUE(memory::is_relaxed_load(memory::relaxed_load_label(b)));
+  EXPECT_TRUE(memory::is_relaxed_load(memory::relaxed_load_label(c)));
+
+  EXPECT_FALSE(memory::is_relaxed_load(memory::relaxed_store_label(a)));
+  EXPECT_FALSE(memory::is_relaxed_load(memory::relaxed_store_label(b)));
+  EXPECT_FALSE(memory::is_relaxed_load(memory::relaxed_store_label(c)));
+}
+
+TEST(CkaTest, MemoryAddress)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+  constexpr memory::Address c = 2U;
+  constexpr memory::Address d = 3U;
+
+  EXPECT_EQ(0U, memory::address(memory::relaxed_load_label(a)));
+  EXPECT_EQ(1U, memory::address(memory::relaxed_load_label(b)));
+  EXPECT_EQ(2U, memory::address(memory::relaxed_load_label(c)));
+  EXPECT_EQ(3U, memory::address(memory::relaxed_load_label(d)));
+
+  EXPECT_EQ(0U, memory::address(memory::relaxed_store_label(a)));
+  EXPECT_EQ(1U, memory::address(memory::relaxed_store_label(b)));
+  EXPECT_EQ(2U, memory::address(memory::relaxed_store_label(c)));
+  EXPECT_EQ(3U, memory::address(memory::relaxed_store_label(d)));
+}
+
+TEST(CkaTest, MemoryRefinementReadFromSameAddress)
+{
+  constexpr memory::Address a = 0U;
+
+  memory::Refinement r;
+
+  PartialString x{memory::relaxed_store_label(a, '\1')};
+  PartialString y{memory::relaxed_store_label(a, '\2')};
+  PartialString z{memory::relaxed_load_label(a)};
+
+  PartialString p{((x , y) | z)};
+
+  EXPECT_TRUE(r.check((x , z , y), p));
+  EXPECT_TRUE(r.check((x , y , z), p));
+
+  // LHS violates the sequenced-before ordering in "p"
+  EXPECT_FALSE(r.check((y , x , z), p));
+
+  // since "x" and "y" have different labels, LHS violates
+  // the sequenced-before order of "x" and "y" in "p".
+  EXPECT_FALSE(r.check((y , z , x), p));
+
+  // But `alike_y` and `y` have the same label so the reordering is allowed.
+  PartialString alike_y{memory::relaxed_store_label(a, '\2')};
+  EXPECT_TRUE(r.check((y , z , alike_y), ((alike_y , y) | z)));
+
+  // Our memory model rules out that a relaxed load happens-before
+  // all relaxed stores on the same memory address.
+  EXPECT_FALSE(r.check((z , y , x), p));
+  EXPECT_FALSE(r.check((z , x , y), p));
+  EXPECT_FALSE(r.check((z , (x | y)), p));
+}
+
+TEST(CkaTest, MemoryRefinementReadFromDifferentAddress)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::Refinement r;
+
+  PartialString x{memory::relaxed_store_label(a)};
+  PartialString y{memory::relaxed_store_label(b)};
+  PartialString z{memory::relaxed_load_label(a)};
+
+  PartialString p{((x , y) | z)};
+
+  EXPECT_TRUE(r.check((x , z , y), p));
+  EXPECT_TRUE(r.check((x , y , z), p));
+
+  // LHS violates the sequenced-before ordering in "p"
+  EXPECT_FALSE(r.check((y , x , z), p));
+  EXPECT_FALSE(r.check((y , z , x), p));
+
+  // "y" writes a different memory address from "x"
+  // and both are unsequenced in RHS
+  EXPECT_TRUE(r.check((y , x , z), (x | y | z)));
+  EXPECT_FALSE(r.check((y , z , x), (x | y | z)));
+
+  EXPECT_FALSE(r.check((z , y , x), p));
+  EXPECT_FALSE(r.check((z , x , y), p));
+  EXPECT_FALSE(r.check((z , (x | y)), p));
+}
+
+TEST(CkaTest, MemoryRefinementModificationOrderSameAddress)
+{
+  constexpr memory::Address a = 0U;
+
+  memory::Refinement r;
+
+  PartialString x{memory::relaxed_store_label(a)};
+  PartialString y{memory::relaxed_store_label(a)};
+
+  PartialString p{(x | y)};
+
+  EXPECT_TRUE(r.check((x , y), p));
+  EXPECT_TRUE(r.check((y , x), p));
+
+  // Our memory model rules out that two relaxed stores
+  // on the same memory address happen concurrently even
+  // when there are no relaxed loads reading from these.
+  EXPECT_FALSE(r.check((x | y), p));
+}
+
+TEST(CkaTest, MemoryRefinementModificationOrderDifferentAddress)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::Refinement r;
+
+  PartialString x{memory::relaxed_store_label(a)};
+  PartialString y{memory::relaxed_store_label(b)};
+
+  PartialString p{(x | y)};
+
+  EXPECT_TRUE(r.check((x , y), p));
+  EXPECT_TRUE(r.check((y , x), p));
+  EXPECT_TRUE(r.check((x | y), p));
+}
+
+TEST(CkaTest, MemoryRefinementRelaxedPartialString)
+{
+  constexpr memory::Address a = 0U;
+
+  memory::Refinement r;
+
+  PartialString u{memory::relaxed_store_label(a, 1)};
+  PartialString v{memory::relaxed_store_label(a, 2)};
+  PartialString x{memory::relaxed_load_label(a)};
+  PartialString y{memory::relaxed_load_label(a)};
+
+  PartialString p{((u , v) | (x , y))};
+
+  EXPECT_FALSE(r.check(p, p));
+}
+
+TEST(CkaTest, MemoryRefinementRelaxedProgram)
+{
+  constexpr memory::Address a = 0U;
+
+  memory::Refinement r;
+
+  Program U{memory::relaxed_store_label(a, 1)};
+  Program V{memory::relaxed_store_label(a, 2)};
+  Program X{memory::relaxed_load_label(a)};
+  Program Y{memory::relaxed_load_label(a)};
+
+  Program P{((U , V) | (X , Y))};
+
+  EXPECT_TRUE(r.check((U , X , Y , V), P));
+  EXPECT_TRUE(r.check((U ,  X , V , Y), P));
+  EXPECT_TRUE(r.check((U , V , X , Y), P));
+
+  // since "Y" and "X" have the same label, they can be reordered
+  EXPECT_TRUE(r.check((U , V , Y , X), P));
+  EXPECT_TRUE(r.check((U , Y , X , V), P));
+
+  EXPECT_FALSE(r.check(P, P));
+  EXPECT_FALSE(r.check((V , X , Y , V), P));
+  EXPECT_FALSE(r.check((U , X , Y , U), P));
+  EXPECT_FALSE(r.check((V , X , Y , U), P));
+  EXPECT_FALSE(r.check(((U | V) , X , Y), P));
+  EXPECT_FALSE(r.check((U , V , (X | Y)), P));
+  EXPECT_FALSE(r.check((X , U , Y , V), P));
+  EXPECT_FALSE(r.check((X , Y , U , V), P));
+  EXPECT_FALSE(r.check((X , U , V, Y), P));
+  EXPECT_FALSE(r.check((Y , U , V, X), P));
+  EXPECT_FALSE(r.check((Y , U , X , V), P));
+  EXPECT_FALSE(r.check((Y , X , U , V), P));
+}
+
+/*
+ * Consider the following program consistent of two threads T1 and T2:
+ * "[a] := 0; [b] := 0; (T1 || T2)" where 'a' and 'b' are shared memory
+ * addresses, T1 = "[a] := 1; r1 := [b]" and T2 = "[b] := 1; r2 := [a]".
+ *
+ * Let p0 = "[a] := 0",
+ *     p1 = "[b] := 0",
+ *     p2 = "[a] := 1",
+ *     p3 = "r1 := [b]",
+ *     p4 = "[b] := 1",
+ *     p5 = "r2 := [a]".
+ *
+ * Sequential consistency can be achieved by requiring that
+ * "p2" is sequenced-before "p3", and "p4" is sequenced-before "p5".
+ */
+TEST(CkaTest, MemoryHandwrittenPartialStringSequentialConsistency)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::Refinement r;
+
+  PartialString p0{memory::relaxed_store_label(a, '\0')};
+  PartialString p1{memory::relaxed_store_label(b, '\0')};
+  PartialString p2{memory::relaxed_store_label(a, '\1')};
+  PartialString p3{memory::relaxed_load_label(b)};
+  PartialString p4{memory::relaxed_store_label(b, '\1')};
+  PartialString p5{memory::relaxed_load_label(a)};
+
+  PartialString v0{((p2 | p4) , (p3 | p5))};
+  PartialString v1{(p4 , p5 , p2 , p3)};
+  PartialString v2{(p2 , p3 , p4 , p5)};
+
+  PartialString x0{((p0 | p1) , v0)};
+  PartialString x1{((p0 | p1) , v1)};
+  PartialString x2{((p0 | p1) , v2)};
+
+  PartialString y0{((p0 , p1) , v0)};
+  PartialString y1{((p0 , p1) , v1)};
+  PartialString y2{((p0 , p1) , v2)};
+
+  PartialString r0{((p0 , p1 ) , ((p2 , p3) | (p4 , p5)))};
+  PartialString r1{(p0 | p1 | ((p2 , p3) | (p4 , p5)))};
+  PartialString r2{(p0 | p1 | p2 | p3 | p4 | p5)};
+
+  // Both "p0" and "p1" are unsequenced in "p", but sequenced in "r0"
+  EXPECT_FALSE(r.check(x0, r0));
+  EXPECT_FALSE(r.check(x1, r0));
+  EXPECT_FALSE(r.check(x2, r0));
+
+  EXPECT_TRUE(r.check(x0, r1));
+  EXPECT_TRUE(r.check(x1, r1));
+  EXPECT_TRUE(r.check(x2, r1));
+
+  EXPECT_TRUE(r.check(x0, r2));
+  EXPECT_TRUE(r.check(x1, r2));
+  EXPECT_TRUE(r.check(x2, r2));
+
+  EXPECT_TRUE(r.check(y0, r0));
+  EXPECT_TRUE(r.check(y1, r0));
+  EXPECT_TRUE(r.check(y2, r0));
+
+  EXPECT_TRUE(r.check(y0, r1));
+  EXPECT_TRUE(r.check(y1, r0));
+  EXPECT_TRUE(r.check(y2, r0));
+
+  EXPECT_TRUE(r.check(y0, r2));
+  EXPECT_TRUE(r.check(y1, r2));
+  EXPECT_TRUE(r.check(y2, r2));
+}
+
+/*
+ * Consider the following program consistent of two threads T1 and T2:
+ * "[a] := 0; [b] := 0; (T1 || T2)" where 'a' and 'b' are shared memory
+ * addresses, T1 = "[a] := 1; r1 := [b]" and T2 = "[b] := 1; r2 := [a]".
+ *
+ * Let P0 = "[a] := 0",
+ *     P1 = "[b] := 0",
+ *     P2 = "[a] := 1",
+ *     P3 = "r1 := [b]",
+ *     P4 = "[b] := 1",
+ *     P5 = "r2 := [a]".
+ *
+ * Sequential consistency can be achieved by requiring that
+ * "P2" is sequenced-before "P3", and "P4" is sequenced-before "P5".
+ */
+TEST(CkaTest, MemoryHandwrittenProgramSequentialConsistency)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::Refinement r;
+
+  Program P0{memory::relaxed_store_label(a, '\0')};
+  Program P1{memory::relaxed_store_label(b, '\0')};
+  Program P2{memory::relaxed_store_label(a, '\1')};
+  Program P3{memory::relaxed_load_label(b)};
+  Program P4{memory::relaxed_store_label(b, '\1')};
+  Program P5{memory::relaxed_load_label(a)};
+
+  Program A{((P2 | P4) , (P3 | P5))};
+  Program B{(P4 , P5 , P2 , P3)};
+  Program C{(P2 , P3 , P4 , P5)};
+
+  Program P{((P0 | P1) , (A + B + C))};
+  Program Q{((P0 , P1) , (A + B + C))};
+
+  Program R0{((P0 , P1 ) , ((P2 , P3) | (P4 , P5)))};
+  Program R1{(P0 | P1 | ((P2 , P3) | (P4 , P5)))};
+  Program R2{(P0 | P1 | P2 | P3 | P4 | P5)};
+
+  // Both "P0" and "P1" are unsequenced in "P", but sequenced in "R0"
+  EXPECT_FALSE(r.check(P, R0));
+
+  EXPECT_TRUE(r.check(P, R1));
+  EXPECT_TRUE(r.check(P, R2));
+
+  EXPECT_TRUE(r.check(Q, R0));
+  EXPECT_TRUE(r.check(Q, R1));
+  EXPECT_TRUE(r.check(Q, R2));
 }

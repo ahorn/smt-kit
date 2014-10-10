@@ -657,10 +657,17 @@ namespace internal
   };
 }
 
+namespace memory
+{
+  class Refinement;
+}
+
 /// Symbolic decision procedure for certain CKA language containment problems
 class Refinement : public internal::ProgramChecker<Refinement>
 {
 private:
+  friend class memory::Refinement;
+
   typedef smt::Int EventSort;
   typedef smt::Int LabelSort;
 
@@ -891,6 +898,221 @@ bool operator<=(const LfpProgram<opchar>& lfpX, const LfpProgram<opchar>& lfpY)
 {
   static Refinement s_refinement;
   return s_refinement.check(lfpX, lfpY);
+}
+
+namespace memory
+{
+
+/// At least 16-bit address of a memory location
+typedef unsigned short Address;
+
+/// Treated as an 8-bit value written to memory
+typedef unsigned char Byte;
+
+/// Returns an even non-negative number
+
+/// C++14-style relaxed store of an atomic byte `b` (default zero)
+/// to a memory location identified by address `a`.
+///
+/// Stores with a higher address will result in greater labels.
+/// That is, `relaxed_store_label` is monotonic; equivalently,
+///
+///   for all addresses a and a', if a is less than a', then
+///   `relaxed_store_label(a, b) < relaxed_store_label(a, b')`
+///   where b and b' are arbitrary bytes.
+Label relaxed_store_label(Address a, Byte b = 0);
+
+/// Returns an odd positive number
+
+/// C++14-style relaxed load instruction of an atomic integral value.
+Label relaxed_load_label(Address);
+
+/// Is label a C++14-style relaxed store on an atomic integral type?
+bool is_relaxed_store(Label);
+
+/// Is label a C++14-style relaxed load on an atomic integral type?
+bool is_relaxed_load(Label);
+
+/// The memory address read or written by a relaxed load or store
+
+/// \pre: `is_relaxed_store(label)` or `is_relaxed_load(label)`
+Address address(Label label);
+
+/// Is same memory accessed by `store` and `load`?
+
+/// \pre: `is_relaxed_store(store)` and `is_relaxed_load(load)`
+bool is_shared(Label store, Label load);
+
+/// Is same memory accessed by a `store` and `load` event?
+
+/// \pre: `store` and `load` are events in `x`
+/// \pre: `is_relaxed_store(x.label_function().at(store))`
+/// \pre: `is_relaxed_load(x.label_function().at(load))`
+bool is_shared(const PartialString& x, Event store, Event load);
+
+/// Checks refinement of two concurrent shared memory programs
+
+/// Memory addresses are assumed to be consecutive, starting at zero.
+class Refinement : public internal::ProgramChecker<Refinement>
+{
+private:
+  /// Maps a memory address to a list of events, sorted in ascending order
+
+  /// \remark we assume that memory addresses are dense
+  typedef std::vector<Events> PerAddressMap;
+
+  /// SMT sort for events
+  typedef cka::Refinement::EventSort EventSort;
+
+  /// Increase precision of the generic partial string refinement checker
+  cka::Refinement m_refinement;
+
+  /// Encode happens-before relation with monotonic bijective morphism
+  smt::Bool event_order_in_x(Event a, Event b)
+  {
+    Refinement::EventSort e_a{smt::apply(m_refinement.m_event_func, a)};
+    Refinement::EventSort e_b{smt::apply(m_refinement.m_event_func, b)};
+
+    return smt::apply(m_refinement.m_order_pred_x, e_a, e_b);
+  }
+
+public:
+  using internal::ProgramChecker<Refinement>::check;
+
+  Refinement() : m_refinement{} {}
+
+  /// Does `x` refine `y` when `y` satisfies the memory axioms?
+  bool check(const cka::PartialString& x, const PartialString& y)
+  {
+    static const char* const s_rf_prefix = "rf!";
+
+    if (x.length() != y.length())
+      return false;
+
+    Label label;
+    Address address;
+    smt::Bool rf_bool;
+    EventSort rf_event;
+    PerAddressMap store_map, load_map;
+
+    // see monotonicity of `relaxed_store_label`
+    // and assumptions on memory addresses
+    const Address max_address{memory::address(y.max_label())};
+    {
+      store_map.resize(max_address + 1U);
+      load_map.resize(max_address + 1U);
+    }
+
+    for (Event e{0}; e < y.length(); ++e)
+    {
+      label = y.label_function().at(e);
+      address = memory::address(label);
+
+      assert(address < store_map.size());
+      assert(address < load_map.size());
+
+      if (is_relaxed_load(label))
+        load_map[address].emplace_back(e);
+      else
+        store_map[address].emplace_back(e);
+    }
+
+    // some read-from pair:
+    //
+    // for every load e, there exists a store e' to the
+    // same memory address such that e' happens-before e
+    smt::Bools some_rf;
+
+    // for all memory addresses, the "some read-from" axiom
+    // must hold, i.e. conjunction of "some_rf" predicates
+    smt::Bools all_rf;
+
+    // read-from relation:
+    //
+    // for all loads e and stores e', if e and e' access the
+    // same memory and e reads-from e', then e' happens-before e
+    smt::Bools order_rf;
+
+    // modification order:
+    //
+    // relaxed stores on the same memory address are totally ordered
+    smt::Bools mo;
+
+#ifdef _CKA_ENCODE_FR_
+    // from-read relation (optional if we don't check written values):
+    //
+    // for all stores s and s' and loads l such that all three
+    // access the same memory location, if l reads-from s and
+    // s happens-before s', then l happens-before s'.
+    smt::Bools order_fr;
+#endif
+
+    assert(store_map.size() == max_address + 1U);
+    assert(load_map.size() == max_address + 1U);
+
+    for (address = 0; address <= max_address; ++address)
+    {
+      const Events& stores = store_map[address];
+      const Events& loads = load_map[address];
+
+      for (Event load : loads)
+      {
+        rf_event = smt::any<EventSort>(s_rf_prefix, load);
+
+        for (Event store_a : stores)
+        {
+          assert(is_shared(y, store_a, load));
+          rf_bool = store_a == rf_event;
+
+          some_rf.push_back(rf_bool);
+          order_rf.push_back(smt::implies(rf_bool,
+            event_order_in_x(store_a, load)));
+
+#ifdef _CKA_ENCODE_FR_
+          for (Event store_b : stores)
+            if (store_a != store_b)
+            {
+              order_fr.push_back(smt::implies(
+                rf_bool and event_order_in_x(store_a, store_b),
+                event_order_in_x(load, store_b)));
+            }
+#endif
+        }
+
+        if (!some_rf.empty())
+          all_rf.push_back(smt::disjunction(some_rf));
+
+        some_rf.clear();
+      }
+
+      for (Event store_a : stores)
+        for (Event store_b : stores)
+          if (store_a < store_b)
+          {
+            mo.push_back(event_order_in_x(store_a, store_b));
+            mo.push_back(event_order_in_x(store_b, store_a));
+          }
+
+    } // end of address iteration
+
+    if (!all_rf.empty())
+      m_refinement.m_solver.add(smt::conjunction(all_rf));
+
+    if (!order_rf.empty())
+      m_refinement.m_solver.add(smt::conjunction(order_rf));
+
+    if (!mo.empty())
+      m_refinement.m_solver.add(smt::disjunction(mo));
+
+#ifdef _CKA_ENCODE_FR_
+    if (!order_fr.empty())
+      m_refinement.m_solver.add(smt::conjunction(order_fr));
+#endif
+
+    return m_refinement.check(x, y);
+  }
+};
+
 }
 
 }

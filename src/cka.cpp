@@ -1,4 +1,5 @@
 #include "cka.h"
+#include <cstddef>
 
 namespace cka
 {
@@ -107,6 +108,60 @@ bool operator<=(const Program& X, const Program& Y)
 {
   static Refinement s_refinement;
   return s_refinement.check(X, Y);
+}
+
+namespace memory
+{
+
+static constexpr std::size_t shift_address = 1 + sizeof(Byte) * 8;
+
+Label relaxed_store_label(Address address, Byte byte)
+{
+  return (address << shift_address) | (byte << 1);
+}
+
+Label relaxed_load_label(Address address)
+{
+  // it's okay to lose a single byte here,
+  // we get simpler address handling in turn
+  return relaxed_store_label(address) | 1U;
+}
+
+bool is_relaxed_store(Label op)
+{
+  return (op & 1U) == 0U;
+}
+
+bool is_relaxed_load(Label op)
+{
+  return (op & 1U) == 1U;
+}
+
+Address address(Label op)
+{
+  // smaller return type acts as bitmask
+  return op >> shift_address;
+}
+
+bool is_shared(Label store, Label load)
+{
+  assert(is_relaxed_store(store));
+  assert(is_relaxed_load(load));
+
+  return address(store) == address(load);
+}
+
+bool is_shared(const PartialString& x, Event store, Event load)
+{
+  assert(store <= x.label_function().size());
+  assert(load <= x.label_function().size());
+
+  Label store_label{x.label_function().at(store)};
+  Label load_label{x.label_function().at(load)};
+
+  return is_shared(store_label, load_label);
+}
+
 }
 
 }
