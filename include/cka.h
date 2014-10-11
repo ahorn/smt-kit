@@ -735,6 +735,11 @@ namespace internal
     }
 
   public:
+    void reset_number_of_shortcuts()
+    {
+      m_number_of_shortcuts = 0;
+    }
+
     unsigned number_of_shortcuts() const
     {
       return m_number_of_shortcuts;
