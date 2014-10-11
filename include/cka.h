@@ -666,8 +666,44 @@ namespace memory
   class Refinement;
 }
 
+namespace internal
+{
+  /// A conservative refinement check for two partial strings
+  class Refinement
+  {
+  private:
+    // Statistics
+    unsigned m_number_of_shortcuts;
+
+  protected:
+    Refinement() : m_number_of_shortcuts{0} {}
+
+    /// Returns true whenever `x` does not refine `y`, and false if unknown
+    bool shortcut(const PartialString& x, const PartialString& y)
+    {
+      if (x.length() != y.length() or
+          x.min_label() != y.min_label() or
+          x.max_label() != y.max_label())
+      {
+        ++m_number_of_shortcuts;
+        return true;
+      }
+
+      return false;
+    }
+
+  public:
+    unsigned number_of_shortcuts() const
+    {
+      return m_number_of_shortcuts;
+    }
+  };
+}
+
 /// Symbolic decision procedure for certain CKA language containment problems
-class Refinement : public internal::ProgramChecker<Refinement>
+class Refinement
+: public internal::ProgramChecker<Refinement>,
+  public internal::Refinement
 {
 private:
   friend class memory::Refinement;
@@ -864,7 +900,7 @@ public:
   {
     ++m_number_of_checks;
 
-    if (x.length() != y.length())
+    if (internal::Refinement::shortcut(x, y))
       return false;
 
     encode_label(m_label_func_x, x);
@@ -957,8 +993,9 @@ bool is_shared(const PartialString& x, Event store, Event load);
 /// Checks refinement of two concurrent shared memory programs
 
 /// Memory addresses are assumed to be consecutive, starting at zero.
-class Refinement : public internal::ProgramChecker<Refinement>
-{
+class Refinement
+: public internal::ProgramChecker<Refinement>,
+  public internal::Refinement
 private:
   /// Maps a memory address to a list of events, sorted in ascending order
 
@@ -990,7 +1027,7 @@ public:
   {
     static const char* const s_rf_prefix = "rf!";
 
-    if (x.length() != y.length())
+    if (internal::Refinement::shortcut(x, y))
       return false;
 
     Label label;

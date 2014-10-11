@@ -1053,6 +1053,30 @@ TEST(CkaTest, ResetPartialStringIterator)
   EXPECT_TRUE(lfp<','>(H + I + J) <= lfp<','>(G));
 }
 
+TEST(CkaTest, Statistics)
+{
+  Program P{'\0'};
+  Program Q{'\1'};
+
+  Refinement r;
+
+  EXPECT_EQ(0, r.number_of_checks());
+  EXPECT_EQ(0, r.number_of_shortcuts());
+  EXPECT_EQ(0, r.number_of_solver_calls());
+
+  EXPECT_FALSE(r.check(P, (P , Q)));
+
+  EXPECT_EQ(1, r.number_of_checks());
+  EXPECT_EQ(1, r.number_of_shortcuts());
+  EXPECT_EQ(0, r.number_of_solver_calls());
+
+  EXPECT_TRUE(r.check((P | Q), (Q | P)));
+
+  EXPECT_EQ(2, r.number_of_checks());
+  EXPECT_EQ(1, r.number_of_shortcuts());
+  EXPECT_EQ(1, r.number_of_solver_calls());
+}
+
 /*
  * For illustrative purposes, we also used Seed to randomly
  * generate tests according to the context-free grammar shown
