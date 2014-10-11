@@ -460,7 +460,7 @@ namespace internal
 
     bool has_next_partial_string() const noexcept
     {
-      return m_program_ptr != nullptr;
+      return m_program_ptr != nullptr and not m_vector.empty();
     }
 
     void reset()
