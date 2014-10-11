@@ -25,6 +25,20 @@ TEST(CkaTest, InitPartialString)
   EXPECT_EQ('x', x.max_label());
 }
 
+/// `PartialString::empty()::min_label()` is undefined
+TEST(CkaTest, EmptyPartialAndExtremalLabel)
+{
+  PartialString x{'x'};
+  PartialString y{(PartialString::empty() | x)};
+  PartialString z{(x | PartialString::empty())};
+
+  EXPECT_EQ('x', y.min_label());
+  EXPECT_EQ('x', y.max_label());
+
+  EXPECT_EQ('x', z.min_label());
+  EXPECT_EQ('x', z.max_label());
+}
+
 TEST(CkaTest, PartialStringConcurrentComposition)
 {
   PartialString x{'x'};

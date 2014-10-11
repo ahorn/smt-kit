@@ -95,6 +95,10 @@ private:
     m_min_label{std::min(x.min_label(), y.min_label())},
     m_max_label{std::max(x.max_label(), y.max_label())}
   {
+    // Is `m_min_label` currently undefined?
+    if (x.length() == 0) m_min_label = y.min_label();
+    if (y.length() == 0) m_min_label = x.min_label();
+
     // point-wise union with labelling function of `y`
     m_label_function.reserve(m_length);
     for (Label label : y.m_label_function)
