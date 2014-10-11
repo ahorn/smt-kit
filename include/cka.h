@@ -607,6 +607,10 @@ namespace internal
   /// This template class implements an iterative algorithm that repeatably calls
   /// `PartialStringChecker::check(const PartialString&, const PartialString&)`
   /// for each pair of partial strings in two elementary programs.
+  ///
+  /// If `Program::partial_strings()` are sorted, we can sometimes exit
+  /// the innermost loop quicker. But we found this not to make a big
+  /// difference on random sets.
   template<class PartialStringChecker>
   class ProgramChecker
   {

@@ -59,6 +59,15 @@ PartialString operator,(const PartialString& x, const PartialString& y)
   return z;
 }
 
+#ifdef _CKA_SORT_PARTIAL_STRINGS_
+struct {
+  bool operator()(const PartialString& x, const PartialString& y)
+  {
+    return x.length() < y.length();
+  }
+} LengthComparison;
+#endif
+
 Program operator|(const Program& X, const Program& Y)
 {
   Program::PartialStrings partial_strings;
@@ -67,6 +76,10 @@ Program operator|(const Program& X, const Program& Y)
   for (const PartialString& x : X.partial_strings())
     for (const PartialString& y : Y.partial_strings())
       partial_strings.push_back((x | y));
+
+#ifdef _CKA_SORT_PARTIAL_STRINGS_
+  std::sort(partial_strings.begin(), partial_strings.end(), LengthComparison);
+#endif
 
   return {std::move(partial_strings)};
 }
@@ -79,6 +92,10 @@ Program operator,(const Program& X, const Program& Y)
   for (const PartialString& x : X.partial_strings())
     for (const PartialString& y : Y.partial_strings())
       partial_strings.push_back((x , y));
+
+#ifdef _CKA_SORT_PARTIAL_STRINGS_
+  std::sort(partial_strings.begin(), partial_strings.end(), LengthComparison);
+#endif
 
   return {std::move(partial_strings)};
 }
@@ -94,6 +111,10 @@ Program operator+(const Program& X, const Program& Y)
 
   for (const PartialString& y : Y.partial_strings())
     partial_strings.push_back(y);
+
+#ifdef _CKA_SORT_PARTIAL_STRINGS_
+  std::sort(partial_strings.begin(), partial_strings.end(), LengthComparison);
+#endif
 
   return {std::move(partial_strings)};
 }
