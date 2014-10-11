@@ -39,6 +39,52 @@ TEST(CkaTest, EmptyPartialAndExtremalLabel)
   EXPECT_EQ('x', z.max_label());
 }
 
+TEST(CkaTest, PartialStringNumberOfEventsWithLabel)
+{
+  PartialString x{'x'};
+  PartialString y{'y'};
+  PartialString z{'z'};
+
+  EXPECT_EQ(1, x.number_of_events_with_label('x'));
+  EXPECT_EQ(0, x.number_of_events_with_label('y'));
+  EXPECT_EQ(0, x.number_of_events_with_label('z'));
+
+  EXPECT_EQ(0, y.number_of_events_with_label('x'));
+  EXPECT_EQ(1, y.number_of_events_with_label('y'));
+  EXPECT_EQ(0, y.number_of_events_with_label('z'));
+
+  EXPECT_EQ(0, z.number_of_events_with_label('x'));
+  EXPECT_EQ(0, z.number_of_events_with_label('y'));
+  EXPECT_EQ(1, z.number_of_events_with_label('z'));
+
+  PartialString u{(x | z)};
+  {
+    EXPECT_EQ(0, u.number_of_events_with_label('x' - '\1'));
+    EXPECT_EQ(1, u.number_of_events_with_label('x'));
+    EXPECT_EQ(0, u.number_of_events_with_label('y'));
+    EXPECT_EQ(1, u.number_of_events_with_label('z'));
+    EXPECT_EQ(0, u.number_of_events_with_label('z' + '\1'));
+  }
+
+  PartialString v{(u , y)};
+  {
+    EXPECT_EQ(0, v.number_of_events_with_label('x' - '\1'));
+    EXPECT_EQ(1, v.number_of_events_with_label('x'));
+    EXPECT_EQ(1, v.number_of_events_with_label('y'));
+    EXPECT_EQ(1, v.number_of_events_with_label('z'));
+    EXPECT_EQ(0, v.number_of_events_with_label('z' + '\1'));
+  }
+
+  PartialString v_prime{(v , y)};
+  {
+    EXPECT_EQ(0, v_prime.number_of_events_with_label('x' - '\1'));
+    EXPECT_EQ(1, v_prime.number_of_events_with_label('x'));
+    EXPECT_EQ(2, v_prime.number_of_events_with_label('y'));
+    EXPECT_EQ(1, v_prime.number_of_events_with_label('z'));
+    EXPECT_EQ(0, v_prime.number_of_events_with_label('z' + '\1'));
+  }
+}
+
 TEST(CkaTest, PartialStringConcurrentComposition)
 {
   PartialString x{'x'};

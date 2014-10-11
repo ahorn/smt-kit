@@ -64,6 +64,9 @@ private:
   // smallest and largest label, undefined whenever `m_length` is zero
   Label m_min_label, m_max_label;
 
+  // size of vector is fixed to `m_max_label + 1`
+  std::vector<unsigned> m_number_of_events_with_label;
+
   /// Empty partial string
 
   /// \post: `length()` is zero
@@ -75,7 +78,8 @@ private:
     m_minimals{},
     m_maximals{},
     m_min_label{0},
-    m_max_label{0} {}
+    m_max_label{0},
+    m_number_of_events_with_label{} {}
 
   friend PartialString operator|(const PartialString&, const PartialString&);
   friend PartialString operator,(const PartialString&, const PartialString&);
@@ -93,7 +97,8 @@ private:
     m_minimals(m_length),
     m_maximals(m_length),
     m_min_label{std::min(x.min_label(), y.min_label())},
-    m_max_label{std::max(x.max_label(), y.max_label())}
+    m_max_label{std::max(x.max_label(), y.max_label())},
+    m_number_of_events_with_label{x.m_number_of_events_with_label}
   {
     // Is `m_min_label` currently undefined?
     if (x.length() == 0) m_min_label = y.min_label();
@@ -118,6 +123,13 @@ private:
     // incomparables in `y` stay incomparable in the coproduct of `x` and `y`
     for (const EventPair& pair : y.m_incomparables)
       m_incomparables.emplace_back(offset + pair.first, offset + pair.second);
+
+    // vector is never resized, assumes labels are dense and sufficiently small
+    m_number_of_events_with_label.resize(m_max_label + 1U);
+
+    unsigned i{0};
+    for (unsigned j : y.m_number_of_events_with_label)
+      m_number_of_events_with_label[i++] += j;
   }
 
   /// Update `m_maximals` and `m_minmals` according to `m_strict_partial_order`
@@ -152,9 +164,13 @@ public:
     m_minimals(1),
     m_maximals(1),
     m_min_label{label},
-    m_max_label{label}
+    m_max_label{label},
+    m_number_of_events_with_label{}
   {
     recompute_extremals();
+
+    m_number_of_events_with_label.resize(label + 1U);
+    m_number_of_events_with_label[label] = 1U;
   }
 
   Length length() const noexcept
@@ -238,6 +254,14 @@ public:
   Label max_label() const noexcept
   {
     return m_max_label;
+  }
+
+  unsigned number_of_events_with_label(Label label) const noexcept
+  {
+    if (m_number_of_events_with_label.size() <= label)
+      return 0;
+
+    return m_number_of_events_with_label[label];
   }
 
   /// Checks equality of two partial strings, not their isomorphism!
@@ -692,6 +716,24 @@ namespace internal
       return false;
     }
 
+    /// Returns true whenever `x` does not refine `y`, and false if unknown
+
+    /// This approximation is more precise than `shortcut` but may be therefore slower.
+    bool more_precise_shortcut(const PartialString& x, const PartialString& y)
+    {
+      if (shortcut(x, y))
+        return true;
+
+      for (Label label{x.min_label()}; label <= x.min_label(); ++label)
+        if (x.number_of_events_with_label(label) != y.number_of_events_with_label(label))
+        {
+          ++m_number_of_shortcuts;
+          return true;
+        }
+
+      return false;
+    }
+
   public:
     unsigned number_of_shortcuts() const
     {
@@ -996,6 +1038,7 @@ bool is_shared(const PartialString& x, Event store, Event load);
 class Refinement
 : public internal::ProgramChecker<Refinement>,
   public internal::Refinement
+{
 private:
   /// Maps a memory address to a list of events, sorted in ascending order
 
