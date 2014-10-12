@@ -3,13 +3,16 @@ Build instructions can be found online:
 
   http://cvc4.cs.nyu.edu/wiki/Building_CVC4_from_source
 
-Note that smt-kit must be compiled with the same compiler as used for CVC4.
+Note 1: On our system, we could not link smt-kit and CVC4-1.4 when
+        smt-kit was compiled with clang++.
 
-First download the source code and create a build directory as follows:
+Note 2: Starting in CVC4-1.4, we have noticed errors on freeing memory.
+
+First download the CVC4 source code and create a build directory as follows:
 
   git clone https://github.com/CVC4/CVC4.git
   cd CVC4
-  git checkout tags/1.3
+  git checkout tags/1.4
   ./autogen.sh
   mkdir target
 
@@ -22,11 +25,10 @@ tools already installed, we successfully built CVC4 with these commands:
   ./configure --prefix=`pwd`/target \
               --with-antlr-dir=`pwd`/antlr-3.4 \
               ANTLR=`pwd`/antlr-3.4/bin/antlr3 \
-              CPPFLAGS=-I/opt/local/include \
               LDFLAGS=-L/opt/local/lib \
               CXX=clang++ \
-              CXXFLAGS='-stdlib=libstdc++' \
-              CPPFLAGS='-stdlib=libstdc++'
+              CXXFLAGS='-I/opt/local/include -stdlib=libstdc++' \
+              CPPFLAGS='-I/opt/local/include -stdlib=libstdc++'
   make
   make check
   make install
@@ -41,3 +43,4 @@ On GNU/Linux, the following build instructions should work with g++:
 If you encounter other problems during the build, there are several helpful
 Wiki pages, e.g. http://cvc4.cs.nyu.edu/wiki/Build_Problems.
 
+The CVC4 mailing list is also very helpful.
