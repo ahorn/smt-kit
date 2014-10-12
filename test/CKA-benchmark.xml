@@ -13,26 +13,6 @@
   </union>
 
   <constants id="Symbol">
-    <symbol value="A"/>
-    <symbol value="B"/>
-    <symbol value="C"/>
-    <symbol value="D"/>
-    <symbol value="E"/>
-    <symbol value="F"/>
-    <symbol value="G"/>
-    <symbol value="H"/>
-    <symbol value="I"/>
-    <symbol value="J"/>
-    <symbol value="K"/>
-    <symbol value="L"/>
-    <symbol value="M"/>
-    <symbol value="N"/>
-    <symbol value="O"/>
-    <symbol value="P"/>
-    <symbol value="Q"/>
-    <symbol value="R"/>
-    <symbol value="S"/>
-    <symbol value="T"/>
     <symbol value="U"/>
     <symbol value="V"/>
     <symbol value="W"/>

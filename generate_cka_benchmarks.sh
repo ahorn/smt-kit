@@ -40,26 +40,6 @@ typedef std::vector<std::pair<Program, Program>> ProgramBenchmarks;
 
 void cka_benchmark()
 {
-  Program A{'a'};
-  Program B{'b'};
-  Program C{'c'};
-  Program D{'d'};
-  Program E{'e'};
-  Program F{'f'};
-  Program G{'g'};
-  Program H{'h'};
-  Program I{'i'};
-  Program J{'j'};
-  Program K{'k'};
-  Program L{'l'};
-  Program M{'m'};
-  Program N{'n'};
-  Program O{'o'};
-  Program P{'p'};
-  Program Q{'q'};
-  Program R{'r'};
-  Program S{'s'};
-  Program T{'t'};
   Program U{'u'};
   Program V{'v'};
   Program W{'w'};
@@ -77,20 +57,20 @@ void cka_benchmark()
 
   file << "\\\\begin{table}" << std::endl;
   file << "\\\\begin{center}" << std::endl;
-  file << "\\\\begin{tabular}{r|r|r|r}" << std::endl;
+  file << "\\\\begin{tabular}{r|r|r|r|r}" << std::endl;
   file << "\\\\toprule" << std::endl;
-  file << "Benchmark & Number of Checks & Numer of Solver Calls & Time (s) \\\\\\\\ \\\\midrule" << std::endl;
+  file << "Benchmark & Number of Checks & Number of Shortcuts & Numer of Solver Calls & Time (s) \\\\\\\\ \\\\midrule" << std::endl;
 
   // program size: ${PROG_SIZE}
   ProgramBenchmarks benchmarks = {
 EOF
 
-for i in $(seq -f 1 1 ${BENCHMARK_NUM})
+for i in $(seq 0 ${BENCHMARK_NUM})
 do
   LHS=`${SEED}`
   RHS=`${SEED}`
 
-  echo "    {{ ${LHS} }, { ${RHS} }},"
+  echo "    /* ${i} */ {{ ${LHS} }, { ${RHS} }},"
 done
 
 cat <<EOF
@@ -98,6 +78,10 @@ cat <<EOF
 
   for (std::size_t n = 0; n < benchmarks.size(); ++n)
   {
+    r.reset_number_of_checks();
+    r.reset_number_of_shortcuts();
+    r.reset_number_of_solver_calls();
+
     file << n << " & ";
     start = std::chrono::system_clock::now();
     r.check(lfp<','>(benchmarks[n].first), lfp<','>(benchmarks[n].second));
@@ -106,11 +90,9 @@ cat <<EOF
     seconds = std::chrono::duration_cast<std::chrono::seconds>(end - start);
 
     file << r.number_of_checks() << " & ";
+    file << r.number_of_shortcuts() << " & ";
     file << r.number_of_solver_calls() << " & ";
     file << seconds.count() << "\\\\\\\\" << std::endl;
-
-    r.reset_number_of_checks();
-    r.reset_number_of_solver_calls();
   }
 
   file << "\\\\bottomrule" << std::endl;
