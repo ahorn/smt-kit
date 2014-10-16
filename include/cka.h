@@ -1042,8 +1042,8 @@ Byte byte(Label op);
 
 /// The memory address read or written by a relaxed load or store
 
-/// \pre: `is_relaxed_store(label)` or `is_relaxed_load(label)`
-Address address(Label label);
+/// \pre: `is_relaxed_store(op)` or `is_relaxed_load(op)`
+Address address(Label op);
 
 /// Is same memory accessed by `store` and `load`?
 
