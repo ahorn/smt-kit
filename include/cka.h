@@ -1018,11 +1018,27 @@ Label relaxed_store_label(Address a, Byte b = 0);
 /// C++14-style relaxed load instruction of an atomic integral value.
 Label relaxed_load_label(Address);
 
+/// Returns a relaxed load label that expects to read `b`
+Label assert_eq_label(Address a, Byte b);
+
+/// Returns a relaxed load label that expects to read anything but `b`
+Label assert_neq_label(Address a, Byte b);
+
 /// Is label a C++14-style relaxed store on an atomic integral type?
 bool is_relaxed_store(Label);
 
 /// Is label a C++14-style relaxed load on an atomic integral type?
 bool is_relaxed_load(Label);
+
+/// Is label a load that expects to read a certain byte?
+bool is_assert(Label);
+bool is_assert_eq(Label);
+bool is_assert_neq(Label);
+
+/// The byte written or expected by `op`
+
+/// \pre: `is_relaxed_store(op)` or `is_assert(op)`
+Byte byte(Label op);
 
 /// The memory address read or written by a relaxed load or store
 
@@ -1082,10 +1098,10 @@ public:
     if (internal::Refinement::shortcut(x, y))
       return false;
 
-    Label label;
     Address address;
     smt::Bool rf_bool;
     EventSort rf_event;
+    Label label, store_label;
     PerAddressMap store_map, load_map;
 
     // see monotonicity of `relaxed_store_label`
@@ -1131,14 +1147,12 @@ public:
     // relaxed stores on the same memory address are totally ordered
     smt::Bools mo;
 
-#ifdef _CKA_ENCODE_FR_
     // from-read relation (optional if we don't check written values):
     //
     // for all stores s and s' and loads l such that all three
     // access the same memory location, if l reads-from s and
     // s happens-before s', then l happens-before s'.
     smt::Bools order_fr;
-#endif
 
     assert(store_map.size() == max_address + 1U);
     assert(load_map.size() == max_address + 1U);
@@ -1150,18 +1164,25 @@ public:
 
       for (Event load : loads)
       {
+        label = y.label_function().at(load);
         rf_event = smt::any<EventSort>(s_rf_prefix, load);
 
         for (Event store_a : stores)
         {
-          assert(is_shared(y, store_a, load));
-          rf_bool = store_a == rf_event;
+          store_label = y.label_function().at(store_a);
 
+          assert(is_relaxed_store(store_label));
+          assert(is_shared(y, store_a, load));
+
+          if ((is_assert_eq(label) and byte(store_label) != byte(label)) or
+                (is_assert_neq(label) and byte(store_label) == byte(label)))
+            continue;
+
+          rf_bool = store_a == rf_event;
           some_rf.push_back(rf_bool);
           order_rf.push_back(smt::implies(rf_bool,
             event_order_in_x(store_a, load)));
 
-#ifdef _CKA_ENCODE_FR_
           for (Event store_b : stores)
             if (store_a != store_b)
             {
@@ -1169,12 +1190,12 @@ public:
                 rf_bool and event_order_in_x(store_a, store_b),
                 event_order_in_x(load, store_b)));
             }
-#endif
         }
 
-        if (!some_rf.empty())
-          all_rf.push_back(smt::disjunction(some_rf));
+        if (some_rf.empty())
+          return false;
 
+        all_rf.push_back(smt::disjunction(some_rf));
         some_rf.clear();
       }
 
@@ -1197,10 +1218,8 @@ public:
     if (!mo.empty())
       m_refinement.m_solver.add(smt::disjunction(mo));
 
-#ifdef _CKA_ENCODE_FR_
     if (!order_fr.empty())
       m_refinement.m_solver.add(smt::conjunction(order_fr));
-#endif
 
     return m_refinement.check(x, y);
   }

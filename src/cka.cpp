@@ -134,18 +134,27 @@ bool operator<=(const Program& X, const Program& Y)
 namespace memory
 {
 
-static constexpr std::size_t shift_address = 1 + sizeof(Byte) * 8;
+static constexpr std::size_t shift_byte = 3;
+static constexpr std::size_t shift_address = shift_byte + sizeof(Byte) * 8;
 
 Label relaxed_store_label(Address address, Byte byte)
 {
-  return (address << shift_address) | (byte << 1);
+  return (address << shift_address) | (byte << shift_byte);
 }
 
 Label relaxed_load_label(Address address)
 {
-  // it's okay to lose a single byte here,
-  // we get simpler address handling in turn
   return relaxed_store_label(address) | 1U;
+}
+
+Label assert_eq_label(Address address, Byte byte)
+{
+  return relaxed_store_label(address, byte) | 3U;
+}
+
+Label assert_neq_label(Address address, Byte byte)
+{
+  return assert_eq_label(address, byte) | 4U;
 }
 
 bool is_relaxed_store(Label op)
@@ -156,6 +165,27 @@ bool is_relaxed_store(Label op)
 bool is_relaxed_load(Label op)
 {
   return (op & 1U) == 1U;
+}
+
+bool is_assert(Label op)
+{
+  return (op & 3U) == 3U;
+}
+
+bool is_assert_eq(Label op)
+{
+  return (op & 7U) == 3U;
+}
+
+bool is_assert_neq(Label op)
+{
+  return (op & 7U) == 7U;
+}
+
+Byte byte(Label op)
+{
+  // smaller return type acts as bitmask
+  return op >> shift_byte;
 }
 
 Address address(Label op)
