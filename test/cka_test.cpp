@@ -1865,3 +1865,438 @@ TEST(CkaTest, MemoryAxiomWithAssertionsAndSequencedWrites)
   EXPECT_TRUE(r.check(Y, X));
   EXPECT_FALSE(r.check(Z, X));
 }
+
+/// Consider the relaxed memory program shown in:
+///
+///   https://gcc.gnu.org/wiki/Atomic/GCCMM/AtomicSync
+///
+/// -Thread 1-       -Thread 2-                   -Thread 3-
+/// y.store (20);    if (x.load() == 10) {        if (y.load() == 10)
+/// x.store (10);      assert (y.load() == 20)      assert (x.load() == 10)
+///                    y.store (10)
+///                  }
+TEST(CkaTest, GnuExampleOverApproximation)
+{
+  Program initx{1};
+  Program inity{2};
+
+  Program w1y{3};
+  Program w1x{4};
+
+  Program if2f{5};
+  Program if2t{6};
+  Program a2f{7};
+  Program a2t{8};
+  Program w2y{9};
+
+  Program if3f{10};
+  Program if3t{11};
+  Program a3f{12};
+  Program a3t{13};
+
+  Program R{((initx , inity) ,
+              ( (w1y | w1x)
+              | ((if2t , (a2f + (a2t , w2y))) + if2f)
+              | ((if3t , (a3t + a3f)) + if3f)))};
+
+  Program SC{((initx , inity) ,
+              ( ((if2f | if3f | w1y) , w1x)
+              + (w1y , w1x ,
+                  ( (((if2t , a2t) | if3f) , w2y)
+                  + (if2t , a2t , w2y , if3t , a3t)))))};
+
+  EXPECT_TRUE(SC <= R);
+}
+
+TEST(CkaTest, GnuExampleOverApproximationWithMemoryLabels)
+{
+  constexpr memory::Address x = 0U;
+  constexpr memory::Address y = 1U;
+
+  Program initx{memory::relaxed_store_label(x, '\0')};
+  Program inity{memory::relaxed_store_label(y, '\0')};
+
+  Program w1y{memory::relaxed_store_label(y, '\20')};
+  Program w1x{memory::relaxed_store_label(x, '\10')};
+
+  Program if2f{memory::relaxed_load_label(x)};
+  Program if2t{memory::relaxed_load_label(x)};
+  Program a2f{memory::relaxed_load_label(y)};
+  Program a2t{memory::relaxed_load_label(y)};
+  Program w2y{memory::relaxed_store_label(y, '\10')};
+
+  Program if3f{memory::relaxed_load_label(y)};
+  Program if3t{memory::relaxed_load_label(y)};
+  Program a3f{memory::relaxed_load_label(x)};
+  Program a3t{memory::relaxed_load_label(x)};
+
+  Program R{((initx , inity) ,
+              ( (w1y | w1x)
+              | ((if2t , (a2f + (a2t , w2y))) + if2f)
+              | ((if3t , (a3t + a3f)) + if3f)))};
+
+  Program SCOverApproximation{((initx , inity) ,
+              ( ((if2f | if3f | w1y) , w1x)
+              + (w1y , w1x ,
+                  ( (((if2t , a2t) | if3f) , w2y)
+                  + (if2t , a2t , w2y , if3t , a3t)))))};
+
+  EXPECT_TRUE(SCOverApproximation <= R);
+}
+
+TEST(CkaTest, GnuExampleOverApproximationWithMemoryAndAssertionLabels)
+{
+  constexpr memory::Address x = 0U;
+  constexpr memory::Address y = 1U;
+
+  Program initx{memory::relaxed_store_label(x, '\0')};
+  Program inity{memory::relaxed_store_label(y, '\0')};
+
+  Program w1y{memory::relaxed_store_label(y, '\20')};
+  Program w1x{memory::relaxed_store_label(x, '\10')};
+
+  Program if2f{memory::assert_neq_label(x, '\10')};
+  Program if2t{memory::assert_eq_label(x, '\10')};
+  Program a2f{memory::assert_neq_label(y, '\20')};
+  Program a2t{memory::assert_eq_label(y, '\20')};
+  Program w2y{memory::relaxed_store_label(y, '\10')};
+
+  Program if3f{memory::assert_neq_label(y, '\10')};
+  Program if3t{memory::assert_eq_label(y, '\10')};
+  Program a3f{memory::assert_neq_label(x, '\10')};
+  Program a3t{memory::assert_eq_label(x, '\10')};
+
+  Program R{((initx , inity) ,
+              ( (w1y | w1x)
+              | ((if2t , (a2f + (a2t , w2y))) + if2f)
+              | ((if3t , (a3t + a3f)) + if3f)))};
+
+  Program SCOverApproximation{((initx , inity) ,
+              ( ((if2f | if3f | w1y) , w1x)
+              + (w1y , w1x ,
+                  ( (((if2t , a2t) | if3f) , w2y)
+                  + (if2t , a2t , w2y , if3t , a3t)))))};
+
+  EXPECT_TRUE(SCOverApproximation <= R);
+}
+
+TEST(CkaTest, GnuExampleOverApproximationWithAssertionFreeMemoryAxioms)
+{
+  constexpr memory::Address x = 0U;
+  constexpr memory::Address y = 1U;
+
+  Program initx{memory::relaxed_store_label(x, '\0')};
+  Program inity{memory::relaxed_store_label(y, '\0')};
+
+  Program w1y{memory::relaxed_store_label(y, '\20')};
+  Program w1x{memory::relaxed_store_label(x, '\10')};
+
+  Program if2f{memory::relaxed_load_label(x)};
+  Program if2t{memory::relaxed_load_label(x)};
+  Program a2f{memory::relaxed_load_label(y)};
+  Program a2t{memory::relaxed_load_label(y)};
+  Program w2y{memory::relaxed_store_label(y, '\10')};
+
+  Program if3f{memory::relaxed_load_label(y)};
+  Program if3t{memory::relaxed_load_label(y)};
+  Program a3f{memory::relaxed_load_label(x)};
+  Program a3t{memory::relaxed_load_label(x)};
+
+  Program R{((initx , inity) ,
+              ( (w1y | w1x)
+              | ((if2t , (a2f + (a2t , w2y))) + if2f)
+              | ((if3t , (a3t + a3f)) + if3f)))};
+
+  Program SCOverApproximation{((initx , inity) ,
+              ( ((if2f | if3f | w1y) , w1x)
+              + (w1y , w1x ,
+                  ( (((if2t , a2t) | if3f) , w2y)
+                  + (if2t , a2t , w2y , if3t , a3t)))))};
+
+  Program Not_SC{((initx , inity) ,
+              ( ((if2f | ((if3f , w1y) + (w1y , if3f))) , w1x)
+              + (w1y , w1x ,
+                  ( ((if2t , a2f) | if3f)
+                  + (if2t , a2t , w2y , if3t , a3t)))))};
+
+  EXPECT_TRUE(SCOverApproximation <= R);
+
+  memory::Refinement r;
+
+  EXPECT_FALSE(r.check(SCOverApproximation, R));
+
+  // Since no assertion labels are used, the memory axioms do not
+  // take into account the values, leading to a coarser abstraction.
+  EXPECT_TRUE(r.check(Not_SC, R));
+}
+
+TEST(CkaTest, GnuExampleOverApproximationWithAssertionsAndMemoryAxioms)
+{
+  constexpr memory::Address x = 0U;
+  constexpr memory::Address y = 1U;
+
+  Program initx{memory::relaxed_store_label(x, '\0')};
+  Program inity{memory::relaxed_store_label(y, '\0')};
+
+  Program w1y{memory::relaxed_store_label(y, '\20')};
+  Program w1x{memory::relaxed_store_label(x, '\10')};
+
+  Program if2f{memory::assert_neq_label(x, '\10')};
+  Program if2t{memory::assert_eq_label(x, '\10')};
+  Program a2f{memory::assert_neq_label(y, '\20')};
+  Program a2t{memory::assert_eq_label(y, '\20')};
+  Program w2y{memory::relaxed_store_label(y, '\10')};
+
+  Program if3f{memory::assert_neq_label(y, '\10')};
+  Program if3t{memory::assert_eq_label(y, '\10')};
+  Program a3f{memory::assert_neq_label(x, '\10')};
+  Program a3t{memory::assert_eq_label(x, '\10')};
+
+  Program R{((initx , inity) ,
+              ( (w1y | w1x)
+              | ((if2t , (a2f + (a2t , w2y))) + if2f)
+              | ((if3t , (a3t + a3f)) + if3f)))};
+
+  Program SCHigherOverApproximation{(initx, inity,
+        ( (w1y, w1x)
+        | ((if2t, a2t, w2y) + if2f)
+        | ((if3t, a3t) + if3f)))};
+
+  Program SCLowerOverApproximation{((initx , inity) ,
+              ( ((if2f | if3f | w1y) , w1x)
+              + (w1y , w1x ,
+                  ( (((if2t , a2t) | if3f) , w2y)
+                  + (if2t , a2t , w2y , if3t , a3t)))))};
+
+  Program SC{((initx , inity) ,
+              ( ((if2f | ((if3f , w1y) + (w1y , if3f))) , w1x)
+              + (w1y , w1x ,
+                  ( (((if2t , a2t) | if3f) , w2y)
+                  + (if2t , a2t , w2y , if3t , a3t)))))};
+
+  EXPECT_TRUE(SCHigherOverApproximation <= R);
+  EXPECT_TRUE(SCLowerOverApproximation <= R);
+  EXPECT_TRUE(SCLowerOverApproximation <= SCHigherOverApproximation);
+  EXPECT_TRUE(SC <= R);
+  EXPECT_TRUE(SC <= SCLowerOverApproximation);
+
+  EXPECT_FALSE(SCHigherOverApproximation <= SC);
+  EXPECT_FALSE(SCLowerOverApproximation <= SC);
+  EXPECT_FALSE(R <= SCHigherOverApproximation);
+  EXPECT_FALSE(R <= SCLowerOverApproximation);
+  EXPECT_FALSE(SCHigherOverApproximation <= SCLowerOverApproximation);
+
+  memory::Refinement r;
+
+  // refinement check fails because loads and stores on the same
+  // memory location do not form a total order in the SC models
+  EXPECT_FALSE(r.check(SCHigherOverApproximation, R));
+  EXPECT_FALSE(r.check(SCLowerOverApproximation, R));
+  EXPECT_FALSE(r.check(SCLowerOverApproximation, SCHigherOverApproximation));
+  EXPECT_FALSE(r.check(SCHigherOverApproximation, SCLowerOverApproximation));
+
+  EXPECT_TRUE(r.check(SC, R));
+  EXPECT_TRUE(r.check(SC, SCLowerOverApproximation));
+  EXPECT_TRUE(r.check(SC, SCHigherOverApproximation));
+}
+
+TEST(CkaTest, GnuExampleWithAssertionsAndMemoryAxiomsNotSC)
+{
+  constexpr memory::Address x = 0U;
+  constexpr memory::Address y = 1U;
+
+  Program initx{memory::relaxed_store_label(x, '\0')};
+  Program inity{memory::relaxed_store_label(y, '\0')};
+
+  Program w1y{memory::relaxed_store_label(y, '\20')};
+  Program w1x{memory::relaxed_store_label(x, '\10')};
+
+  Program if2f{memory::assert_neq_label(x, '\10')};
+  Program if2t{memory::assert_eq_label(x, '\10')};
+  Program a2f{memory::assert_neq_label(y, '\20')};
+  Program a2t{memory::assert_eq_label(y, '\20')};
+  Program w2y{memory::relaxed_store_label(y, '\10')};
+
+  Program if3f{memory::assert_neq_label(y, '\10')};
+  Program if3t{memory::assert_eq_label(y, '\10')};
+  Program a3f{memory::assert_neq_label(x, '\10')};
+  Program a3t{memory::assert_eq_label(x, '\10')};
+
+  Program R{((initx , inity) ,
+              ( (w1y | w1x)
+              | ((if2t , (a2f + (a2t , w2y))) + if2f)
+              | ((if3t , (a3t + a3f)) + if3f)))};
+
+  // loads and stores on the same memory address must
+  // be totally ordered in sequential consistency models,
+  // and our refinement check exposes this violation
+  Program Wrong_SC{((initx , inity) ,
+              ( ((if2f | if3f | w1y) , w1x)
+              + (w1y , w1x ,
+                  ( (((if2t , a2t) | if3f) , w2y)
+                  + (if2t , a2t , w2y , if3t , a3t)))))};
+
+  // events for assertion failures
+  Program Not_SC0{((initx , inity) ,
+              ( ((if2f | ((if3f , w1y) + (w1y , if3f))) , w1x)
+              + (w1y , w1x ,
+                  ( ((if2t , a2f) | if3f)
+                  + (if2t , a2f , ((if3t , a3f) + (if3f)))))))};
+
+  Program Not_SC1{((initx , inity) ,
+              ( ((if2f | ((if3f , w1y) + (w1y , if3f))) , w1x)
+              + (w1y , w1x ,
+                  ( ((if2t , a2f) | if3f)
+                  + (if2t , a2f , if3t , a3t)))))};
+
+  Program Not_SC2{((initx , inity) ,
+              ( ((if2f | ((if3f , w1y) + (w1y , if3f))) , w1x)
+              + (w1y , w1x ,
+                  ( ((if2t , a2f) | if3f)
+                  + (if2t , (a2f + (a2t , w2y)) , if3t , a3f)))))};
+
+  // By reflexivity, there exist other memory models that are
+  // not SC but which refine "R". For example, one such model
+  // violates the total ordering of loads and stores on the
+  // same memory location and another violates the assertions
+  // that do hold in the "SC" program.
+  EXPECT_TRUE(Wrong_SC <= R);
+  EXPECT_TRUE(Not_SC0 <= R);
+  EXPECT_TRUE(Not_SC1 <= R);
+  EXPECT_TRUE(Not_SC2 <= R);
+
+  memory::Refinement r;
+
+  // By adding the memory axioms including the From-Read axiom,
+  // we can enforce that every read-from relation induces the
+  // correct happens-before ordering in the relaxed model "R".
+  EXPECT_FALSE(r.check(Wrong_SC, R));
+  EXPECT_FALSE(r.check(Not_SC0, R));
+  EXPECT_FALSE(r.check(Not_SC1, R));
+  EXPECT_FALSE(r.check(Not_SC2, R));
+}
+
+TEST(CkaTest, GnuExampleWithAssertionsAndMemoryAxioms)
+{
+  constexpr memory::Address x = 0U;
+  constexpr memory::Address y = 1U;
+
+  Program initx{memory::relaxed_store_label(x, '\0')};
+  Program inity{memory::relaxed_store_label(y, '\0')};
+
+  Program w1y{memory::relaxed_store_label(y, '\20')};
+  Program w1x{memory::relaxed_store_label(x, '\10')};
+
+  Program if2f{memory::assert_neq_label(x, '\10')};
+  Program if2t{memory::assert_eq_label(x, '\10')};
+  Program a2f{memory::assert_neq_label(y, '\20')};
+  Program a2t{memory::assert_eq_label(y, '\20')};
+  Program w2y{memory::relaxed_store_label(y, '\10')};
+
+  Program if3f{memory::assert_neq_label(y, '\10')};
+  Program if3t{memory::assert_eq_label(y, '\10')};
+  Program a3f{memory::assert_neq_label(x, '\10')};
+  Program a3t{memory::assert_eq_label(x, '\10')};
+
+  Program R{((initx , inity) ,
+              ( (w1y | w1x)
+              | ((if2t , (a2f + (a2t , w2y))) + if2f)
+              | ((if3t , (a3t + a3f)) + if3f)))};
+
+  Program SC0{((initx , inity) ,
+              ( (w1y , w1x)
+              | ((if2t , (a2f + (a2t , w2y))) + if2f)
+              | ((if3t , (a3t + a3f)) + if3f)))};
+
+  Program SC1{((initx , inity) ,
+              ( ((if2f | ((if3f , w1y) + (w1y , if3f))) , w1x)
+              + (w1y , w1x ,
+                  ( (((if2t , a2t) | if3f) , w2y)
+                  + (if2t , a2t , w2y , if3t , a3t)))))};
+
+  Program SC2{((initx , inity) ,
+              ( ((if2f | if3f | w1y) , w1x)
+              + (w1y , w1x ,
+                  ( (((if2t , a2t) | if3f) , w2y)
+                  + (if2t , a2t , w2y , if3t , a3t)))))};
+
+  EXPECT_TRUE(SC0 <= R);
+  EXPECT_TRUE(SC1 <= R);
+  EXPECT_TRUE(SC1 <= SC0);
+  EXPECT_TRUE(SC2 <= R);
+  EXPECT_TRUE(SC2 <= SC0);
+
+  memory::Refinement r;
+  EXPECT_TRUE(r.check(SC1, R));
+  EXPECT_TRUE(r.check(SC1, SC0));
+
+  // writes and reads on the same memory address
+  // are not totally ordered in "SC0" and "SC2"
+  EXPECT_FALSE(r.check(SC2, R));
+  EXPECT_FALSE(r.check(SC2, SC0));
+  EXPECT_FALSE(r.check(SC0, R));
+}
+
+/// This is the shortest example:
+///
+///   https://gcc.gnu.org/wiki/Atomic/GCCMM/AtomicSync
+///
+/// -Thread 1-       -Thread 2-                   -Thread 3-
+/// y.store (20);    if (x.load() == 10) {        if (y.load() == 10)
+/// x.store (10);      assert (y.load() == 20)      assert (x.load() == 10)
+///                    y.store (10)
+///                  }
+TEST(CkaTest, GnuExampleSmallWithAssertionsAndMemoryAxioms)
+{
+  constexpr memory::Address x = 0U;
+  constexpr memory::Address y = 1U;
+
+  Program initx{memory::relaxed_store_label(x, '\0')};
+  Program inity{memory::relaxed_store_label(y, '\0')};
+
+  Program w1y{memory::relaxed_store_label(y, '\20')};
+  Program w1x{memory::relaxed_store_label(x, '\10')};
+
+  Program if2f{memory::assert_neq_label(x, '\10')};
+  Program if2t{memory::assert_eq_label(x, '\10')};
+  Program a2f{memory::assert_neq_label(y, '\20')};
+  Program a2t{memory::assert_eq_label(y, '\20')};
+  Program w2y{memory::relaxed_store_label(y, '\10')};
+
+  Program if3f{memory::assert_neq_label(y, '\10')};
+  Program if3t{memory::assert_eq_label(y, '\10')};
+  Program a3f{memory::assert_neq_label(x, '\10')};
+  Program a3t{memory::assert_eq_label(x, '\10')};
+
+  Program R{((initx , inity) ,
+              ( (w1y | w1x)
+              | ((if2t , (a2f + (a2t , w2y))) + if2f)
+              | ((if3t , (a3t + a3f)) + if3f)))};
+
+  Program SC0{((initx , inity) ,
+              ( (w1y , w1x)
+              | ((if2t , a2t , w2y) + if2f)
+              | ((if3t , a3t) + if3f)))};
+
+  Program SC1{((initx , inity) , (if2f | ((if3f , w1y) + (w1y , if3f))) , w1x)};
+  Program SC2{((initx , inity) , (if2f | if3f | w1y) , w1x)};
+
+  EXPECT_TRUE(SC0 <= R);
+  EXPECT_TRUE(SC1 <= R);
+  EXPECT_TRUE(SC1 <= SC0);
+  EXPECT_TRUE(SC2 <= R);
+  EXPECT_TRUE(SC2 <= SC0);
+
+
+  EXPECT_FALSE(R <= SC0);
+
+  memory::Refinement r;
+  EXPECT_TRUE(r.check(SC1, R));
+  EXPECT_TRUE(r.check(SC1, SC0));
+
+  // writes and reads on the same memory address
+  // are not totally ordered in "SC0" and "SC2"
+  EXPECT_FALSE(r.check(SC2, R));
+  EXPECT_FALSE(r.check(SC2, SC0));
+  EXPECT_FALSE(r.check(SC0, R));
+}
