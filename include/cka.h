@@ -751,6 +751,99 @@ namespace internal
   };
 }
 
+/// SMT sort for events
+typedef smt::Int EventSort;
+
+/// Symbolic partial order base model
+
+/// This model uses partial orders to describe the computation of concurrent
+/// programs. Other models have been developed that rely only on relations.
+/// The underpinning principles of our symbolic implementation of relations
+/// would, however, remain the same.
+class PartialOrderModel
+{
+private:
+  // Binary predicate to symbolically encode strict partial order
+  typedef smt::Func<EventSort, EventSort, smt::Bool> OrderPredSort;
+  typedef smt::Decl<OrderPredSort> OrderPred;
+
+  OrderPred m_order_pred;
+
+public:
+  PartialOrderModel()
+  : m_order_pred{"order_x"} {}
+
+  /// \internal binary predicate to enforce the ordering between events
+
+  /// \see order(Event, Event)
+  const OrderPred& order_pred() const
+  {
+    return m_order_pred;
+  }
+
+  /// Adds the symbolic ordering constraint that `a` enables `b`
+  smt::Bool order(Event a, Event b)
+  {
+    EventSort a_literal{smt::literal<EventSort>(a)};
+    EventSort b_literal{smt::literal<EventSort>(b)};
+    return smt::apply(m_order_pred, std::move(a_literal), std::move(b_literal));
+  }
+
+  /// Symbolically encodes an irreflexive, transitive and asymmetric relation
+
+  /// Returns partial order constraint as a list of conjuncts
+  smt::Bools strict_partial_order(const PartialString& p)
+  {
+    // in the worst case, encoding is cubic in the number of events in `p`
+    const Length len{p.length()};
+    smt::Bools partial_order(len * len * len);
+
+    // transitive reduction of `p`
+    for (const PartialString::EventPair& pair : p.strict_partial_order())
+      partial_order.push_back(order(pair.first, pair.second));
+
+    // irreflexivity
+    for (Event e{0}; e < len; ++e)
+      partial_order.push_back(not order(e, e));
+
+    // asymmetry
+    smt::Bool order_a_b;
+    {
+      smt::Bool order_b_a;
+      for (Event e_a{0}; e_a < len; ++e_a)
+        for (Event e_b{e_a + 1U}; e_b < len; ++e_b)
+        {
+          order_a_b = order(e_a, e_b);
+          order_b_a = order(e_b, e_a);
+
+          partial_order.push_back(smt::implies(order_a_b, not order_b_a));
+        }
+    }
+
+    // transitivity
+    smt::Bool order_b_c, order_a_c;
+    for (Event e_a{0}; e_a < len; ++e_a)
+      for (Event e_b{e_a + 1U}; e_b < len; ++e_b)
+        for (Event e_c{e_b + 1U}; e_c < len; ++e_c)
+        {
+          order_a_b = order(e_a, e_b);
+          order_b_c = order(e_b, e_c);
+          order_a_c = order(e_a, e_c);
+
+          partial_order.push_back(smt::implies(order_a_b and order_b_c, order_a_c));
+        }
+
+    // incomparable events
+    for (const PartialString::EventPair& pair : p.incomparables())
+    {
+      partial_order.push_back(not order(pair.first, pair.second));
+      partial_order.push_back(not order(pair.second, pair.first));
+    }
+
+    return partial_order;
+  }
+};
+
 /// Symbolic decision procedure for certain CKA language containment problems
 class Refinement
 : public internal::ProgramChecker<Refinement>,
@@ -759,18 +852,12 @@ class Refinement
 private:
   friend class memory::Refinement;
 
-  typedef smt::Int EventSort;
   typedef smt::Int LabelSort;
-
   typedef smt::Func<EventSort, EventSort> EventFuncSort;
   typedef smt::Func<EventSort, LabelSort> LabelFuncSort;
 
-  // Binary predicate to symbolically encode strict partial order
-  typedef smt::Func<EventSort, EventSort, smt::Bool> OrderPredSort;
-
   typedef smt::Decl<EventFuncSort> EventFunc;
   typedef smt::Decl<LabelFuncSort> LabelFunc;
-  typedef smt::Decl<OrderPredSort> OrderPred;
 
   // Other SMT solvers include smt::CVC4Solver and smt::MsatSolver
   smt::Z3Solver m_solver;
@@ -780,18 +867,13 @@ private:
 
   // The range of `m_event_func` must respect the labelling and ordering of `x`
   LabelFunc m_label_func_x;
-  OrderPred m_order_pred_x;
+
+  // The core of the encoding
+  PartialOrderModel m_model;
 
   // Statistics
   unsigned m_number_of_solver_calls;
   unsigned m_number_of_checks;
-
-  smt::Bool order(const OrderPred& order_pred, Event e_a, Event e_b)
-  {
-    EventSort e_a_literal{smt::literal<EventSort>(e_a)};
-    EventSort e_b_literal{smt::literal<EventSort>(e_b)};
-    return smt::apply(order_pred, std::move(e_a_literal), std::move(e_b_literal));
-  }
 
   void encode_label(const LabelFunc& label_func_p, const PartialString& p)
   {
@@ -805,57 +887,6 @@ private:
     m_solver.add(smt::conjunction(std::move(equalities)));
   }
 
-  void encode_strict_partial_order(const OrderPred& order_pred_p, const PartialString& p)
-  {
-    // in the worst case, encoding is cubic in the number of events in `p`
-    const Length len{p.length()};
-    smt::Bools partial_order(len * len * len);
-
-    // transitive reduction of `p`
-    for (const PartialString::EventPair& pair : p.strict_partial_order())
-      partial_order.push_back(order(order_pred_p, pair.first, pair.second));
-
-    // irreflexivity
-    for (Event e{0}; e < len; ++e)
-      partial_order.push_back(not order(order_pred_p, e, e));
-
-    // asymmetry
-    smt::Bool order_a_b;
-    {
-      smt::Bool order_b_a;
-      for (Event e_a{0}; e_a < len; ++e_a)
-        for (Event e_b{e_a + 1U}; e_b < len; ++e_b)
-        {
-          order_a_b = order(order_pred_p, e_a, e_b);
-          order_b_a = order(order_pred_p, e_b, e_a);
-
-          partial_order.push_back(smt::implies(order_a_b, not order_b_a));
-        }
-    }
-
-    // transitivity
-    smt::Bool order_b_c, order_a_c;
-    for (Event e_a{0}; e_a < len; ++e_a)
-      for (Event e_b{e_a + 1U}; e_b < len; ++e_b)
-        for (Event e_c{e_b + 1U}; e_c < len; ++e_c)
-        {
-          order_a_b = order(order_pred_p, e_a, e_b);
-          order_b_c = order(order_pred_p, e_b, e_c);
-          order_a_c = order(order_pred_p, e_a, e_c);
-
-          partial_order.push_back(smt::implies(order_a_b and order_b_c, order_a_c));
-        }
-
-    // incomparable events
-    for (const PartialString::EventPair& pair : p.incomparables())
-    {
-      partial_order.push_back(not order(order_pred_p, pair.first, pair.second));
-      partial_order.push_back(not order(order_pred_p, pair.second, pair.first));
-    }
-
-    m_solver.add(smt::conjunction(std::move(partial_order)));
-  }
-
   void encode_monotonic_bijective_morphism(const PartialString& x, const PartialString& y)
   {
     // strict monotonicity from y to x
@@ -866,13 +897,13 @@ private:
 
       // It suffices to check the strict monotonicity of the
       // transitive reduction of the strict partial ordering
-      // of `y` because `m_order_pred_x` is transitive.
+      // of `y` because `model.order_pred()` is transitive.
       for (const PartialString::EventPair& y_pair : y.strict_partial_order())
       {
         e_first = smt::apply(m_event_func, y_pair.first);
         e_second = smt::apply(m_event_func, y_pair.second);
 
-        partial_order.push_back(smt::apply(m_order_pred_x, e_first, e_second));
+        partial_order.push_back(smt::apply(m_model.order_pred(), e_first, e_second));
       }
 
       assert(not partial_order.empty());
@@ -922,7 +953,7 @@ public:
   : m_solver(smt::QF_UFLIA_LOGIC),
     m_event_func{"event"},
     m_label_func_x{"label_x"},
-    m_order_pred_x{"order_x"},
+    m_model{},
     m_number_of_solver_calls{0},
     m_number_of_checks{0} {}
 
@@ -954,8 +985,10 @@ public:
     if (internal::Refinement::shortcut(x, y))
       return false;
 
+    m_solver.add(smt::conjunction(
+      m_model.strict_partial_order(x)));
+
     encode_label(m_label_func_x, x);
-    encode_strict_partial_order(m_order_pred_x, x);
     encode_monotonic_bijective_morphism(x, y);
 
     ++m_number_of_solver_calls;
@@ -973,7 +1006,6 @@ public:
     // label-preserving function from y to x?
     return r == smt::sat;
   }
-
 
 };
 
@@ -1070,19 +1102,19 @@ private:
   /// \remark we assume that memory addresses are dense
   typedef std::vector<Events> PerAddressMap;
 
-  /// SMT sort for events
-  typedef cka::Refinement::EventSort EventSort;
-
   /// Increase precision of the generic partial string refinement checker
   cka::Refinement m_refinement;
 
   /// Encode happens-before relation with monotonic bijective morphism
+
+  /// \remark not the same as `PartialOrderModel::order`, the difference
+  ///   is that we first map the events with `m_refinement.m_event_func`
   smt::Bool event_order_in_x(Event a, Event b)
   {
-    Refinement::EventSort e_a{smt::apply(m_refinement.m_event_func, a)};
-    Refinement::EventSort e_b{smt::apply(m_refinement.m_event_func, b)};
+    EventSort e_a{smt::apply(m_refinement.m_event_func, a)};
+    EventSort e_b{smt::apply(m_refinement.m_event_func, b)};
 
-    return smt::apply(m_refinement.m_order_pred_x, e_a, e_b);
+    return smt::apply(m_refinement.m_model.order_pred(), e_a, e_b);
   }
 
 public:
