@@ -134,70 +134,110 @@ bool operator<=(const Program& X, const Program& Y)
 namespace memory
 {
 
-static constexpr std::size_t shift_byte = 3;
+/// Bit mask:
+///
+///     Bit 3 (2^3)       Bit 2 (2^2)        Bit 1 (2^1)      Bit 0 (2^0)
+/// +-----------------+-----------------+-----------------+-----------------+
+/// |      equal      |      assert     | release-acquire |      load       |
+/// +-----------------+-----------------+-----------------+-----------------+
+static constexpr std::size_t shift_byte = 4;
 static constexpr std::size_t shift_address = shift_byte + sizeof(Byte) * 8;
 
-Label relaxed_store_label(Address address, Byte byte)
+Label none_store_label(Address address, Byte byte)
 {
   return (address << shift_address) | (byte << shift_byte);
 }
 
-Label relaxed_load_label(Address address)
+Label none_load_label(Address address)
 {
-  return relaxed_store_label(address) | 1U;
+  return none_store_label(address) | 1U;
 }
 
-Label assert_eq_label(Address address, Byte byte)
+Label release_store_label(Address address, Byte byte)
 {
-  return relaxed_store_label(address, byte) | 3U;
+  return none_store_label(address, byte) | 2U;
+}
+
+Label acquire_load_label(Address address)
+{
+  return release_store_label(address) | 1U;
 }
 
 Label assert_neq_label(Address address, Byte byte)
 {
-  return assert_eq_label(address, byte) | 4U;
+  return acquire_load_label(address) | (byte << shift_byte) | 4U;
 }
 
-bool is_relaxed_store(Label op)
+Label assert_eq_label(Address address, Byte byte)
 {
-  return (op & 1U) == 0U;
+  return assert_neq_label(address, byte) | 8U;
 }
 
-bool is_relaxed_load(Label op)
+bool is_none_store(Label op)
 {
-  return (op & 1U) == 1U;
+  return (op & 0x3U) == 0x0U;
+}
+
+bool is_none_load(Label op)
+{
+  return (op & 0x3U) == 0x1U;
+}
+
+bool is_release_store(Label op)
+{
+  return (op & 0x3U) == 0x2U;
+}
+
+bool is_acquire_load(Label op)
+{
+  return (op & 0x3U) == 0x3U;
+}
+
+bool is_store(Label op)
+{
+  return is_none_store(op) or is_release_store(op);
+}
+
+bool is_load(Label op)
+{
+  return is_none_load(op) or is_acquire_load(op);
 }
 
 bool is_assert(Label op)
 {
-  return (op & 3U) == 3U;
+  return (op & 0x4U) == 0x4U;
 }
 
 bool is_assert_eq(Label op)
 {
-  return (op & 7U) == 3U;
+  return (op & 0xCU) == 0xCU;
 }
 
 bool is_assert_neq(Label op)
 {
-  return (op & 7U) == 7U;
+  return (op & 0xCU) == 0x4U;
 }
 
 Byte byte(Label op)
 {
+  assert(is_store(op) or is_assert(op));
+
   // smaller return type acts as bitmask
   return op >> shift_byte;
 }
 
 Address address(Label op)
 {
+  assert(is_store(op) or is_load(op));
+
   // smaller return type acts as bitmask
   return op >> shift_address;
 }
 
 bool is_shared(Label store, Label load)
 {
-  assert(is_relaxed_store(store));
-  assert(is_relaxed_load(load));
+  assert(is_release_store(store));
+  assert(is_acquire_load(load));
 
   return address(store) == address(load);
 }

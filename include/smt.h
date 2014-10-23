@@ -1103,6 +1103,11 @@ public:
     return terms.resize(count);
   }
 
+  void reserve(SizeType new_cap)
+  {
+    terms.reserve(new_cap);
+  }
+
   T front() const
   {
     assert(!empty());

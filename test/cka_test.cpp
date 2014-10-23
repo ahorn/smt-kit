@@ -1194,76 +1194,165 @@ TEST(CkaTest, MemoryLabels)
   constexpr memory::Address a = 0U;
   constexpr memory::Address b = 1U;
 
-  EXPECT_EQ(0U, memory::relaxed_store_label(a));
-  EXPECT_EQ(1U, memory::relaxed_load_label(a));
-  EXPECT_EQ(43U, memory::assert_eq_label(a, '\5'));
-  EXPECT_EQ(47U, memory::assert_neq_label(a, '\5'));
+  EXPECT_EQ(0U, memory::none_store_label(a));
+  EXPECT_EQ(1U, memory::none_load_label(a));
+  EXPECT_EQ(2U, memory::release_store_label(a));
+  EXPECT_EQ(3U, memory::acquire_load_label(a));
+  EXPECT_EQ(15U, (memory::assert_eq_label(a, '\5')) & 0xFU);
+  EXPECT_EQ(7U, (memory::assert_neq_label(a, '\5') & 0xFU));
 
-  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::relaxed_store_label(b));
-  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::relaxed_store_label(b, '\1'));
-  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::relaxed_load_label(b));
+  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::none_store_label(b));
+  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::none_store_label(b, '\1'));
+  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::release_store_label(b));
+  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::release_store_label(b, '\1'));
+  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::none_load_label(b));
+  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::acquire_load_label(b));
   EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::assert_eq_label(b, '\5'));
   EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::assert_neq_label(b, '\5'));
 }
 
-TEST(CkaTest, MemoryStoreAddressMonotonicity)
+TEST(CkaTest, MemoryNoneStoreAddressMonotonicity)
 {
   constexpr memory::Address a = 0U;
   constexpr memory::Address b = 1U;
   constexpr memory::Address c = 2U;
 
-  EXPECT_TRUE(memory::relaxed_store_label(a, '\0') < memory::relaxed_store_label(b));
-  EXPECT_TRUE(memory::relaxed_store_label(a, '\1') < memory::relaxed_store_label(b));
-  EXPECT_TRUE(memory::relaxed_store_label(a, '\2') < memory::relaxed_store_label(b));
-  EXPECT_TRUE(memory::relaxed_store_label(a, '\3') < memory::relaxed_store_label(b));
+  EXPECT_TRUE(memory::none_store_label(a, '\0') < memory::none_store_label(b));
+  EXPECT_TRUE(memory::none_store_label(a, '\1') < memory::none_store_label(b));
+  EXPECT_TRUE(memory::none_store_label(a, '\2') < memory::none_store_label(b));
+  EXPECT_TRUE(memory::none_store_label(a, '\3') < memory::none_store_label(b));
 
-  EXPECT_TRUE(memory::relaxed_store_label(b, '\0') < memory::relaxed_store_label(c));
-  EXPECT_TRUE(memory::relaxed_store_label(b, '\1') < memory::relaxed_store_label(c));
-  EXPECT_TRUE(memory::relaxed_store_label(b, '\2') < memory::relaxed_store_label(c));
-  EXPECT_TRUE(memory::relaxed_store_label(b, '\3') < memory::relaxed_store_label(c));
+  EXPECT_TRUE(memory::none_store_label(b, '\0') < memory::none_store_label(c));
+  EXPECT_TRUE(memory::none_store_label(b, '\1') < memory::none_store_label(c));
+  EXPECT_TRUE(memory::none_store_label(b, '\2') < memory::none_store_label(c));
+  EXPECT_TRUE(memory::none_store_label(b, '\3') < memory::none_store_label(c));
+}
+
+TEST(CkaTest, MemoryReleaseStoreAddressMonotonicity)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+  constexpr memory::Address c = 2U;
+
+  EXPECT_TRUE(memory::release_store_label(a, '\0') < memory::release_store_label(b));
+  EXPECT_TRUE(memory::release_store_label(a, '\1') < memory::release_store_label(b));
+  EXPECT_TRUE(memory::release_store_label(a, '\2') < memory::release_store_label(b));
+  EXPECT_TRUE(memory::release_store_label(a, '\3') < memory::release_store_label(b));
+
+  EXPECT_TRUE(memory::release_store_label(b, '\0') < memory::release_store_label(c));
+  EXPECT_TRUE(memory::release_store_label(b, '\1') < memory::release_store_label(c));
+  EXPECT_TRUE(memory::release_store_label(b, '\2') < memory::release_store_label(c));
+  EXPECT_TRUE(memory::release_store_label(b, '\3') < memory::release_store_label(c));
 }
 
 TEST(CkaTest, IsShared)
 {
-  EXPECT_TRUE(memory::is_shared(memory::relaxed_store_label(0U), memory::relaxed_load_label(0U)));
-  EXPECT_TRUE(memory::is_shared(memory::relaxed_store_label(1U), memory::relaxed_load_label(1U)));
-  EXPECT_TRUE(memory::is_shared(memory::relaxed_store_label(2U), memory::relaxed_load_label(2U)));
+  EXPECT_TRUE(memory::is_shared(memory::release_store_label(0U), memory::acquire_load_label(0U)));
+  EXPECT_TRUE(memory::is_shared(memory::release_store_label(1U), memory::acquire_load_label(1U)));
+  EXPECT_TRUE(memory::is_shared(memory::release_store_label(2U), memory::acquire_load_label(2U)));
 
-  EXPECT_FALSE(memory::is_shared(memory::relaxed_store_label(0U), memory::relaxed_load_label(1U)));
-  EXPECT_FALSE(memory::is_shared(memory::relaxed_store_label(1U), memory::relaxed_load_label(3U)));
-  EXPECT_FALSE(memory::is_shared(memory::relaxed_store_label(2U), memory::relaxed_load_label(4U)));
-  EXPECT_FALSE(memory::is_shared(memory::relaxed_store_label(3U), memory::relaxed_load_label(4U)));
-  EXPECT_FALSE(memory::is_shared(memory::relaxed_store_label(4U), memory::relaxed_load_label(5U)));
+  EXPECT_FALSE(memory::is_shared(memory::release_store_label(0U), memory::acquire_load_label(1U)));
+  EXPECT_FALSE(memory::is_shared(memory::release_store_label(1U), memory::acquire_load_label(3U)));
+  EXPECT_FALSE(memory::is_shared(memory::release_store_label(2U), memory::acquire_load_label(4U)));
+  EXPECT_FALSE(memory::is_shared(memory::release_store_label(3U), memory::acquire_load_label(4U)));
+  EXPECT_FALSE(memory::is_shared(memory::release_store_label(4U), memory::acquire_load_label(5U)));
+
+  // Would cause an assertion violation:
+  //
+  //   EXPECT_ANY_THROW((memory::is_shared(memory::none_store_label(0U), memory::acquire_load_label(0U))));
+  //   EXPECT_ANY_THROW((memory::is_shared(memory::release_store_label(0U), memory::none_load_label(0U))));
 }
 
-TEST(CkaTest, IsStore)
+TEST(CkaTest, IsNoneStore)
 {
   constexpr memory::Address a = 0U;
   constexpr memory::Address b = 1U;
   constexpr memory::Address c = 2U;
 
-  EXPECT_TRUE(memory::is_relaxed_store(memory::relaxed_store_label(a)));
-  EXPECT_TRUE(memory::is_relaxed_store(memory::relaxed_store_label(b)));
-  EXPECT_TRUE(memory::is_relaxed_store(memory::relaxed_store_label(c)));
+  EXPECT_TRUE(memory::is_none_store(memory::none_store_label(a)));
+  EXPECT_TRUE(memory::is_none_store(memory::none_store_label(b)));
+  EXPECT_TRUE(memory::is_none_store(memory::none_store_label(c)));
 
-  EXPECT_FALSE(memory::is_relaxed_store(memory::relaxed_load_label(a)));
-  EXPECT_FALSE(memory::is_relaxed_store(memory::relaxed_load_label(b)));
-  EXPECT_FALSE(memory::is_relaxed_store(memory::relaxed_load_label(c)));
+  EXPECT_TRUE(memory::is_store(memory::none_store_label(a)));
+  EXPECT_TRUE(memory::is_store(memory::none_store_label(b)));
+  EXPECT_TRUE(memory::is_store(memory::none_store_label(c)));
+
+  EXPECT_FALSE(memory::is_none_store(memory::none_load_label(a)));
+  EXPECT_FALSE(memory::is_none_store(memory::none_load_label(b)));
+  EXPECT_FALSE(memory::is_none_store(memory::none_load_label(c)));
+
+  EXPECT_FALSE(memory::is_none_store(memory::acquire_load_label(a)));
+  EXPECT_FALSE(memory::is_none_store(memory::acquire_load_label(b)));
+  EXPECT_FALSE(memory::is_none_store(memory::acquire_load_label(c)));
 }
 
-TEST(CkaTest, IsLoad)
+TEST(CkaTest, IsNoneLoad)
 {
   constexpr memory::Address a = 0U;
   constexpr memory::Address b = 1U;
   constexpr memory::Address c = 2U;
 
-  EXPECT_TRUE(memory::is_relaxed_load(memory::relaxed_load_label(a)));
-  EXPECT_TRUE(memory::is_relaxed_load(memory::relaxed_load_label(b)));
-  EXPECT_TRUE(memory::is_relaxed_load(memory::relaxed_load_label(c)));
+  EXPECT_TRUE(memory::is_none_load(memory::none_load_label(a)));
+  EXPECT_TRUE(memory::is_none_load(memory::none_load_label(b)));
+  EXPECT_TRUE(memory::is_none_load(memory::none_load_label(c)));
 
-  EXPECT_FALSE(memory::is_relaxed_load(memory::relaxed_store_label(a)));
-  EXPECT_FALSE(memory::is_relaxed_load(memory::relaxed_store_label(b)));
-  EXPECT_FALSE(memory::is_relaxed_load(memory::relaxed_store_label(c)));
+  EXPECT_TRUE(memory::is_load(memory::none_load_label(a)));
+  EXPECT_TRUE(memory::is_load(memory::none_load_label(b)));
+  EXPECT_TRUE(memory::is_load(memory::none_load_label(c)));
+
+  EXPECT_FALSE(memory::is_none_load(memory::none_store_label(a)));
+  EXPECT_FALSE(memory::is_none_load(memory::none_store_label(b)));
+  EXPECT_FALSE(memory::is_none_load(memory::none_store_label(c)));
+
+  EXPECT_FALSE(memory::is_none_load(memory::release_store_label(a)));
+  EXPECT_FALSE(memory::is_none_load(memory::release_store_label(b)));
+  EXPECT_FALSE(memory::is_none_load(memory::release_store_label(c)));
+}
+
+TEST(CkaTest, IsReleaseStore)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+  constexpr memory::Address c = 2U;
+
+  EXPECT_TRUE(memory::is_release_store(memory::release_store_label(a)));
+  EXPECT_TRUE(memory::is_release_store(memory::release_store_label(b)));
+  EXPECT_TRUE(memory::is_release_store(memory::release_store_label(c)));
+
+  EXPECT_TRUE(memory::is_store(memory::release_store_label(a)));
+  EXPECT_TRUE(memory::is_store(memory::release_store_label(b)));
+  EXPECT_TRUE(memory::is_store(memory::release_store_label(c)));
+
+  EXPECT_FALSE(memory::is_release_store(memory::none_load_label(a)));
+  EXPECT_FALSE(memory::is_release_store(memory::none_load_label(b)));
+  EXPECT_FALSE(memory::is_release_store(memory::none_load_label(c)));
+
+  EXPECT_FALSE(memory::is_release_store(memory::acquire_load_label(a)));
+  EXPECT_FALSE(memory::is_release_store(memory::acquire_load_label(b)));
+  EXPECT_FALSE(memory::is_release_store(memory::acquire_load_label(c)));
+}
+
+TEST(CkaTest, IsAcquireLoad)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+  constexpr memory::Address c = 2U;
+
+  EXPECT_TRUE(memory::is_acquire_load(memory::acquire_load_label(a)));
+  EXPECT_TRUE(memory::is_acquire_load(memory::acquire_load_label(b)));
+  EXPECT_TRUE(memory::is_acquire_load(memory::acquire_load_label(c)));
+
+  EXPECT_TRUE(memory::is_load(memory::acquire_load_label(a)));
+  EXPECT_TRUE(memory::is_load(memory::acquire_load_label(b)));
+  EXPECT_TRUE(memory::is_load(memory::acquire_load_label(c)));
+
+  EXPECT_FALSE(memory::is_acquire_load(memory::none_store_label(a)));
+  EXPECT_FALSE(memory::is_acquire_load(memory::none_store_label(b)));
+  EXPECT_FALSE(memory::is_acquire_load(memory::none_store_label(c)));
+
+  EXPECT_FALSE(memory::is_acquire_load(memory::release_store_label(a)));
+  EXPECT_FALSE(memory::is_acquire_load(memory::release_store_label(b)));
+  EXPECT_FALSE(memory::is_acquire_load(memory::release_store_label(c)));
 }
 
 TEST(CkaTest, IsAssert)
@@ -1376,23 +1465,41 @@ TEST(CkaTest, StoredByte)
   constexpr memory::Address b = 1U;
   constexpr memory::Address c = 2U;
 
-  EXPECT_EQ('\1', memory::byte(memory::relaxed_store_label(a, '\1')));
-  EXPECT_EQ('\2', memory::byte(memory::relaxed_store_label(a, '\2')));
-  EXPECT_EQ('\3', memory::byte(memory::relaxed_store_label(a, '\3')));
-  EXPECT_EQ('\4', memory::byte(memory::relaxed_store_label(a, '\4')));
-  EXPECT_EQ('\5', memory::byte(memory::relaxed_store_label(a, '\5')));
+  EXPECT_EQ('\1', memory::byte(memory::none_store_label(a, '\1')));
+  EXPECT_EQ('\2', memory::byte(memory::none_store_label(a, '\2')));
+  EXPECT_EQ('\3', memory::byte(memory::none_store_label(a, '\3')));
+  EXPECT_EQ('\4', memory::byte(memory::none_store_label(a, '\4')));
+  EXPECT_EQ('\5', memory::byte(memory::none_store_label(a, '\5')));
 
-  EXPECT_EQ('\1', memory::byte(memory::relaxed_store_label(b, '\1')));
-  EXPECT_EQ('\2', memory::byte(memory::relaxed_store_label(b, '\2')));
-  EXPECT_EQ('\3', memory::byte(memory::relaxed_store_label(b, '\3')));
-  EXPECT_EQ('\4', memory::byte(memory::relaxed_store_label(b, '\4')));
-  EXPECT_EQ('\5', memory::byte(memory::relaxed_store_label(b, '\5')));
+  EXPECT_EQ('\1', memory::byte(memory::none_store_label(b, '\1')));
+  EXPECT_EQ('\2', memory::byte(memory::none_store_label(b, '\2')));
+  EXPECT_EQ('\3', memory::byte(memory::none_store_label(b, '\3')));
+  EXPECT_EQ('\4', memory::byte(memory::none_store_label(b, '\4')));
+  EXPECT_EQ('\5', memory::byte(memory::none_store_label(b, '\5')));
 
-  EXPECT_EQ('\1', memory::byte(memory::relaxed_store_label(c, '\1')));
-  EXPECT_EQ('\2', memory::byte(memory::relaxed_store_label(c, '\2')));
-  EXPECT_EQ('\3', memory::byte(memory::relaxed_store_label(c, '\3')));
-  EXPECT_EQ('\4', memory::byte(memory::relaxed_store_label(c, '\4')));
-  EXPECT_EQ('\5', memory::byte(memory::relaxed_store_label(c, '\5')));
+  EXPECT_EQ('\1', memory::byte(memory::none_store_label(c, '\1')));
+  EXPECT_EQ('\2', memory::byte(memory::none_store_label(c, '\2')));
+  EXPECT_EQ('\3', memory::byte(memory::none_store_label(c, '\3')));
+  EXPECT_EQ('\4', memory::byte(memory::none_store_label(c, '\4')));
+  EXPECT_EQ('\5', memory::byte(memory::none_store_label(c, '\5')));
+
+  EXPECT_EQ('\1', memory::byte(memory::release_store_label(a, '\1')));
+  EXPECT_EQ('\2', memory::byte(memory::release_store_label(a, '\2')));
+  EXPECT_EQ('\3', memory::byte(memory::release_store_label(a, '\3')));
+  EXPECT_EQ('\4', memory::byte(memory::release_store_label(a, '\4')));
+  EXPECT_EQ('\5', memory::byte(memory::release_store_label(a, '\5')));
+
+  EXPECT_EQ('\1', memory::byte(memory::release_store_label(b, '\1')));
+  EXPECT_EQ('\2', memory::byte(memory::release_store_label(b, '\2')));
+  EXPECT_EQ('\3', memory::byte(memory::release_store_label(b, '\3')));
+  EXPECT_EQ('\4', memory::byte(memory::release_store_label(b, '\4')));
+  EXPECT_EQ('\5', memory::byte(memory::release_store_label(b, '\5')));
+
+  EXPECT_EQ('\1', memory::byte(memory::release_store_label(c, '\1')));
+  EXPECT_EQ('\2', memory::byte(memory::release_store_label(c, '\2')));
+  EXPECT_EQ('\3', memory::byte(memory::release_store_label(c, '\3')));
+  EXPECT_EQ('\4', memory::byte(memory::release_store_label(c, '\4')));
+  EXPECT_EQ('\5', memory::byte(memory::release_store_label(c, '\5')));
 }
 
 TEST(CkaTest, AssertedEqualByte)
@@ -1452,15 +1559,25 @@ TEST(CkaTest, MemoryAddress)
   constexpr memory::Address c = 2U;
   constexpr memory::Address d = 3U;
 
-  EXPECT_EQ(0U, memory::address(memory::relaxed_load_label(a)));
-  EXPECT_EQ(1U, memory::address(memory::relaxed_load_label(b)));
-  EXPECT_EQ(2U, memory::address(memory::relaxed_load_label(c)));
-  EXPECT_EQ(3U, memory::address(memory::relaxed_load_label(d)));
+  EXPECT_EQ(0U, memory::address(memory::none_load_label(a)));
+  EXPECT_EQ(1U, memory::address(memory::none_load_label(b)));
+  EXPECT_EQ(2U, memory::address(memory::none_load_label(c)));
+  EXPECT_EQ(3U, memory::address(memory::none_load_label(d)));
 
-  EXPECT_EQ(0U, memory::address(memory::relaxed_store_label(a)));
-  EXPECT_EQ(1U, memory::address(memory::relaxed_store_label(b)));
-  EXPECT_EQ(2U, memory::address(memory::relaxed_store_label(c)));
-  EXPECT_EQ(3U, memory::address(memory::relaxed_store_label(d)));
+  EXPECT_EQ(0U, memory::address(memory::none_store_label(a)));
+  EXPECT_EQ(1U, memory::address(memory::none_store_label(b)));
+  EXPECT_EQ(2U, memory::address(memory::none_store_label(c)));
+  EXPECT_EQ(3U, memory::address(memory::none_store_label(d)));
+
+  EXPECT_EQ(0U, memory::address(memory::acquire_load_label(a)));
+  EXPECT_EQ(1U, memory::address(memory::acquire_load_label(b)));
+  EXPECT_EQ(2U, memory::address(memory::acquire_load_label(c)));
+  EXPECT_EQ(3U, memory::address(memory::acquire_load_label(d)));
+
+  EXPECT_EQ(0U, memory::address(memory::release_store_label(a)));
+  EXPECT_EQ(1U, memory::address(memory::release_store_label(b)));
+  EXPECT_EQ(2U, memory::address(memory::release_store_label(c)));
+  EXPECT_EQ(3U, memory::address(memory::release_store_label(d)));
 }
 
 TEST(CkaTest, MemoryRefinementReadFromSameAddress)
@@ -1469,9 +1586,9 @@ TEST(CkaTest, MemoryRefinementReadFromSameAddress)
 
   memory::Refinement r;
 
-  PartialString x{memory::relaxed_store_label(a, '\1')};
-  PartialString y{memory::relaxed_store_label(a, '\2')};
-  PartialString z{memory::relaxed_load_label(a)};
+  PartialString x{memory::release_store_label(a, '\1')};
+  PartialString y{memory::release_store_label(a, '\2')};
+  PartialString z{memory::acquire_load_label(a)};
 
   PartialString p{((x , y) | z)};
 
@@ -1486,11 +1603,11 @@ TEST(CkaTest, MemoryRefinementReadFromSameAddress)
   EXPECT_FALSE(r.check((y , z , x), p));
 
   // But `alike_y` and `y` have the same label so the reordering is allowed.
-  PartialString alike_y{memory::relaxed_store_label(a, '\2')};
+  PartialString alike_y{memory::release_store_label(a, '\2')};
   EXPECT_TRUE(r.check((y , z , alike_y), ((alike_y , y) | z)));
 
-  // Our memory model rules out that a relaxed load happens-before
-  // all relaxed stores on the same memory address.
+  // Our memory model rules out that an acquire load happens-before
+  // all release stores on the same memory address.
   EXPECT_FALSE(r.check((z , y , x), p));
   EXPECT_FALSE(r.check((z , x , y), p));
   EXPECT_FALSE(r.check((z , (x | y)), p));
@@ -1503,9 +1620,9 @@ TEST(CkaTest, MemoryRefinementReadFromDifferentAddress)
 
   memory::Refinement r;
 
-  PartialString x{memory::relaxed_store_label(a)};
-  PartialString y{memory::relaxed_store_label(b)};
-  PartialString z{memory::relaxed_load_label(a)};
+  PartialString x{memory::release_store_label(a)};
+  PartialString y{memory::release_store_label(b)};
+  PartialString z{memory::acquire_load_label(a)};
 
   PartialString p{((x , y) | z)};
 
@@ -1532,17 +1649,17 @@ TEST(CkaTest, MemoryRefinementModificationOrderSameAddress)
 
   memory::Refinement r;
 
-  PartialString x{memory::relaxed_store_label(a)};
-  PartialString y{memory::relaxed_store_label(a)};
+  PartialString x{memory::release_store_label(a)};
+  PartialString y{memory::release_store_label(a)};
 
   PartialString p{(x | y)};
 
   EXPECT_TRUE(r.check((x , y), p));
   EXPECT_TRUE(r.check((y , x), p));
 
-  // Our memory model rules out that two relaxed stores
+  // Our memory model rules out that two atomic stores
   // on the same memory address happen concurrently even
-  // when there are no relaxed loads reading from these.
+  // when there are no atomic loads reading from these.
   EXPECT_FALSE(r.check((x | y), p));
 }
 
@@ -1553,8 +1670,8 @@ TEST(CkaTest, MemoryRefinementModificationOrderDifferentAddress)
 
   memory::Refinement r;
 
-  PartialString x{memory::relaxed_store_label(a)};
-  PartialString y{memory::relaxed_store_label(b)};
+  PartialString x{memory::release_store_label(a)};
+  PartialString y{memory::release_store_label(b)};
 
   PartialString p{(x | y)};
 
@@ -1569,10 +1686,10 @@ TEST(CkaTest, MemoryRefinementRelaxedPartialString)
 
   memory::Refinement r;
 
-  PartialString u{memory::relaxed_store_label(a, 1)};
-  PartialString v{memory::relaxed_store_label(a, 2)};
-  PartialString x{memory::relaxed_load_label(a)};
-  PartialString y{memory::relaxed_load_label(a)};
+  PartialString u{memory::release_store_label(a, 1)};
+  PartialString v{memory::release_store_label(a, 2)};
+  PartialString x{memory::acquire_load_label(a)};
+  PartialString y{memory::acquire_load_label(a)};
 
   PartialString p{((u , v) | (x , y))};
 
@@ -1585,10 +1702,10 @@ TEST(CkaTest, MemoryRefinementRelaxedProgram)
 
   memory::Refinement r;
 
-  Program U{memory::relaxed_store_label(a, 1)};
-  Program V{memory::relaxed_store_label(a, 2)};
-  Program X{memory::relaxed_load_label(a)};
-  Program Y{memory::relaxed_load_label(a)};
+  Program U{memory::release_store_label(a, 1)};
+  Program V{memory::release_store_label(a, 2)};
+  Program X{memory::acquire_load_label(a)};
+  Program Y{memory::acquire_load_label(a)};
 
   Program P{((U , V) | (X , Y))};
 
@@ -1636,12 +1753,12 @@ TEST(CkaTest, MemoryHandwrittenPartialStringSequentialConsistency)
 
   memory::Refinement r;
 
-  PartialString p0{memory::relaxed_store_label(a, '\0')};
-  PartialString p1{memory::relaxed_store_label(b, '\0')};
-  PartialString p2{memory::relaxed_store_label(a, '\1')};
-  PartialString p3{memory::relaxed_load_label(b)};
-  PartialString p4{memory::relaxed_store_label(b, '\1')};
-  PartialString p5{memory::relaxed_load_label(a)};
+  PartialString p0{memory::release_store_label(a, '\0')};
+  PartialString p1{memory::release_store_label(b, '\0')};
+  PartialString p2{memory::release_store_label(a, '\1')};
+  PartialString p3{memory::acquire_load_label(b)};
+  PartialString p4{memory::release_store_label(b, '\1')};
+  PartialString p5{memory::acquire_load_label(a)};
 
   PartialString v0{((p2 | p4) , (p3 | p5))};
   PartialString v1{(p4 , p5 , p2 , p3)};
@@ -1707,12 +1824,12 @@ TEST(CkaTest, MemoryHandwrittenProgramSequentialConsistency)
 
   memory::Refinement r;
 
-  Program P0{memory::relaxed_store_label(a, '\0')};
-  Program P1{memory::relaxed_store_label(b, '\0')};
-  Program P2{memory::relaxed_store_label(a, '\1')};
-  Program P3{memory::relaxed_load_label(b)};
-  Program P4{memory::relaxed_store_label(b, '\1')};
-  Program P5{memory::relaxed_load_label(a)};
+  Program P0{memory::release_store_label(a, '\0')};
+  Program P1{memory::release_store_label(b, '\0')};
+  Program P2{memory::release_store_label(a, '\1')};
+  Program P3{memory::acquire_load_label(b)};
+  Program P4{memory::release_store_label(b, '\1')};
+  Program P5{memory::acquire_load_label(a)};
 
   Program A{((P2 | P4) , (P3 | P5))};
   Program B{(P4 , P5 , P2 , P3)};
@@ -1771,14 +1888,14 @@ TEST(CkaTest, MemoryAxiomWithFromReadAndMultipleWrites)
   constexpr memory::Address x = 0U;
   constexpr memory::Address y = 1U;
 
-  Program initx{memory::relaxed_store_label(x, '\0')};
-  Program inity{memory::relaxed_store_label(y, '\0')};
+  Program initx{memory::release_store_label(x, '\0')};
+  Program inity{memory::release_store_label(y, '\0')};
 
-  Program w1y{memory::relaxed_store_label(y, '\2')};
-  Program w1x{memory::relaxed_store_label(x, '\1')};
+  Program w1y{memory::release_store_label(y, '\2')};
+  Program w1x{memory::release_store_label(x, '\1')};
 
-  Program r2x{memory::relaxed_load_label(x)};
-  Program r2y{memory::relaxed_load_label(y)};
+  Program r2x{memory::acquire_load_label(x)};
+  Program r2y{memory::acquire_load_label(y)};
 
   Program P{(initx , inity, (r2x | r2y | w1y | w1x))};
 
@@ -1792,7 +1909,7 @@ TEST(CkaTest, MemoryAxiomWithFailingAssertion)
 {
   constexpr memory::Address x = 0U;
 
-  Program Wx{memory::relaxed_store_label(x, '\0')};
+  Program Wx{memory::release_store_label(x, '\0')};
   Program AnZx{memory::assert_neq_label(x, '\0')};
   Program AZx{memory::assert_eq_label(x, '\0')};
 
@@ -1818,8 +1935,8 @@ TEST(CkaTest, MemoryAxiomWithAssertionsAndUnsequencedWrites)
 {
   constexpr memory::Address x = 0U;
 
-  Program W1x{memory::relaxed_store_label(x, '\1')};
-  Program W2x{memory::relaxed_store_label(x, '\2')};
+  Program W1x{memory::release_store_label(x, '\1')};
+  Program W2x{memory::release_store_label(x, '\2')};
 
   Program A1x{memory::assert_eq_label(x, '\1')};
   Program A2x{memory::assert_eq_label(x, '\2')};
@@ -1847,8 +1964,8 @@ TEST(CkaTest, MemoryAxiomWithAssertionsAndSequencedWrites)
 {
   constexpr memory::Address x = 0U;
 
-  Program W1x{memory::relaxed_store_label(x, '\1')};
-  Program W2x{memory::relaxed_store_label(x, '\2')};
+  Program W1x{memory::release_store_label(x, '\1')};
+  Program W2x{memory::release_store_label(x, '\2')};
 
   Program A1x{memory::assert_eq_label(x, '\1')};
   Program A2x{memory::assert_neq_label(x, '\1')};
@@ -1913,22 +2030,22 @@ TEST(CkaTest, GnuExampleOverApproximationWithMemoryLabels)
   constexpr memory::Address x = 0U;
   constexpr memory::Address y = 1U;
 
-  Program initx{memory::relaxed_store_label(x, '\0')};
-  Program inity{memory::relaxed_store_label(y, '\0')};
+  Program initx{memory::release_store_label(x, '\0')};
+  Program inity{memory::release_store_label(y, '\0')};
 
-  Program w1y{memory::relaxed_store_label(y, '\20')};
-  Program w1x{memory::relaxed_store_label(x, '\10')};
+  Program w1y{memory::release_store_label(y, '\20')};
+  Program w1x{memory::release_store_label(x, '\10')};
 
-  Program if2f{memory::relaxed_load_label(x)};
-  Program if2t{memory::relaxed_load_label(x)};
-  Program a2f{memory::relaxed_load_label(y)};
-  Program a2t{memory::relaxed_load_label(y)};
-  Program w2y{memory::relaxed_store_label(y, '\10')};
+  Program if2f{memory::acquire_load_label(x)};
+  Program if2t{memory::acquire_load_label(x)};
+  Program a2f{memory::acquire_load_label(y)};
+  Program a2t{memory::acquire_load_label(y)};
+  Program w2y{memory::release_store_label(y, '\10')};
 
-  Program if3f{memory::relaxed_load_label(y)};
-  Program if3t{memory::relaxed_load_label(y)};
-  Program a3f{memory::relaxed_load_label(x)};
-  Program a3t{memory::relaxed_load_label(x)};
+  Program if3f{memory::acquire_load_label(y)};
+  Program if3t{memory::acquire_load_label(y)};
+  Program a3f{memory::acquire_load_label(x)};
+  Program a3t{memory::acquire_load_label(x)};
 
   Program R{((initx , inity) ,
               ( (w1y | w1x)
@@ -1949,17 +2066,17 @@ TEST(CkaTest, GnuExampleOverApproximationWithMemoryAndAssertionLabels)
   constexpr memory::Address x = 0U;
   constexpr memory::Address y = 1U;
 
-  Program initx{memory::relaxed_store_label(x, '\0')};
-  Program inity{memory::relaxed_store_label(y, '\0')};
+  Program initx{memory::release_store_label(x, '\0')};
+  Program inity{memory::release_store_label(y, '\0')};
 
-  Program w1y{memory::relaxed_store_label(y, '\20')};
-  Program w1x{memory::relaxed_store_label(x, '\10')};
+  Program w1y{memory::release_store_label(y, '\20')};
+  Program w1x{memory::release_store_label(x, '\10')};
 
   Program if2f{memory::assert_neq_label(x, '\10')};
   Program if2t{memory::assert_eq_label(x, '\10')};
   Program a2f{memory::assert_neq_label(y, '\20')};
   Program a2t{memory::assert_eq_label(y, '\20')};
-  Program w2y{memory::relaxed_store_label(y, '\10')};
+  Program w2y{memory::release_store_label(y, '\10')};
 
   Program if3f{memory::assert_neq_label(y, '\10')};
   Program if3t{memory::assert_eq_label(y, '\10')};
@@ -1985,22 +2102,22 @@ TEST(CkaTest, GnuExampleOverApproximationWithAssertionFreeMemoryAxioms)
   constexpr memory::Address x = 0U;
   constexpr memory::Address y = 1U;
 
-  Program initx{memory::relaxed_store_label(x, '\0')};
-  Program inity{memory::relaxed_store_label(y, '\0')};
+  Program initx{memory::release_store_label(x, '\0')};
+  Program inity{memory::release_store_label(y, '\0')};
 
-  Program w1y{memory::relaxed_store_label(y, '\20')};
-  Program w1x{memory::relaxed_store_label(x, '\10')};
+  Program w1y{memory::release_store_label(y, '\20')};
+  Program w1x{memory::release_store_label(x, '\10')};
 
-  Program if2f{memory::relaxed_load_label(x)};
-  Program if2t{memory::relaxed_load_label(x)};
-  Program a2f{memory::relaxed_load_label(y)};
-  Program a2t{memory::relaxed_load_label(y)};
-  Program w2y{memory::relaxed_store_label(y, '\10')};
+  Program if2f{memory::acquire_load_label(x)};
+  Program if2t{memory::acquire_load_label(x)};
+  Program a2f{memory::acquire_load_label(y)};
+  Program a2t{memory::acquire_load_label(y)};
+  Program w2y{memory::release_store_label(y, '\10')};
 
-  Program if3f{memory::relaxed_load_label(y)};
-  Program if3t{memory::relaxed_load_label(y)};
-  Program a3f{memory::relaxed_load_label(x)};
-  Program a3t{memory::relaxed_load_label(x)};
+  Program if3f{memory::acquire_load_label(y)};
+  Program if3t{memory::acquire_load_label(y)};
+  Program a3f{memory::acquire_load_label(x)};
+  Program a3t{memory::acquire_load_label(x)};
 
   Program R{((initx , inity) ,
               ( (w1y | w1x)
@@ -2035,17 +2152,17 @@ TEST(CkaTest, GnuExampleOverApproximationWithAssertionsAndMemoryAxioms)
   constexpr memory::Address x = 0U;
   constexpr memory::Address y = 1U;
 
-  Program initx{memory::relaxed_store_label(x, '\0')};
-  Program inity{memory::relaxed_store_label(y, '\0')};
+  Program initx{memory::release_store_label(x, '\0')};
+  Program inity{memory::release_store_label(y, '\0')};
 
-  Program w1y{memory::relaxed_store_label(y, '\20')};
-  Program w1x{memory::relaxed_store_label(x, '\10')};
+  Program w1y{memory::release_store_label(y, '\20')};
+  Program w1x{memory::release_store_label(x, '\10')};
 
   Program if2f{memory::assert_neq_label(x, '\10')};
   Program if2t{memory::assert_eq_label(x, '\10')};
   Program a2f{memory::assert_neq_label(y, '\20')};
   Program a2t{memory::assert_eq_label(y, '\20')};
-  Program w2y{memory::relaxed_store_label(y, '\10')};
+  Program w2y{memory::release_store_label(y, '\10')};
 
   Program if3f{memory::assert_neq_label(y, '\10')};
   Program if3t{memory::assert_eq_label(y, '\10')};
@@ -2105,17 +2222,17 @@ TEST(CkaTest, GnuExampleWithAssertionsAndMemoryAxiomsNotSC)
   constexpr memory::Address x = 0U;
   constexpr memory::Address y = 1U;
 
-  Program initx{memory::relaxed_store_label(x, '\0')};
-  Program inity{memory::relaxed_store_label(y, '\0')};
+  Program initx{memory::release_store_label(x, '\0')};
+  Program inity{memory::release_store_label(y, '\0')};
 
-  Program w1y{memory::relaxed_store_label(y, '\20')};
-  Program w1x{memory::relaxed_store_label(x, '\10')};
+  Program w1y{memory::release_store_label(y, '\20')};
+  Program w1x{memory::release_store_label(x, '\10')};
 
   Program if2f{memory::assert_neq_label(x, '\10')};
   Program if2t{memory::assert_eq_label(x, '\10')};
   Program a2f{memory::assert_neq_label(y, '\20')};
   Program a2t{memory::assert_eq_label(y, '\20')};
-  Program w2y{memory::relaxed_store_label(y, '\10')};
+  Program w2y{memory::release_store_label(y, '\10')};
 
   Program if3f{memory::assert_neq_label(y, '\10')};
   Program if3t{memory::assert_eq_label(y, '\10')};
@@ -2181,17 +2298,17 @@ TEST(CkaTest, GnuExampleWithAssertionsAndMemoryAxioms)
   constexpr memory::Address x = 0U;
   constexpr memory::Address y = 1U;
 
-  Program initx{memory::relaxed_store_label(x, '\0')};
-  Program inity{memory::relaxed_store_label(y, '\0')};
+  Program initx{memory::release_store_label(x, '\0')};
+  Program inity{memory::release_store_label(y, '\0')};
 
-  Program w1y{memory::relaxed_store_label(y, '\20')};
-  Program w1x{memory::relaxed_store_label(x, '\10')};
+  Program w1y{memory::release_store_label(y, '\20')};
+  Program w1x{memory::release_store_label(x, '\10')};
 
   Program if2f{memory::assert_neq_label(x, '\10')};
   Program if2t{memory::assert_eq_label(x, '\10')};
   Program a2f{memory::assert_neq_label(y, '\20')};
   Program a2t{memory::assert_eq_label(y, '\20')};
-  Program w2y{memory::relaxed_store_label(y, '\10')};
+  Program w2y{memory::release_store_label(y, '\10')};
 
   Program if3f{memory::assert_neq_label(y, '\10')};
   Program if3t{memory::assert_eq_label(y, '\10')};
@@ -2251,17 +2368,17 @@ TEST(CkaTest, GnuExampleSmallWithAssertionsAndMemoryAxioms)
   constexpr memory::Address x = 0U;
   constexpr memory::Address y = 1U;
 
-  Program initx{memory::relaxed_store_label(x, '\0')};
-  Program inity{memory::relaxed_store_label(y, '\0')};
+  Program initx{memory::release_store_label(x, '\0')};
+  Program inity{memory::release_store_label(y, '\0')};
 
-  Program w1y{memory::relaxed_store_label(y, '\20')};
-  Program w1x{memory::relaxed_store_label(x, '\10')};
+  Program w1y{memory::release_store_label(y, '\20')};
+  Program w1x{memory::release_store_label(x, '\10')};
 
   Program if2f{memory::assert_neq_label(x, '\10')};
   Program if2t{memory::assert_eq_label(x, '\10')};
   Program a2f{memory::assert_neq_label(y, '\20')};
   Program a2t{memory::assert_eq_label(y, '\20')};
-  Program w2y{memory::relaxed_store_label(y, '\10')};
+  Program w2y{memory::release_store_label(y, '\10')};
 
   Program if3f{memory::assert_neq_label(y, '\10')};
   Program if3t{memory::assert_eq_label(y, '\10')};
@@ -2299,4 +2416,472 @@ TEST(CkaTest, GnuExampleSmallWithAssertionsAndMemoryAxioms)
   EXPECT_FALSE(r.check(SC2, R));
   EXPECT_FALSE(r.check(SC2, SC0));
   EXPECT_FALSE(r.check(SC0, R));
+}
+
+TEST(CkaTest, RacyOnlyStores)
+{
+  constexpr memory::Address a = 0U;
+
+  PartialString p0{memory::none_store_label(a, '\0')};
+  PartialString p1{memory::none_store_label(a, '\0')};
+
+  PartialString x{(p0 | p1)};
+  PartialString y{(p0 , p1)};
+  PartialString z{(p1 , p0)};
+
+  memory::DataRaceDetector drd;
+
+  EXPECT_FALSE(drd.is_racy(p0));
+  EXPECT_FALSE(drd.is_racy(p1));
+
+  EXPECT_TRUE(drd.is_racy(x));
+  EXPECT_FALSE(drd.is_racy(y));
+  EXPECT_FALSE(drd.is_racy(z));
+}
+
+TEST(CkaTest, NonRacyOnlyReleaseStores)
+{
+  constexpr memory::Address a = 0U;
+
+  PartialString p0{memory::release_store_label(a, '\0')};
+  PartialString p1{memory::release_store_label(a, '\0')};
+
+  PartialString x{(p0 | p1)};
+  PartialString y{(p0 , p1)};
+  PartialString z{(p1 , p0)};
+
+  memory::DataRaceDetector drd;
+
+  EXPECT_FALSE(drd.is_racy(p0));
+  EXPECT_FALSE(drd.is_racy(p1));
+
+  EXPECT_FALSE(drd.is_racy(x));
+  EXPECT_FALSE(drd.is_racy(y));
+  EXPECT_FALSE(drd.is_racy(z));
+}
+
+/// At least one conflicting event must be a non-atomic write
+TEST(CkaTest, NonRacyOnlyLoads)
+{
+  constexpr memory::Address a = 0U;
+
+  PartialString p0{memory::none_load_label(a)};
+  PartialString p1{memory::none_load_label(a)};
+
+  PartialString x{(p0 | p1)};
+  PartialString y{(p0 , p1)};
+  PartialString z{(p1 , p0)};
+
+  memory::DataRaceDetector drd;
+
+  EXPECT_FALSE(drd.is_racy(p0));
+  EXPECT_FALSE(drd.is_racy(p1));
+
+  EXPECT_FALSE(drd.is_racy(x));
+  EXPECT_FALSE(drd.is_racy(y));
+  EXPECT_FALSE(drd.is_racy(z));
+}
+
+TEST(CkaTest, RacyNonatomic)
+{
+  constexpr memory::Address a = 0U;
+
+  PartialString p0{memory::none_store_label(a, '\0')};
+  PartialString p1{memory::none_load_label(a)};
+
+  PartialString x{(p0 | p1)};
+  PartialString y{(p0 , p1)};
+  PartialString z{(p1 , p0)};
+
+  memory::DataRaceDetector drd;
+
+  EXPECT_TRUE(drd.is_racy(x));
+
+  EXPECT_FALSE(drd.is_racy(y));
+  EXPECT_FALSE(drd.is_racy(z));
+}
+
+/// This example illustrates a data race. The partial string corresponds to
+/// the "MP+na_rel+acq_na.c" scenario in the "CppMem" tool developed by
+/// Mark Batty, Scott Owens, Jean Pichon, Susmit Sarkar and Peter Sewell.
+///
+/// John Wickerson's tool demo at MSR Cambridge on 22nd October, 2014
+/// featured the example in the context of another research tool that
+/// explicitly enumerates all relations which satisfy various versions
+/// of the weak memory axioms:
+///
+///   https://github.com/herd/herdtools
+///
+/// This sparked the idea to try a symbolic technique instead.
+///
+/// Example:
+///
+/// Let T1 be "[a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; r1 := [a]_none;"
+/// where both memory locations "a" and "b" are initially zero.
+///
+/// The data race occurs when "r0 := [b]_acquire" reads the initial value
+/// of "b" and "r1 := [a]_none" reads from "[a]_none := 1". In that case,
+/// no synchronize-with relation is induced between the writing and
+/// reading of memory location "a", a data race.
+TEST(CkaTest, RacyMessagePassingWithInit)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  PartialString p0{memory::release_store_label(a, '\0')};
+  PartialString p1{memory::release_store_label(b, '\0')};
+
+  PartialString p2{memory::none_store_label(a, '\1')};
+  PartialString p3{memory::release_store_label(b, '\1')};
+
+  PartialString p4{memory::acquire_load_label(b)};
+  PartialString p5{memory::none_load_label(a)};
+
+  memory::DataRaceDetector drd;
+
+  PartialString x{((p0 | p1) , ((p2 , p3) | (p4 , p5)))};
+
+  EXPECT_TRUE(drd.is_racy(x));
+}
+
+TEST(CkaTest, RacyMessagePassingWithoutInit)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  PartialString p2{memory::none_store_label(a, '\1')};
+  PartialString p3{memory::release_store_label(b, '\1')};
+
+  PartialString p4{memory::acquire_load_label(b)};
+  PartialString p5{memory::none_load_label(a)};
+
+  memory::DataRaceDetector drd;
+
+  PartialString x{((p2 , p3) | (p4 , p5))};
+
+  // For example, "p4 , p2 , p3 , p5" is a data race
+  // but it does not satisfy the axiom that every load
+  // happens-before a store to the same memory address.
+  EXPECT_FALSE(drd.is_racy(x));
+}
+
+/// By changing the previous example so that the code only
+/// uses release-acquire, it is clearly not racy anymore.
+///
+/// Let T1 be "[a]_release := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; r1 := [a]_acquire;"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, NonRacyMessagePassingUsingAlwaysReleaseAcquire)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  PartialString p0{memory::release_store_label(a, '\0')};
+  PartialString p1{memory::release_store_label(b, '\0')};
+
+  PartialString p2{memory::release_store_label(a, '\1')};
+  PartialString p3{memory::release_store_label(b, '\1')};
+
+  PartialString p4{memory::acquire_load_label(b)};
+  PartialString p5{memory::acquire_load_label(a)};
+
+  memory::DataRaceDetector drd;
+
+  PartialString x{((p0 | p1) , ((p2 , p3) | (p4 , p5)))};
+
+  EXPECT_FALSE(drd.is_racy(x));
+}
+
+/// One way of fixing the racy code from RacyMessagePassingWithInit
+/// is by checking whether a certain value was indeed read:
+///
+/// Let T1 be "[a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, NonRacyMessagePassingUsingBranch)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  PartialString p0{memory::release_store_label(a, '\0')};
+  PartialString p1{memory::release_store_label(b, '\0')};
+
+  PartialString p2{memory::none_store_label(a, '\1')};
+  PartialString p3{memory::release_store_label(b, '\1')};
+
+  PartialString p4{memory::assert_eq_label(b, '\1')};
+  PartialString p5{memory::none_load_label(a)};
+
+  PartialString p6{memory::assert_neq_label(b, '\1')};
+
+  memory::DataRaceDetector drd;
+
+  PartialString x{((p0 | p1) , ((p2 , p3) | (p4 , p5)))};
+  PartialString y{((p0 | p1) , ((p2 , p3) | p6))};
+
+  EXPECT_FALSE(drd.is_racy(x));
+  EXPECT_FALSE(drd.is_racy(y));
+}
+
+/// Even if we check that a certain value was written, we still
+/// have a data race if the written value can come from multiple threads:
+///
+/// Let T1 be "[a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T1' be "[a]_none := 1; [b]_release := 1"
+/// where both memory locations "a" and "b" are initially zero.
+///
+/// Clearly "T1 | T2 | T1'" is also racy for the reason that
+/// there are two "[a]_none := 1" instructions.
+TEST(CkaTest, RacyDespiteBranch)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  PartialString p0{memory::release_store_label(a, '\0')};
+  PartialString p1{memory::release_store_label(b, '\0')};
+
+  PartialString p2{memory::none_store_label(a, '\1')};
+  PartialString p3{memory::release_store_label(b, '\1')};
+
+  PartialString p4{memory::assert_eq_label(b, '\1')};
+  PartialString p5{memory::none_load_label(a)};
+
+  PartialString p6{memory::assert_neq_label(b, '\1')};
+
+  PartialString p7{memory::none_store_label(a, '\1')};
+  PartialString p8{memory::release_store_label(b, '\1')};
+
+  memory::DataRaceDetector drd;
+
+  PartialString x{((p0 | p1) , ((p2 , p3) | (p4 , p5) | (p7 , p8)))};
+  PartialString y{((p0 | p1) , ((p2 , p3) | p6 | (p7 , p8)))};
+
+  EXPECT_TRUE(drd.is_racy(x));
+
+  // two "[a]_none := 1"
+  EXPECT_TRUE(drd.is_racy(y));
+}
+
+/// Furthermore, even if we wrap the non-synchronizing writes inside
+/// release-acquire, and we check that a certain value was written,
+/// we have still a data race:
+///
+/// Let T1 be "r0 := [b]_acquire; [a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T1' be "r0 := [b]_acquire; [a]_none := 1; [b]_release := 1"
+/// where both memory locations "a" and "b" are initially zero.
+///
+/// Clearly "T1 | T2 | T1'" is also racy for the reason that
+/// there are two "[a]_none := 1" instructions.
+TEST(CkaTest, RacyDespiteBranchAndReleaseAcquireWrap)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  PartialString t0_0{memory::release_store_label(a, '\0')};
+  PartialString t0_1{memory::release_store_label(b, '\0')};
+
+  PartialString t1_0{memory::acquire_load_label(b)};
+  PartialString t1_1{memory::none_store_label(a, '\1')};
+  PartialString t1_2{memory::release_store_label(b, '\1')};
+
+  PartialString t2_0{memory::assert_eq_label(b, '\1')};
+  PartialString t2_1{memory::none_load_label(a)};
+
+  PartialString t2_2{memory::assert_neq_label(b, '\1')};
+
+  PartialString t3_0{memory::acquire_load_label(b)};
+  PartialString t3_1{memory::none_store_label(a, '\1')};
+  PartialString t3_2{memory::release_store_label(b, '\1')};
+
+  memory::DataRaceDetector drd;
+
+  PartialString x{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | (t2_0 , t2_1) | (t3_0 , t3_1 , t3_2)))};
+  PartialString y{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | t2_2 | (t3_0 , t3_1 , t3_2)))};
+
+  EXPECT_TRUE(drd.is_racy(x));
+  EXPECT_TRUE(drd.is_racy(y));
+}
+
+/// So let's refine RacyDespiteBranchAndReleaseAcquireWrap as follows:
+///
+/// Let T1 be "r0 := [b]_acquire; [a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 0) then r1 := [a]_none; end",
+/// and T1' be "r0 := [b]_acquire; if (r0 == 1) then [a]_none := 2; [b]_release := 2; end"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, RacyDespiteBranchCheckZero)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  PartialString t0_0{memory::release_store_label(a, '\0')};
+  PartialString t0_1{memory::release_store_label(b, '\0')};
+
+  PartialString t1_0{memory::acquire_load_label(b)};
+  PartialString t1_1{memory::none_store_label(a, '\1')};
+  PartialString t1_2{memory::release_store_label(b, '\1')};
+
+  PartialString t2_0{memory::assert_eq_label(b, '\0')};
+  PartialString t2_1{memory::none_load_label(a)};
+
+  PartialString t2_2{memory::assert_neq_label(b, '\0')};
+
+  PartialString t3_0{memory::assert_eq_label(b, '\1')};
+  PartialString t3_1{memory::none_store_label(a, '\2')};
+  PartialString t3_2{memory::release_store_label(b, '\2')};
+
+  PartialString t3_3{memory::assert_neq_label(b, '\1')};
+
+  memory::DataRaceDetector drd;
+
+  PartialString u{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | t2_2 | t3_3))};
+  PartialString v{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | (t2_0 , t2_1) | t3_3))};
+  PartialString v_prime{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | (t2_0 , t2_1) | t3_0))};
+  PartialString x{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | (t2_0 , t2_1) | (t3_0 , t3_1 , t3_2)))};
+  PartialString y{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | t2_2 | (t3_0 , t3_1 , t3_2)))};
+
+  EXPECT_FALSE(drd.is_racy(u));
+
+  EXPECT_TRUE(drd.is_racy(v));
+  EXPECT_TRUE(drd.is_racy(v_prime));
+  EXPECT_TRUE(drd.is_racy(x));
+
+  EXPECT_FALSE(drd.is_racy(y));
+}
+
+/// Let T1 be "r0 := [b]_acquire; [a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T1' be "r0 := [b]_acquire; if (r0 == 1) then [a]_none := 2; [b]_release := 2; end"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, RacyDespiteBranchCheckOne)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  PartialString t0_0{memory::release_store_label(a, '\0')};
+  PartialString t0_1{memory::release_store_label(b, '\0')};
+
+  PartialString t1_0{memory::acquire_load_label(b)};
+  PartialString t1_1{memory::none_store_label(a, '\1')};
+  PartialString t1_2{memory::release_store_label(b, '\1')};
+
+  PartialString t2_0{memory::assert_eq_label(b, '\1')};
+  PartialString t2_1{memory::none_load_label(a)};
+
+  PartialString t2_2{memory::assert_neq_label(b, '\1')};
+
+  PartialString t3_0{memory::assert_eq_label(b, '\1')};
+  PartialString t3_1{memory::none_store_label(a, '\2')};
+  PartialString t3_2{memory::release_store_label(b, '\2')};
+
+  PartialString t3_3{memory::assert_neq_label(b, '\1')};
+
+  memory::DataRaceDetector drd;
+
+  PartialString u{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | t2_2 | t3_3))};
+  PartialString v{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | (t2_0 , t2_1) | t3_3))};
+  PartialString x{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | (t2_0 , t2_1) | (t3_0 , t3_1 , t3_2)))};
+  PartialString y{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | t2_2 | (t3_0 , t3_1 , t3_2)))};
+
+  EXPECT_FALSE(drd.is_racy(u));
+  EXPECT_FALSE(drd.is_racy(v));
+
+  EXPECT_TRUE(drd.is_racy(x));
+  EXPECT_FALSE(drd.is_racy(y));
+}
+
+/// Let T1 be "r0 := [b]_acquire; if r0 == 2 then [a]_none := 1; [b]_release := 1; end",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T1' be "r0 := [b]_acquire; [a]_none := 2; [b]_release := 2"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, NonRacyWithBranches)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  PartialString t0_0{memory::release_store_label(a, '\0')};
+  PartialString t0_1{memory::release_store_label(b, '\0')};
+
+  PartialString t1_0{memory::assert_eq_label(b, '\2')};
+  PartialString t1_1{memory::none_store_label(a, '\1')};
+  PartialString t1_2{memory::release_store_label(b, '\1')};
+
+  PartialString t1_3{memory::assert_neq_label(b, '\2')};
+
+  PartialString t2_0{memory::assert_eq_label(b, '\1')};
+  PartialString t2_1{memory::none_load_label(a)};
+
+  PartialString t2_2{memory::assert_neq_label(b, '\1')};
+  PartialString t2_3{memory::assert_eq_label(b, '\0')};
+
+  PartialString t3_0{memory::acquire_load_label(b)};
+  PartialString t3_1{memory::none_store_label(a, '\2')};
+  PartialString t3_2{memory::release_store_label(b, '\2')};
+
+  memory::DataRaceDetector drd;
+
+  PartialString c{((t0_0 | t0_1) , ((t3_0 , t3_1 , t3_2) | t2_2 | t1_3))};
+  PartialString d{((t0_0 | t0_1) , ((t3_0 , t3_1 , t3_2) | (t2_0 , t2_1) | t1_3))};
+  PartialString e{((t0_0 | t0_1) , ((t3_0 , t3_1 , t3_2) | (t2_0 , t2_1) | (t1_0 , t1_1 , t1_2)))};
+  PartialString f{((t0_0 | t0_1) , ((t3_0 , t3_1 , t3_2) | t2_2 | (t1_0 , t1_1 , t1_2)))};
+
+  EXPECT_FALSE(drd.is_racy(c));
+  EXPECT_FALSE(drd.is_racy(d));
+  EXPECT_FALSE(drd.is_racy(e));
+  EXPECT_FALSE(drd.is_racy(f));
+
+  PartialString u{((t0_0 | t0_1) , (t1_3 | t2_2 | (t3_0 , t3_1 , t3_2)))};
+  PartialString v{((t0_0 | t0_1) , (t1_3 | (t2_0 , t2_1) | (t3_0 , t3_1 , t3_2)))};
+  PartialString x{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | (t2_0 , t2_1) | (t3_0 , t3_1 , t3_2)))};
+  PartialString y{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | t2_2 | (t3_0 , t3_1 , t3_2)))};
+  PartialString y_prime{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | t2_3 | (t3_0 , t3_1 , t3_2)))};
+
+  EXPECT_FALSE(drd.is_racy(u));
+  EXPECT_FALSE(drd.is_racy(v));
+  EXPECT_FALSE(drd.is_racy(x));
+  EXPECT_FALSE(drd.is_racy(y));
+  EXPECT_FALSE(drd.is_racy(y_prime));
+}
+
+/// Unlike RacyDespiteBranchCheckOne, in this test T1' does not write "a":
+///
+/// Let T1 be "r0 := [b]_acquire; [a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T1' be "r0 := [b]_acquire; if (r0 == 1) then [b]_release := 2; end"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, NonRacyBranchCheckOne)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  PartialString t0_0{memory::release_store_label(a, '\0')};
+  PartialString t0_1{memory::release_store_label(b, '\0')};
+
+  PartialString t1_0{memory::acquire_load_label(b)};
+  PartialString t1_1{memory::none_store_label(a, '\1')};
+  PartialString t1_2{memory::release_store_label(b, '\1')};
+
+  PartialString t2_0{memory::assert_eq_label(b, '\1')};
+  PartialString t2_1{memory::none_load_label(a)};
+
+  PartialString t2_2{memory::assert_neq_label(b, '\1')};
+
+  PartialString t3_0{memory::assert_eq_label(b, '\1')};
+  PartialString t3_1{memory::release_store_label(b, '\2')};
+
+  PartialString t3_2{memory::assert_neq_label(b, '\1')};
+
+  memory::DataRaceDetector drd;
+
+  PartialString u{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | t2_2 | t3_2))};
+  PartialString v{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | (t2_0 , t2_1) | t3_2))};
+  PartialString x{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | (t2_0 , t2_1) | (t3_0 , t3_1)))};
+  PartialString y{((t0_0 | t0_1) , ((t1_0 , t1_1 , t1_2) | t2_2 | (t3_0 , t3_1)))};
+
+  EXPECT_FALSE(drd.is_racy(u));
+  EXPECT_FALSE(drd.is_racy(v));
+  EXPECT_FALSE(drd.is_racy(x));
+  EXPECT_FALSE(drd.is_racy(y));
 }

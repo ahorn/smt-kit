@@ -782,7 +782,7 @@ public:
   }
 
   /// Adds the symbolic ordering constraint that `a` enables `b`
-  smt::Bool order(Event a, Event b)
+  smt::Bool order(Event a, Event b) const
   {
     EventSort a_literal{smt::literal<EventSort>(a)};
     EventSort b_literal{smt::literal<EventSort>(b)};
@@ -791,20 +791,20 @@ public:
 
   /// Symbolically encodes an irreflexive, transitive and asymmetric relation
 
-  /// Returns partial order constraint as a list of conjuncts
-  smt::Bools strict_partial_order(const PartialString& p)
+  /// Returns `true` if `conjuncts` is unsatisfiable, `false` if unknown
+  bool strict_partial_order(const PartialString& p, smt::Bools& conjuncts)
   {
     // in the worst case, encoding is cubic in the number of events in `p`
     const Length len{p.length()};
-    smt::Bools partial_order(len * len * len);
+    conjuncts.reserve(conjuncts.size() + (len * len * len));
 
     // transitive reduction of `p`
     for (const PartialString::EventPair& pair : p.strict_partial_order())
-      partial_order.push_back(order(pair.first, pair.second));
+      conjuncts.push_back(order(pair.first, pair.second));
 
     // irreflexivity
     for (Event e{0}; e < len; ++e)
-      partial_order.push_back(not order(e, e));
+      conjuncts.push_back(not order(e, e));
 
     // asymmetry
     smt::Bool order_a_b;
@@ -816,33 +816,54 @@ public:
           order_a_b = order(e_a, e_b);
           order_b_a = order(e_b, e_a);
 
-          partial_order.push_back(smt::implies(order_a_b, not order_b_a));
+          conjuncts.push_back(smt::implies(order_a_b, not order_b_a));
         }
     }
 
     // transitivity
     smt::Bool order_b_c, order_a_c;
     for (Event e_a{0}; e_a < len; ++e_a)
-      for (Event e_b{e_a + 1U}; e_b < len; ++e_b)
-        for (Event e_c{e_b + 1U}; e_c < len; ++e_c)
+      for (Event e_b{0}; e_b < len; ++e_b)
+        for (Event e_c{0}; e_c < len; ++e_c)
         {
           order_a_b = order(e_a, e_b);
           order_b_c = order(e_b, e_c);
           order_a_c = order(e_a, e_c);
 
-          partial_order.push_back(smt::implies(order_a_b and order_b_c, order_a_c));
+          conjuncts.push_back(smt::implies(order_a_b and order_b_c, order_a_c));
         }
 
-    // incomparable events
+    return false;
+  }
+
+  /// Symbolically encode the incomparable events in `p`
+
+  /// Returns `true` if `conjuncts` is unsatisfiable, `false` if unknown
+  bool incomparables(const PartialString& p, smt::Bools& conjuncts)
+  {
+    conjuncts.reserve(conjuncts.size() + (2U * p.incomparables().size()));
     for (const PartialString::EventPair& pair : p.incomparables())
     {
-      partial_order.push_back(not order(pair.first, pair.second));
-      partial_order.push_back(not order(pair.second, pair.first));
+      conjuncts.push_back(not order(pair.first, pair.second));
+      conjuncts.push_back(not order(pair.second, pair.first));
     }
 
-    return partial_order;
+    return false;
   }
 };
+
+namespace internal
+{
+  /// RAII
+  class ResetSolver
+  {
+  private:
+    smt::Solver& m_solver_ref;
+  public:
+    ResetSolver(smt::Solver& solver) : m_solver_ref(solver) {}
+    ~ResetSolver() { m_solver_ref.reset(); }
+  };
+}
 
 /// Symbolic decision procedure for certain CKA language containment problems
 class Refinement
@@ -869,7 +890,7 @@ private:
   LabelFunc m_label_func_x;
 
   // The core of the encoding
-  PartialOrderModel m_model;
+  PartialOrderModel m_po_model;
 
   // Statistics
   unsigned m_number_of_solver_calls;
@@ -903,7 +924,7 @@ private:
         e_first = smt::apply(m_event_func, y_pair.first);
         e_second = smt::apply(m_event_func, y_pair.second);
 
-        partial_order.push_back(smt::apply(m_model.order_pred(), e_first, e_second));
+        partial_order.push_back(smt::apply(m_po_model.order_pred(), e_first, e_second));
       }
 
       assert(not partial_order.empty());
@@ -953,7 +974,7 @@ public:
   : m_solver(smt::QF_UFLIA_LOGIC),
     m_event_func{"event"},
     m_label_func_x{"label_x"},
-    m_model{},
+    m_po_model{},
     m_number_of_solver_calls{0},
     m_number_of_checks{0} {}
 
@@ -985,8 +1006,17 @@ public:
     if (internal::Refinement::shortcut(x, y))
       return false;
 
-    m_solver.add(smt::conjunction(
-      m_model.strict_partial_order(x)));
+    smt::Bools conjuncts;
+    internal::ResetSolver reset_solver{m_solver};
+
+    if (m_po_model.strict_partial_order(x, conjuncts))
+      return false;
+
+    if (m_po_model.incomparables(x, conjuncts))
+      return false;
+
+    if (!conjuncts.empty())
+      m_solver.add(smt::conjunction(conjuncts));
 
     encode_label(m_label_func_x, x);
     encode_monotonic_bijective_morphism(x, y);
@@ -999,8 +1029,6 @@ public:
     if (r == smt::sat)
       std::cout << "Model: " << m_solver.solver().get_model() << std::endl;
 #endif
-
-    m_solver.reset();
 
     // Does there exist a strictly monotonic bijective
     // label-preserving function from y to x?
@@ -1034,33 +1062,59 @@ typedef unsigned char Byte;
 
 /// Returns an even non-negative number
 
-/// C++14-style relaxed store of an atomic byte `b` (default zero)
-/// to a memory location identified by address `a`.
-///
-/// Stores with a higher address will result in greater labels.
-/// That is, `relaxed_store_label` is monotonic; equivalently,
-///
-///   for all addresses a and a', if a is less than a', then
-///   `relaxed_store_label(a, b) < relaxed_store_label(a, b')`
-///   where b and b' are arbitrary bytes.
-Label relaxed_store_label(Address a, Byte b = 0);
+/// A non-synchronization store instruction
+Label none_store_label(Address a, Byte b = 0);
 
 /// Returns an odd positive number
 
-/// C++14-style relaxed load instruction of an atomic integral value.
-Label relaxed_load_label(Address);
+/// A non-synchronization load instruction
+///
+/// Stores with a higher address will result in greater labels.
+/// That is, `none_store_label` is monotonic; equivalently,
+///
+///   for all addresses a and a', if a is less than a', then
+///   `none_store_label(a, b) < none_store_label(a, b')`
+///   where b and b' are arbitrary bytes.
+Label none_load_label(Address);
 
-/// Returns a relaxed load label that expects to read `b`
+/// Returns an even non-negative number
+
+/// C++14-style release store of an atomic byte `b` (default zero)
+/// to a memory location identified by address `a`.
+///
+/// Stores with a higher address will result in greater labels.
+/// That is, `release_store_label` is monotonic; equivalently,
+///
+///   for all addresses a and a', if a is less than a', then
+///   `release_store_label(a, b) < release_store_label(a, b')`
+///   where b and b' are arbitrary bytes.
+Label release_store_label(Address a, Byte b = 0);
+
+/// Returns an odd positive number
+
+/// C++14-style acquire load instruction of an atomic integral value.
+Label acquire_load_label(Address);
+
+/// Returns an acquire load label that expects to read `b`
 Label assert_eq_label(Address a, Byte b);
 
-/// Returns a relaxed load label that expects to read anything but `b`
+/// Returns an acquire load label that expects to read anything but `b`
 Label assert_neq_label(Address a, Byte b);
 
-/// Is label a C++14-style relaxed store on an atomic integral type?
-bool is_relaxed_store(Label);
+/// Is label a non-synchronization store instruction?
+bool is_none_store(Label);
 
-/// Is label a C++14-style relaxed load on an atomic integral type?
-bool is_relaxed_load(Label);
+/// Is label a non-synchronization load instruction?
+bool is_none_load(Label);
+
+/// Is label a C++14-style release store on an atomic integral type?
+bool is_release_store(Label);
+
+/// Is label a C++14-style acquire load on an atomic integral type?
+bool is_acquire_load(Label);
+
+bool is_store(Label);
+bool is_load(Label);
 
 /// Is label a load that expects to read a certain byte?
 bool is_assert(Label);
@@ -1069,66 +1123,106 @@ bool is_assert_neq(Label);
 
 /// The byte written or expected by `op`
 
-/// \pre: `is_relaxed_store(op)` or `is_assert(op)`
+/// \pre: `is_store(op)` or `is_assert(op)`
 Byte byte(Label op);
 
-/// The memory address read or written by a relaxed load or store
+/// The memory address read or written by a load or store
 
-/// \pre: `is_relaxed_store(op)` or `is_relaxed_load(op)`
+/// \pre: `is_store(op)` or `is_load(op)`
 Address address(Label op);
 
 /// Is same memory accessed by `store` and `load`?
 
-/// \pre: `is_relaxed_store(store)` and `is_relaxed_load(load)`
+/// \pre: `is_release_store(store)` and `is_acquire_load(load)`
 bool is_shared(Label store, Label load);
 
 /// Is same memory accessed by a `store` and `load` event?
 
 /// \pre: `store` and `load` are events in `x`
-/// \pre: `is_relaxed_store(x.label_function().at(store))`
-/// \pre: `is_relaxed_load(x.label_function().at(load))`
+/// \pre: `is_release_store(x.label_function().at(store))`
+/// \pre: `is_acquire_load(x.label_function().at(load))`
 bool is_shared(const PartialString& x, Event store, Event load);
 
-/// Checks refinement of two concurrent shared memory programs
+/// Maps a memory address to a list of events, sorted in ascending order
 
-/// Memory addresses are assumed to be consecutive, starting at zero.
-class Refinement
-: public internal::ProgramChecker<Refinement>,
-  public internal::Refinement
+/// \remark we assume that memory addresses are dense
+typedef std::vector<Events> PerAddressMap;
+
+namespace internal
+{
+  struct Filter
+  {
+    Filter() = delete;
+
+    /// Extracts stores and loads from `x`
+
+    /// \pre: for all events `e`, if `store_predicate(e)` then `is_store(e)`
+    /// \pre: for all events `e`, if `load_predicate(e)` then `is_load(e)`
+    template<class Predicate>
+    static Address store_load_filter(
+      const PartialString& x,
+      PerAddressMap& store_map,
+      PerAddressMap& load_map,
+      Predicate store_predicate,
+      Predicate load_predicate)
+    {
+      // see monotonicity of store labels
+      // and assumptions on memory addresses
+      const Address max_address{memory::address(x.max_label())};
+
+      Label label;
+      Address address;
+
+      store_map.resize(max_address + 1U);
+      load_map.resize(max_address + 1U);
+
+      for (Event e{0}; e < x.length(); ++e)
+      {
+        label = x.label_function().at(e);
+        address = memory::address(label);
+
+        assert(address < store_map.size());
+        assert(address < load_map.size());
+
+        if (store_predicate(label))
+        {
+          assert(is_store(label));
+          store_map[address].emplace_back(e);
+        }
+
+        if (load_predicate(label))
+        {
+          assert(is_load(label));
+          load_map[address].emplace_back(e);
+        }
+      }
+
+      assert(store_map.size() == max_address + 1U);
+      assert(load_map.size() == max_address + 1U);
+
+      return max_address;
+    }
+  };
+}
+
+/// A partial order model of C++14-style release-acquire semantics
+class ReleaseAcquireModel
 {
 private:
-  /// Maps a memory address to a list of events, sorted in ascending order
-
-  /// \remark we assume that memory addresses are dense
-  typedef std::vector<Events> PerAddressMap;
-
-  /// Increase precision of the generic partial string refinement checker
-  cka::Refinement m_refinement;
-
-  /// Encode happens-before relation with monotonic bijective morphism
-
-  /// \remark not the same as `PartialOrderModel::order`, the difference
-  ///   is that we first map the events with `m_refinement.m_event_func`
-  smt::Bool event_order_in_x(Event a, Event b)
-  {
-    EventSort e_a{smt::apply(m_refinement.m_event_func, a)};
-    EventSort e_b{smt::apply(m_refinement.m_event_func, b)};
-
-    return smt::apply(m_refinement.m_model.order_pred(), e_a, e_b);
-  }
+  const PartialOrderModel& m_po_model;
 
 public:
-  using internal::ProgramChecker<Refinement>::check;
+  ReleaseAcquireModel(const PartialOrderModel& po_model)
+  : m_po_model(po_model) {}
 
-  Refinement() : m_refinement{} {}
+  /// Symbolically encodes a form of release-acquire semantics
 
-  /// Does `x` refine `y` when `y` satisfies the memory axioms?
-  bool check(const cka::PartialString& x, const PartialString& y)
+  /// Returns `true` if `conjuncts` is unsatisfiable, `false` if unknown
+  template<class Order>
+  bool release_acquire(const Order& order, const PartialString& x,
+    smt::Bools& conjuncts)
   {
     static const char* const s_rf_prefix = "rf!";
-
-    if (internal::Refinement::shortcut(x, y))
-      return false;
 
     Address address;
     smt::Bool rf_bool;
@@ -1136,27 +1230,8 @@ public:
     Label label, store_label;
     PerAddressMap store_map, load_map;
 
-    // see monotonicity of `relaxed_store_label`
-    // and assumptions on memory addresses
-    const Address max_address{memory::address(y.max_label())};
-    {
-      store_map.resize(max_address + 1U);
-      load_map.resize(max_address + 1U);
-    }
-
-    for (Event e{0}; e < y.length(); ++e)
-    {
-      label = y.label_function().at(e);
-      address = memory::address(label);
-
-      assert(address < store_map.size());
-      assert(address < load_map.size());
-
-      if (is_relaxed_load(label))
-        load_map[address].emplace_back(e);
-      else
-        store_map[address].emplace_back(e);
-    }
+    const Address max_address{internal::Filter::store_load_filter(
+      x, store_map, load_map, is_release_store, is_acquire_load)};
 
     // some read-from pair:
     //
@@ -1176,7 +1251,7 @@ public:
 
     // modification order:
     //
-    // relaxed stores on the same memory address are totally ordered
+    // atomic stores on the same memory address are totally ordered
     smt::Bools mo;
 
     // from-read relation (optional if we don't check written values):
@@ -1186,9 +1261,6 @@ public:
     // s happens-before s', then l happens-before s'.
     smt::Bools order_fr;
 
-    assert(store_map.size() == max_address + 1U);
-    assert(load_map.size() == max_address + 1U);
-
     for (address = 0; address <= max_address; ++address)
     {
       const Events& stores = store_map[address];
@@ -1196,15 +1268,15 @@ public:
 
       for (Event load : loads)
       {
-        label = y.label_function().at(load);
+        label = x.label_function().at(load);
         rf_event = smt::any<EventSort>(s_rf_prefix, load);
 
         for (Event store_a : stores)
         {
-          store_label = y.label_function().at(store_a);
+          store_label = x.label_function().at(store_a);
 
-          assert(is_relaxed_store(store_label));
-          assert(is_shared(y, store_a, load));
+          assert(is_release_store(store_label));
+          assert(is_shared(x, store_a, load));
 
           if ((is_assert_eq(label) and byte(store_label) != byte(label)) or
                 (is_assert_neq(label) and byte(store_label) == byte(label)))
@@ -1213,19 +1285,19 @@ public:
           rf_bool = store_a == rf_event;
           some_rf.push_back(rf_bool);
           order_rf.push_back(smt::implies(rf_bool,
-            event_order_in_x(store_a, load)));
+            order.order(store_a, load)));
 
           for (Event store_b : stores)
             if (store_a != store_b)
             {
               order_fr.push_back(smt::implies(
-                rf_bool and event_order_in_x(store_a, store_b),
-                event_order_in_x(load, store_b)));
+                rf_bool and order.order(store_a, store_b),
+                order.order(load, store_b)));
             }
         }
 
         if (some_rf.empty())
-          return false;
+          return true;
 
         all_rf.push_back(smt::disjunction(some_rf));
         some_rf.clear();
@@ -1235,25 +1307,167 @@ public:
         for (Event store_b : stores)
           if (store_a < store_b)
           {
-            mo.push_back(event_order_in_x(store_a, store_b));
-            mo.push_back(event_order_in_x(store_b, store_a));
+            mo.push_back(order.order(store_a, store_b));
+            mo.push_back(order.order(store_b, store_a));
           }
 
     } // end of address iteration
 
     if (!all_rf.empty())
-      m_refinement.m_solver.add(smt::conjunction(all_rf));
+      conjuncts.push_back(smt::conjunction(all_rf));
 
     if (!order_rf.empty())
-      m_refinement.m_solver.add(smt::conjunction(order_rf));
+      conjuncts.push_back(smt::conjunction(order_rf));
 
     if (!mo.empty())
-      m_refinement.m_solver.add(smt::disjunction(mo));
+      conjuncts.push_back(smt::disjunction(mo));
 
     if (!order_fr.empty())
-      m_refinement.m_solver.add(smt::conjunction(order_fr));
+      conjuncts.push_back(smt::conjunction(order_fr));
+
+    return false;
+  }
+};
+
+/// Checks refinement of two concurrent shared memory programs
+
+/// Memory addresses are assumed to be consecutive, starting at zero.
+class Refinement
+: public cka::internal::ProgramChecker<Refinement>,
+  public cka::internal::Refinement
+{
+private:
+  friend class ReleaseAcquireModel;
+
+  /// Increase precision of the generic partial string refinement checker
+  cka::Refinement m_refinement;
+  ReleaseAcquireModel m_rel_acq_model;
+
+  /// Encode happens-before relation with monotonic bijective morphism
+
+  /// \remark not the same as `PartialOrderModel::order`, the difference
+  ///   is that we first map the events with `m_refinement.m_event_func`
+  smt::Bool order(Event a, Event b) const
+  {
+    EventSort e_a{smt::apply(m_refinement.m_event_func, a)};
+    EventSort e_b{smt::apply(m_refinement.m_event_func, b)};
+
+    return smt::apply(m_refinement.m_po_model.order_pred(), e_a, e_b);
+  }
+
+public:
+  using cka::internal::ProgramChecker<Refinement>::check;
+
+  Refinement()
+  : m_refinement{},
+    m_rel_acq_model(m_refinement.m_po_model) {}
+
+  /// Does `x` refine `y` when `y` satisfies the memory axioms?
+  bool check(const cka::PartialString& x, const PartialString& y)
+  {
+    if (cka::internal::Refinement::shortcut(x, y))
+      return false;
+
+    smt::Bools conjuncts;
+
+    if (m_rel_acq_model.release_acquire(*this, y, conjuncts))
+      return false;
+
+    if (!conjuncts.empty())
+      m_refinement.m_solver.add(smt::conjunction(conjuncts));
 
     return m_refinement.check(x, y);
+  }
+};
+
+/// Symbolic data race detector
+class DataRaceDetector
+{
+private:
+  /// Maps a memory address to a list of events, sorted in ascending order
+
+  /// \remark we assume that memory addresses are dense
+  typedef std::vector<Events> PerAddressMap;
+
+  // Other SMT solvers include smt::CVC4Solver and smt::MsatSolver
+  smt::Z3Solver m_solver;
+
+  // The core of the encoding
+  PartialOrderModel m_po_model;
+
+  // Memory axioms
+  friend class ReleaseAcquireModel;
+  ReleaseAcquireModel m_rel_acq_model;
+
+public:
+  DataRaceDetector()
+  : m_solver{smt::QF_UFLIA_LOGIC},
+    m_po_model{},
+    m_rel_acq_model{m_po_model} {}
+
+  /// Is there a data race in `x`?
+  bool is_racy(const PartialString& x)
+  {
+    cka::internal::ResetSolver reset_solver{m_solver};
+
+    smt::Bools conjuncts;
+    if (m_po_model.strict_partial_order(x, conjuncts))
+      return false;
+
+    if (m_rel_acq_model.release_acquire(m_po_model, x, conjuncts))
+      return false;
+
+    if (!conjuncts.empty())
+      m_solver.add(smt::conjunction(conjuncts));
+
+    Address address;
+    PerAddressMap store_map, load_map;
+
+    const Address max_address{internal::Filter::store_load_filter(
+      x, store_map, load_map, is_none_store, is_none_load)};
+
+    if (store_map.empty() or load_map.empty())
+      return false;
+
+    smt::Bools dr;
+    dr.reserve(x.length() * x.length());
+
+    for (address = 0; address <= max_address; ++address)
+    {
+      const Events& stores = store_map[address];
+      const Events& loads = load_map[address];
+
+      if (stores.empty() and loads.empty())
+        continue;
+
+      for (Event store : stores)
+      {
+        for (Event load : loads)
+          dr.push_back(not (m_po_model.order(store, load) or
+            m_po_model.order(load, store)));
+
+        for (Event store_b : stores)
+          if (store < store_b)
+            dr.push_back(not (m_po_model.order(store_b, store) or
+              m_po_model.order(store, store_b)));
+      }
+    }
+
+    if (dr.empty())
+      return false;
+
+    m_solver.add(smt::disjunction(dr));
+
+    smt::CheckResult r{m_solver.check()};
+
+#ifdef _CKA_DEBUG_
+    std::cout << "Solver: " << m_solver.solver() << std::endl;
+    if (r == smt::sat)
+      std::cout << "Model: " << m_solver.solver().get_model() << std::endl;
+#endif
+
+    // Does there exist a data race in `x`?
+    return r == smt::sat;
   }
 };
 
