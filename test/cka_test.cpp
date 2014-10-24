@@ -1198,8 +1198,8 @@ TEST(CkaTest, MemoryLabels)
   EXPECT_EQ(1U, memory::none_load_label(a));
   EXPECT_EQ(2U, memory::release_store_label(a));
   EXPECT_EQ(3U, memory::acquire_load_label(a));
-  EXPECT_EQ(15U, (memory::assert_eq_label(a, '\5')) & 0xFU);
-  EXPECT_EQ(7U, (memory::assert_neq_label(a, '\5') & 0xFU));
+  EXPECT_EQ(15U, (memory::assume_acquire_eq_label(a, '\5')) & 0xFU);
+  EXPECT_EQ(7U, (memory::assume_acquire_neq_label(a, '\5') & 0xFU));
 
   EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::none_store_label(b));
   EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::none_store_label(b, '\1'));
@@ -1207,8 +1207,8 @@ TEST(CkaTest, MemoryLabels)
   EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::release_store_label(b, '\1'));
   EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::none_load_label(b));
   EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::acquire_load_label(b));
-  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::assert_eq_label(b, '\5'));
-  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::assert_neq_label(b, '\5'));
+  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::assume_acquire_eq_label(b, '\5'));
+  EXPECT_TRUE(std::numeric_limits<memory::Byte>::max() < memory::assume_acquire_neq_label(b, '\5'));
 }
 
 TEST(CkaTest, MemoryNoneStoreAddressMonotonicity)
@@ -1361,102 +1361,102 @@ TEST(CkaTest, IsAssert)
   constexpr memory::Address b = 1U;
   constexpr memory::Address c = 2U;
 
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(a, '\0')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(b, '\0')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(c, '\0')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(a, '\0')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(b, '\0')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(c, '\0')));
 
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(a, '\1')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(b, '\1')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(c, '\1')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(a, '\1')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(b, '\1')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(c, '\1')));
 
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(a, '\2')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(b, '\2')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(c, '\2')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(a, '\2')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(b, '\2')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(c, '\2')));
 
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(a, '\3')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(b, '\3')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(c, '\3')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(a, '\3')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(b, '\3')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(c, '\3')));
 
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(a, '\4')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(b, '\4')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(c, '\4')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(a, '\4')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(b, '\4')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(c, '\4')));
 
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(a, '\5')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(b, '\5')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_eq_label(c, '\5')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(a, '\5')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(b, '\5')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_eq_label(c, '\5')));
 
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(a, '\0')));
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(b, '\0')));
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(c, '\0')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(a, '\0')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(b, '\0')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(c, '\0')));
 
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(a, '\1')));
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(b, '\1')));
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(c, '\1')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(a, '\1')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(b, '\1')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(c, '\1')));
 
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(a, '\2')));
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(b, '\2')));
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(c, '\2')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(a, '\2')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(b, '\2')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(c, '\2')));
 
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(a, '\3')));
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(b, '\3')));
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(c, '\3')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(a, '\3')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(b, '\3')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(c, '\3')));
 
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(a, '\4')));
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(b, '\4')));
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(c, '\4')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(a, '\4')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(b, '\4')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(c, '\4')));
 
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(a, '\5')));
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(b, '\5')));
-  EXPECT_TRUE(memory::is_assert_eq(memory::assert_eq_label(c, '\5')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(a, '\5')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(b, '\5')));
+  EXPECT_TRUE(memory::is_assume_acquire_eq(memory::assume_acquire_eq_label(c, '\5')));
 
   // negation
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(a, '\0')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(b, '\0')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(c, '\0')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(a, '\0')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(b, '\0')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(c, '\0')));
 
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(a, '\1')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(b, '\1')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(c, '\1')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(a, '\1')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(b, '\1')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(c, '\1')));
 
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(a, '\2')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(b, '\2')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(c, '\2')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(a, '\2')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(b, '\2')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(c, '\2')));
 
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(a, '\3')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(b, '\3')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(c, '\3')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(a, '\3')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(b, '\3')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(c, '\3')));
 
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(a, '\4')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(b, '\4')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(c, '\4')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(a, '\4')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(b, '\4')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(c, '\4')));
 
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(a, '\5')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(b, '\5')));
-  EXPECT_TRUE(memory::is_assert(memory::assert_neq_label(c, '\5')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(a, '\5')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(b, '\5')));
+  EXPECT_TRUE(memory::is_assume(memory::assume_acquire_neq_label(c, '\5')));
 
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(a, '\0')));
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(b, '\0')));
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(c, '\0')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(a, '\0')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(b, '\0')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(c, '\0')));
 
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(a, '\1')));
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(b, '\1')));
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(c, '\1')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(a, '\1')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(b, '\1')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(c, '\1')));
 
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(a, '\2')));
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(b, '\2')));
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(c, '\2')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(a, '\2')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(b, '\2')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(c, '\2')));
 
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(a, '\3')));
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(b, '\3')));
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(c, '\3')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(a, '\3')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(b, '\3')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(c, '\3')));
 
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(a, '\4')));
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(b, '\4')));
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(c, '\4')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(a, '\4')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(b, '\4')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(c, '\4')));
 
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(a, '\5')));
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(b, '\5')));
-  EXPECT_TRUE(memory::is_assert_neq(memory::assert_neq_label(c, '\5')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(a, '\5')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(b, '\5')));
+  EXPECT_TRUE(memory::is_assume_acquire_neq(memory::assume_acquire_neq_label(c, '\5')));
 }
 
 TEST(CkaTest, StoredByte)
@@ -1508,23 +1508,23 @@ TEST(CkaTest, AssertedEqualByte)
   constexpr memory::Address b = 1U;
   constexpr memory::Address c = 2U;
 
-  EXPECT_EQ('\1', memory::byte(memory::assert_eq_label(a, '\1')));
-  EXPECT_EQ('\2', memory::byte(memory::assert_eq_label(a, '\2')));
-  EXPECT_EQ('\3', memory::byte(memory::assert_eq_label(a, '\3')));
-  EXPECT_EQ('\4', memory::byte(memory::assert_eq_label(a, '\4')));
-  EXPECT_EQ('\5', memory::byte(memory::assert_eq_label(a, '\5')));
+  EXPECT_EQ('\1', memory::byte(memory::assume_acquire_eq_label(a, '\1')));
+  EXPECT_EQ('\2', memory::byte(memory::assume_acquire_eq_label(a, '\2')));
+  EXPECT_EQ('\3', memory::byte(memory::assume_acquire_eq_label(a, '\3')));
+  EXPECT_EQ('\4', memory::byte(memory::assume_acquire_eq_label(a, '\4')));
+  EXPECT_EQ('\5', memory::byte(memory::assume_acquire_eq_label(a, '\5')));
 
-  EXPECT_EQ('\1', memory::byte(memory::assert_eq_label(b, '\1')));
-  EXPECT_EQ('\2', memory::byte(memory::assert_eq_label(b, '\2')));
-  EXPECT_EQ('\3', memory::byte(memory::assert_eq_label(b, '\3')));
-  EXPECT_EQ('\4', memory::byte(memory::assert_eq_label(b, '\4')));
-  EXPECT_EQ('\5', memory::byte(memory::assert_eq_label(b, '\5')));
+  EXPECT_EQ('\1', memory::byte(memory::assume_acquire_eq_label(b, '\1')));
+  EXPECT_EQ('\2', memory::byte(memory::assume_acquire_eq_label(b, '\2')));
+  EXPECT_EQ('\3', memory::byte(memory::assume_acquire_eq_label(b, '\3')));
+  EXPECT_EQ('\4', memory::byte(memory::assume_acquire_eq_label(b, '\4')));
+  EXPECT_EQ('\5', memory::byte(memory::assume_acquire_eq_label(b, '\5')));
 
-  EXPECT_EQ('\1', memory::byte(memory::assert_eq_label(c, '\1')));
-  EXPECT_EQ('\2', memory::byte(memory::assert_eq_label(c, '\2')));
-  EXPECT_EQ('\3', memory::byte(memory::assert_eq_label(c, '\3')));
-  EXPECT_EQ('\4', memory::byte(memory::assert_eq_label(c, '\4')));
-  EXPECT_EQ('\5', memory::byte(memory::assert_eq_label(c, '\5')));
+  EXPECT_EQ('\1', memory::byte(memory::assume_acquire_eq_label(c, '\1')));
+  EXPECT_EQ('\2', memory::byte(memory::assume_acquire_eq_label(c, '\2')));
+  EXPECT_EQ('\3', memory::byte(memory::assume_acquire_eq_label(c, '\3')));
+  EXPECT_EQ('\4', memory::byte(memory::assume_acquire_eq_label(c, '\4')));
+  EXPECT_EQ('\5', memory::byte(memory::assume_acquire_eq_label(c, '\5')));
 }
 
 TEST(CkaTest, AssertedNotEqualByte)
@@ -1533,23 +1533,23 @@ TEST(CkaTest, AssertedNotEqualByte)
   constexpr memory::Address b = 1U;
   constexpr memory::Address c = 2U;
 
-  EXPECT_EQ('\1', memory::byte(memory::assert_neq_label(a, '\1')));
-  EXPECT_EQ('\2', memory::byte(memory::assert_neq_label(a, '\2')));
-  EXPECT_EQ('\3', memory::byte(memory::assert_neq_label(a, '\3')));
-  EXPECT_EQ('\4', memory::byte(memory::assert_neq_label(a, '\4')));
-  EXPECT_EQ('\5', memory::byte(memory::assert_neq_label(a, '\5')));
+  EXPECT_EQ('\1', memory::byte(memory::assume_acquire_neq_label(a, '\1')));
+  EXPECT_EQ('\2', memory::byte(memory::assume_acquire_neq_label(a, '\2')));
+  EXPECT_EQ('\3', memory::byte(memory::assume_acquire_neq_label(a, '\3')));
+  EXPECT_EQ('\4', memory::byte(memory::assume_acquire_neq_label(a, '\4')));
+  EXPECT_EQ('\5', memory::byte(memory::assume_acquire_neq_label(a, '\5')));
 
-  EXPECT_EQ('\1', memory::byte(memory::assert_neq_label(b, '\1')));
-  EXPECT_EQ('\2', memory::byte(memory::assert_neq_label(b, '\2')));
-  EXPECT_EQ('\3', memory::byte(memory::assert_neq_label(b, '\3')));
-  EXPECT_EQ('\4', memory::byte(memory::assert_neq_label(b, '\4')));
-  EXPECT_EQ('\5', memory::byte(memory::assert_neq_label(b, '\5')));
+  EXPECT_EQ('\1', memory::byte(memory::assume_acquire_neq_label(b, '\1')));
+  EXPECT_EQ('\2', memory::byte(memory::assume_acquire_neq_label(b, '\2')));
+  EXPECT_EQ('\3', memory::byte(memory::assume_acquire_neq_label(b, '\3')));
+  EXPECT_EQ('\4', memory::byte(memory::assume_acquire_neq_label(b, '\4')));
+  EXPECT_EQ('\5', memory::byte(memory::assume_acquire_neq_label(b, '\5')));
 
-  EXPECT_EQ('\1', memory::byte(memory::assert_neq_label(c, '\1')));
-  EXPECT_EQ('\2', memory::byte(memory::assert_neq_label(c, '\2')));
-  EXPECT_EQ('\3', memory::byte(memory::assert_neq_label(c, '\3')));
-  EXPECT_EQ('\4', memory::byte(memory::assert_neq_label(c, '\4')));
-  EXPECT_EQ('\5', memory::byte(memory::assert_neq_label(c, '\5')));
+  EXPECT_EQ('\1', memory::byte(memory::assume_acquire_neq_label(c, '\1')));
+  EXPECT_EQ('\2', memory::byte(memory::assume_acquire_neq_label(c, '\2')));
+  EXPECT_EQ('\3', memory::byte(memory::assume_acquire_neq_label(c, '\3')));
+  EXPECT_EQ('\4', memory::byte(memory::assume_acquire_neq_label(c, '\4')));
+  EXPECT_EQ('\5', memory::byte(memory::assume_acquire_neq_label(c, '\5')));
 }
 
 TEST(CkaTest, MemoryAddress)
@@ -1910,8 +1910,8 @@ TEST(CkaTest, MemoryAxiomWithFailingAssertion)
   constexpr memory::Address x = 0U;
 
   Program Wx{memory::release_store_label(x, '\0')};
-  Program AnZx{memory::assert_neq_label(x, '\0')};
-  Program AZx{memory::assert_eq_label(x, '\0')};
+  Program AnZx{memory::assume_acquire_neq_label(x, '\0')};
+  Program AZx{memory::assume_acquire_eq_label(x, '\0')};
 
   Program P{(Wx , AnZx)};
   Program Q{(Wx , AZx)};
@@ -1938,8 +1938,8 @@ TEST(CkaTest, MemoryAxiomWithAssertionsAndUnsequencedWrites)
   Program W1x{memory::release_store_label(x, '\1')};
   Program W2x{memory::release_store_label(x, '\2')};
 
-  Program A1x{memory::assert_eq_label(x, '\1')};
-  Program A2x{memory::assert_eq_label(x, '\2')};
+  Program A1x{memory::assume_acquire_eq_label(x, '\1')};
+  Program A2x{memory::assume_acquire_eq_label(x, '\2')};
 
   Program U{((W1x | W2x) , (A1x + A2x))};
   Program V{(W2x , W1x , A1x)};
@@ -1967,8 +1967,8 @@ TEST(CkaTest, MemoryAxiomWithAssertionsAndSequencedWrites)
   Program W1x{memory::release_store_label(x, '\1')};
   Program W2x{memory::release_store_label(x, '\2')};
 
-  Program A1x{memory::assert_eq_label(x, '\1')};
-  Program A2x{memory::assert_neq_label(x, '\1')};
+  Program A1x{memory::assume_acquire_eq_label(x, '\1')};
+  Program A2x{memory::assume_acquire_neq_label(x, '\1')};
 
   Program X{(W1x , (A1x + A2x) , W2x)};
   Program Y{(W1x , A1x , W2x)};
@@ -2072,16 +2072,16 @@ TEST(CkaTest, GnuExampleOverApproximationWithMemoryAndAssertionLabels)
   Program w1y{memory::release_store_label(y, '\20')};
   Program w1x{memory::release_store_label(x, '\10')};
 
-  Program if2f{memory::assert_neq_label(x, '\10')};
-  Program if2t{memory::assert_eq_label(x, '\10')};
-  Program a2f{memory::assert_neq_label(y, '\20')};
-  Program a2t{memory::assert_eq_label(y, '\20')};
+  Program if2f{memory::assume_acquire_neq_label(x, '\10')};
+  Program if2t{memory::assume_acquire_eq_label(x, '\10')};
+  Program a2f{memory::assume_acquire_neq_label(y, '\20')};
+  Program a2t{memory::assume_acquire_eq_label(y, '\20')};
   Program w2y{memory::release_store_label(y, '\10')};
 
-  Program if3f{memory::assert_neq_label(y, '\10')};
-  Program if3t{memory::assert_eq_label(y, '\10')};
-  Program a3f{memory::assert_neq_label(x, '\10')};
-  Program a3t{memory::assert_eq_label(x, '\10')};
+  Program if3f{memory::assume_acquire_neq_label(y, '\10')};
+  Program if3t{memory::assume_acquire_eq_label(y, '\10')};
+  Program a3f{memory::assume_acquire_neq_label(x, '\10')};
+  Program a3t{memory::assume_acquire_eq_label(x, '\10')};
 
   Program R{((initx , inity) ,
               ( (w1y | w1x)
@@ -2158,16 +2158,16 @@ TEST(CkaTest, GnuExampleOverApproximationWithAssertionsAndMemoryAxioms)
   Program w1y{memory::release_store_label(y, '\20')};
   Program w1x{memory::release_store_label(x, '\10')};
 
-  Program if2f{memory::assert_neq_label(x, '\10')};
-  Program if2t{memory::assert_eq_label(x, '\10')};
-  Program a2f{memory::assert_neq_label(y, '\20')};
-  Program a2t{memory::assert_eq_label(y, '\20')};
+  Program if2f{memory::assume_acquire_neq_label(x, '\10')};
+  Program if2t{memory::assume_acquire_eq_label(x, '\10')};
+  Program a2f{memory::assume_acquire_neq_label(y, '\20')};
+  Program a2t{memory::assume_acquire_eq_label(y, '\20')};
   Program w2y{memory::release_store_label(y, '\10')};
 
-  Program if3f{memory::assert_neq_label(y, '\10')};
-  Program if3t{memory::assert_eq_label(y, '\10')};
-  Program a3f{memory::assert_neq_label(x, '\10')};
-  Program a3t{memory::assert_eq_label(x, '\10')};
+  Program if3f{memory::assume_acquire_neq_label(y, '\10')};
+  Program if3t{memory::assume_acquire_eq_label(y, '\10')};
+  Program a3f{memory::assume_acquire_neq_label(x, '\10')};
+  Program a3t{memory::assume_acquire_eq_label(x, '\10')};
 
   Program R{((initx , inity) ,
               ( (w1y | w1x)
@@ -2228,16 +2228,16 @@ TEST(CkaTest, GnuExampleWithAssertionsAndMemoryAxiomsNotSC)
   Program w1y{memory::release_store_label(y, '\20')};
   Program w1x{memory::release_store_label(x, '\10')};
 
-  Program if2f{memory::assert_neq_label(x, '\10')};
-  Program if2t{memory::assert_eq_label(x, '\10')};
-  Program a2f{memory::assert_neq_label(y, '\20')};
-  Program a2t{memory::assert_eq_label(y, '\20')};
+  Program if2f{memory::assume_acquire_neq_label(x, '\10')};
+  Program if2t{memory::assume_acquire_eq_label(x, '\10')};
+  Program a2f{memory::assume_acquire_neq_label(y, '\20')};
+  Program a2t{memory::assume_acquire_eq_label(y, '\20')};
   Program w2y{memory::release_store_label(y, '\10')};
 
-  Program if3f{memory::assert_neq_label(y, '\10')};
-  Program if3t{memory::assert_eq_label(y, '\10')};
-  Program a3f{memory::assert_neq_label(x, '\10')};
-  Program a3t{memory::assert_eq_label(x, '\10')};
+  Program if3f{memory::assume_acquire_neq_label(y, '\10')};
+  Program if3t{memory::assume_acquire_eq_label(y, '\10')};
+  Program a3f{memory::assume_acquire_neq_label(x, '\10')};
+  Program a3t{memory::assume_acquire_eq_label(x, '\10')};
 
   Program R{((initx , inity) ,
               ( (w1y | w1x)
@@ -2304,16 +2304,16 @@ TEST(CkaTest, GnuExampleWithAssertionsAndMemoryAxioms)
   Program w1y{memory::release_store_label(y, '\20')};
   Program w1x{memory::release_store_label(x, '\10')};
 
-  Program if2f{memory::assert_neq_label(x, '\10')};
-  Program if2t{memory::assert_eq_label(x, '\10')};
-  Program a2f{memory::assert_neq_label(y, '\20')};
-  Program a2t{memory::assert_eq_label(y, '\20')};
+  Program if2f{memory::assume_acquire_neq_label(x, '\10')};
+  Program if2t{memory::assume_acquire_eq_label(x, '\10')};
+  Program a2f{memory::assume_acquire_neq_label(y, '\20')};
+  Program a2t{memory::assume_acquire_eq_label(y, '\20')};
   Program w2y{memory::release_store_label(y, '\10')};
 
-  Program if3f{memory::assert_neq_label(y, '\10')};
-  Program if3t{memory::assert_eq_label(y, '\10')};
-  Program a3f{memory::assert_neq_label(x, '\10')};
-  Program a3t{memory::assert_eq_label(x, '\10')};
+  Program if3f{memory::assume_acquire_neq_label(y, '\10')};
+  Program if3t{memory::assume_acquire_eq_label(y, '\10')};
+  Program a3f{memory::assume_acquire_neq_label(x, '\10')};
+  Program a3t{memory::assume_acquire_eq_label(x, '\10')};
 
   Program R{((initx , inity) ,
               ( (w1y | w1x)
@@ -2374,16 +2374,16 @@ TEST(CkaTest, GnuExampleSmallWithAssertionsAndMemoryAxioms)
   Program w1y{memory::release_store_label(y, '\20')};
   Program w1x{memory::release_store_label(x, '\10')};
 
-  Program if2f{memory::assert_neq_label(x, '\10')};
-  Program if2t{memory::assert_eq_label(x, '\10')};
-  Program a2f{memory::assert_neq_label(y, '\20')};
-  Program a2t{memory::assert_eq_label(y, '\20')};
+  Program if2f{memory::assume_acquire_neq_label(x, '\10')};
+  Program if2t{memory::assume_acquire_eq_label(x, '\10')};
+  Program a2f{memory::assume_acquire_neq_label(y, '\20')};
+  Program a2t{memory::assume_acquire_eq_label(y, '\20')};
   Program w2y{memory::release_store_label(y, '\10')};
 
-  Program if3f{memory::assert_neq_label(y, '\10')};
-  Program if3t{memory::assert_eq_label(y, '\10')};
-  Program a3f{memory::assert_neq_label(x, '\10')};
-  Program a3t{memory::assert_eq_label(x, '\10')};
+  Program if3f{memory::assume_acquire_neq_label(y, '\10')};
+  Program if3t{memory::assume_acquire_eq_label(y, '\10')};
+  Program a3f{memory::assume_acquire_neq_label(x, '\10')};
+  Program a3t{memory::assume_acquire_eq_label(x, '\10')};
 
   Program R{((initx , inity) ,
               ( (w1y | w1x)
@@ -2610,10 +2610,10 @@ TEST(CkaTest, NonRacyMessagePassingUsingBranch)
   PartialString p2{memory::none_store_label(a, '\1')};
   PartialString p3{memory::release_store_label(b, '\1')};
 
-  PartialString p4{memory::assert_eq_label(b, '\1')};
+  PartialString p4{memory::assume_acquire_eq_label(b, '\1')};
   PartialString p5{memory::none_load_label(a)};
 
-  PartialString p6{memory::assert_neq_label(b, '\1')};
+  PartialString p6{memory::assume_acquire_neq_label(b, '\1')};
 
   memory::DataRaceDetector drd;
 
@@ -2645,10 +2645,10 @@ TEST(CkaTest, RacyDespiteBranch)
   PartialString p2{memory::none_store_label(a, '\1')};
   PartialString p3{memory::release_store_label(b, '\1')};
 
-  PartialString p4{memory::assert_eq_label(b, '\1')};
+  PartialString p4{memory::assume_acquire_eq_label(b, '\1')};
   PartialString p5{memory::none_load_label(a)};
 
-  PartialString p6{memory::assert_neq_label(b, '\1')};
+  PartialString p6{memory::assume_acquire_neq_label(b, '\1')};
 
   PartialString p7{memory::none_store_label(a, '\1')};
   PartialString p8{memory::release_store_label(b, '\1')};
@@ -2687,10 +2687,10 @@ TEST(CkaTest, RacyDespiteBranchAndReleaseAcquireWrap)
   PartialString t1_1{memory::none_store_label(a, '\1')};
   PartialString t1_2{memory::release_store_label(b, '\1')};
 
-  PartialString t2_0{memory::assert_eq_label(b, '\1')};
+  PartialString t2_0{memory::assume_acquire_eq_label(b, '\1')};
   PartialString t2_1{memory::none_load_label(a)};
 
-  PartialString t2_2{memory::assert_neq_label(b, '\1')};
+  PartialString t2_2{memory::assume_acquire_neq_label(b, '\1')};
 
   PartialString t3_0{memory::acquire_load_label(b)};
   PartialString t3_1{memory::none_store_label(a, '\1')};
@@ -2723,16 +2723,16 @@ TEST(CkaTest, RacyDespiteBranchCheckZero)
   PartialString t1_1{memory::none_store_label(a, '\1')};
   PartialString t1_2{memory::release_store_label(b, '\1')};
 
-  PartialString t2_0{memory::assert_eq_label(b, '\0')};
+  PartialString t2_0{memory::assume_acquire_eq_label(b, '\0')};
   PartialString t2_1{memory::none_load_label(a)};
 
-  PartialString t2_2{memory::assert_neq_label(b, '\0')};
+  PartialString t2_2{memory::assume_acquire_neq_label(b, '\0')};
 
-  PartialString t3_0{memory::assert_eq_label(b, '\1')};
+  PartialString t3_0{memory::assume_acquire_eq_label(b, '\1')};
   PartialString t3_1{memory::none_store_label(a, '\2')};
   PartialString t3_2{memory::release_store_label(b, '\2')};
 
-  PartialString t3_3{memory::assert_neq_label(b, '\1')};
+  PartialString t3_3{memory::assume_acquire_neq_label(b, '\1')};
 
   memory::DataRaceDetector drd;
 
@@ -2767,16 +2767,16 @@ TEST(CkaTest, RacyDespiteBranchCheckOne)
   PartialString t1_1{memory::none_store_label(a, '\1')};
   PartialString t1_2{memory::release_store_label(b, '\1')};
 
-  PartialString t2_0{memory::assert_eq_label(b, '\1')};
+  PartialString t2_0{memory::assume_acquire_eq_label(b, '\1')};
   PartialString t2_1{memory::none_load_label(a)};
 
-  PartialString t2_2{memory::assert_neq_label(b, '\1')};
+  PartialString t2_2{memory::assume_acquire_neq_label(b, '\1')};
 
-  PartialString t3_0{memory::assert_eq_label(b, '\1')};
+  PartialString t3_0{memory::assume_acquire_eq_label(b, '\1')};
   PartialString t3_1{memory::none_store_label(a, '\2')};
   PartialString t3_2{memory::release_store_label(b, '\2')};
 
-  PartialString t3_3{memory::assert_neq_label(b, '\1')};
+  PartialString t3_3{memory::assume_acquire_neq_label(b, '\1')};
 
   memory::DataRaceDetector drd;
 
@@ -2804,17 +2804,17 @@ TEST(CkaTest, NonRacyWithBranches)
   PartialString t0_0{memory::release_store_label(a, '\0')};
   PartialString t0_1{memory::release_store_label(b, '\0')};
 
-  PartialString t1_0{memory::assert_eq_label(b, '\2')};
+  PartialString t1_0{memory::assume_acquire_eq_label(b, '\2')};
   PartialString t1_1{memory::none_store_label(a, '\1')};
   PartialString t1_2{memory::release_store_label(b, '\1')};
 
-  PartialString t1_3{memory::assert_neq_label(b, '\2')};
+  PartialString t1_3{memory::assume_acquire_neq_label(b, '\2')};
 
-  PartialString t2_0{memory::assert_eq_label(b, '\1')};
+  PartialString t2_0{memory::assume_acquire_eq_label(b, '\1')};
   PartialString t2_1{memory::none_load_label(a)};
 
-  PartialString t2_2{memory::assert_neq_label(b, '\1')};
-  PartialString t2_3{memory::assert_eq_label(b, '\0')};
+  PartialString t2_2{memory::assume_acquire_neq_label(b, '\1')};
+  PartialString t2_3{memory::assume_acquire_eq_label(b, '\0')};
 
   PartialString t3_0{memory::acquire_load_label(b)};
   PartialString t3_1{memory::none_store_label(a, '\2')};
@@ -2863,15 +2863,15 @@ TEST(CkaTest, NonRacyBranchCheckOne)
   PartialString t1_1{memory::none_store_label(a, '\1')};
   PartialString t1_2{memory::release_store_label(b, '\1')};
 
-  PartialString t2_0{memory::assert_eq_label(b, '\1')};
+  PartialString t2_0{memory::assume_acquire_eq_label(b, '\1')};
   PartialString t2_1{memory::none_load_label(a)};
 
-  PartialString t2_2{memory::assert_neq_label(b, '\1')};
+  PartialString t2_2{memory::assume_acquire_neq_label(b, '\1')};
 
-  PartialString t3_0{memory::assert_eq_label(b, '\1')};
+  PartialString t3_0{memory::assume_acquire_eq_label(b, '\1')};
   PartialString t3_1{memory::release_store_label(b, '\2')};
 
-  PartialString t3_2{memory::assert_neq_label(b, '\1')};
+  PartialString t3_2{memory::assume_acquire_neq_label(b, '\1')};
 
   memory::DataRaceDetector drd;
 

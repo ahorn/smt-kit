@@ -138,7 +138,7 @@ namespace memory
 ///
 ///     Bit 3 (2^3)       Bit 2 (2^2)        Bit 1 (2^1)      Bit 0 (2^0)
 /// +-----------------+-----------------+-----------------+-----------------+
-/// |      equal      |      assert     | release-acquire |      load       |
+/// |      equal      |      assume     | release-acquire |      load       |
 /// +-----------------+-----------------+-----------------+-----------------+
 static constexpr std::size_t shift_byte = 4;
 static constexpr std::size_t shift_address = shift_byte + sizeof(Byte) * 8;
@@ -163,14 +163,14 @@ Label acquire_load_label(Address address)
   return release_store_label(address) | 1U;
 }
 
-Label assert_neq_label(Address address, Byte byte)
+Label assume_acquire_neq_label(Address address, Byte byte)
 {
   return acquire_load_label(address) | (byte << shift_byte) | 4U;
 }
 
-Label assert_eq_label(Address address, Byte byte)
+Label assume_acquire_eq_label(Address address, Byte byte)
 {
-  return assert_neq_label(address, byte) | 8U;
+  return assume_acquire_neq_label(address, byte) | 8U;
 }
 
 bool is_none_store(Label op)
@@ -203,24 +203,24 @@ bool is_load(Label op)
   return is_none_load(op) or is_acquire_load(op);
 }
 
-bool is_assert(Label op)
+bool is_assume(Label op)
 {
   return (op & 0x4U) == 0x4U;
 }
 
-bool is_assert_eq(Label op)
+bool is_assume_acquire_eq(Label op)
 {
   return (op & 0xCU) == 0xCU;
 }
 
-bool is_assert_neq(Label op)
+bool is_assume_acquire_neq(Label op)
 {
   return (op & 0xCU) == 0x4U;
 }
 
 Byte byte(Label op)
 {
-  assert(is_store(op) or is_assert(op));
+  assert(is_store(op) or is_assume(op));
 
   // smaller return type acts as bitmask
   return op >> shift_byte;

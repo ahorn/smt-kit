@@ -1095,11 +1095,11 @@ Label release_store_label(Address a, Byte b = 0);
 /// C++14-style acquire load instruction of an atomic integral value.
 Label acquire_load_label(Address);
 
-/// Returns an acquire load label that expects to read `b`
-Label assert_eq_label(Address a, Byte b);
+/// Returns an acquire load label that assumes `b` was read
+Label assume_acquire_eq_label(Address a, Byte b);
 
-/// Returns an acquire load label that expects to read anything but `b`
-Label assert_neq_label(Address a, Byte b);
+/// Returns an acquire load label that assumes anything but `b` was read
+Label assume_acquire_neq_label(Address a, Byte b);
 
 /// Is label a non-synchronization store instruction?
 bool is_none_store(Label);
@@ -1116,14 +1116,14 @@ bool is_acquire_load(Label);
 bool is_store(Label);
 bool is_load(Label);
 
-/// Is label a load that expects to read a certain byte?
-bool is_assert(Label);
-bool is_assert_eq(Label);
-bool is_assert_neq(Label);
+/// Is label a load that assumes a certain byte was read?
+bool is_assume(Label);
+bool is_assume_acquire_eq(Label);
+bool is_assume_acquire_neq(Label);
 
 /// The byte written or expected by `op`
 
-/// \pre: `is_store(op)` or `is_assert(op)`
+/// \pre: `is_store(op)` or `is_assume(op)`
 Byte byte(Label op);
 
 /// The memory address read or written by a load or store
@@ -1278,8 +1278,8 @@ public:
           assert(is_release_store(store_label));
           assert(is_shared(x, store_a, load));
 
-          if ((is_assert_eq(label) and byte(store_label) != byte(label)) or
-                (is_assert_neq(label) and byte(store_label) == byte(label)))
+          if ((is_assume_acquire_eq(label) and byte(store_label) != byte(label)) or
+                (is_assume_acquire_neq(label) and byte(store_label) == byte(label)))
             continue;
 
           rf_bool = store_a == rf_event;
