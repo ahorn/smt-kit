@@ -253,6 +253,29 @@ bool is_shared(const PartialString& x, Event store, Event load)
   return is_shared(store_label, load_label);
 }
 
+SymbolicProgram operator|(const SymbolicProgram& X, const SymbolicProgram& Y)
+{
+  return {X, Y, (X.p() | Y.p())};
+}
+
+SymbolicProgram operator,(const SymbolicProgram& X, const SymbolicProgram& Y)
+{
+  return {X, Y, (X.p() , Y.p())};
+}
+
+SymbolicProgram if_then(const Address a, const Byte b, const SymbolicProgram& P)
+{
+  SymbolicProgram Assume{assume_acquire_eq_label(a, b)};
+  SymbolicProgram Q{Assume, P, (Assume.p() , P.p())};
+
+  // set guard of events in `P` to the only event in `Assume.p()`
+  Q.m_unguarded_events.resize(1);
+  for (Event e_p : P.unguarded_events())
+    Q.m_assume_map.at(Assume.p().length() + e_p) = 0;
+
+  return Q;
+}
+
 }
 
 }

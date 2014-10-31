@@ -413,7 +413,7 @@ TEST(CkaTest, IncomparableMinimals)
   PartialString v{'v'};
   PartialString x{'x'};
   PartialString y{'y'};
-  
+
   PartialString q{((u , x) | (v , y))};
 
   PartialString a{((x | q) , (x | y))};
@@ -432,7 +432,7 @@ TEST(CkaTest, IncomparableMaximals)
   PartialString x{'x'};
   PartialString y{'y'};
   PartialString z{'z'};
-  
+
   // "p | q" on LHS but "p ; q" on RHS
   EXPECT_FALSE(((x, p) | (y , z , q)) <= (x | (y , z , p , q)));
 }
@@ -780,7 +780,7 @@ TEST(CkaTest, ProgramExchangeLaw)
   Program V{'v'};
   Program X{'x'};
   Program Y{'y'};
-  
+
   Program P{((U | V) , (X | Y))};
   Program Q{((U , X) | (V , Y))};
 
@@ -845,7 +845,7 @@ TEST(CkaTest, Reductions)
 
   Program U{'u'};
   Program V{'v'};
-  
+
   Program P{((U | V) , (X | Y))};
   Program Q{((U , X) | (V , Y))};
 
@@ -2884,4 +2884,1544 @@ TEST(CkaTest, NonRacyBranchCheckOne)
   EXPECT_FALSE(drd.is_racy(v));
   EXPECT_FALSE(drd.is_racy(x));
   EXPECT_FALSE(drd.is_racy(y));
+}
+
+TEST(CkaTest, SymbolicProgramSingle)
+{
+  memory::SymbolicProgram P{'\1'};
+  EXPECT_EQ(1, P.assume_map().size());
+  EXPECT_EQ(1, P.unguarded_events().size());
+  EXPECT_EQ(1, P.p().length());
+
+  EXPECT_EQ(0, P.assume_map().at(0));
+  EXPECT_EQ(0, P.unguarded_events().front());
+  EXPECT_EQ('\1', P.p().label_function().at(0));
+}
+
+TEST(CkaTest, SymbolicProgramTwoUnguarded)
+{
+  memory::SymbolicProgram X{'\1'};
+  memory::SymbolicProgram Y{'\2'};
+  memory::SymbolicProgram Z{X, Y, (X.p() | Y.p())};
+
+  EXPECT_EQ(2, Z.assume_map().size());
+  EXPECT_EQ(2, Z.unguarded_events().size());
+  EXPECT_EQ(2, Z.p().length());
+
+  EXPECT_EQ(0, Z.assume_map().at(0));
+  EXPECT_EQ(1, Z.assume_map().at(1));
+  EXPECT_EQ(0, Z.unguarded_events().front());
+  EXPECT_EQ(1, Z.unguarded_events().back());
+
+  EXPECT_EQ('\1', Z.p().label_function().at(0));
+  EXPECT_EQ('\2', Z.p().label_function().at(1));
+}
+
+TEST(CkaTest, SymbolicProgramSequential)
+{
+  memory::SymbolicProgram X{'\1'};
+  memory::SymbolicProgram Y{'\2'};
+  memory::SymbolicProgram Z{(X , Y)};
+
+  EXPECT_EQ(2, Z.assume_map().size());
+  EXPECT_EQ(2, Z.unguarded_events().size());
+  EXPECT_EQ(2, Z.p().length());
+
+  EXPECT_EQ(0, Z.assume_map().at(0));
+  EXPECT_EQ(1, Z.assume_map().at(1));
+  EXPECT_EQ(0, Z.unguarded_events().front());
+  EXPECT_EQ(1, Z.unguarded_events().back());
+
+  EXPECT_EQ('\1', Z.p().label_function().at(0));
+  EXPECT_EQ('\2', Z.p().label_function().at(1));
+}
+
+TEST(CkaTest, SymbolicProgramConcurrent)
+{
+  memory::SymbolicProgram X{'\1'};
+  memory::SymbolicProgram Y{'\2'};
+  memory::SymbolicProgram Z{(X , Y)};
+
+  EXPECT_EQ(2, Z.assume_map().size());
+  EXPECT_EQ(2, Z.unguarded_events().size());
+  EXPECT_EQ(2, Z.p().length());
+
+  EXPECT_EQ(0, Z.assume_map().at(0));
+  EXPECT_EQ(1, Z.assume_map().at(1));
+  EXPECT_EQ(0, Z.unguarded_events().front());
+  EXPECT_EQ(1, Z.unguarded_events().back());
+
+  EXPECT_EQ('\1', Z.p().label_function().at(0));
+  EXPECT_EQ('\2', Z.p().label_function().at(1));
+}
+
+TEST(CkaTest, SymbolicProgramSingleIfThen)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Byte b = '\1';
+
+  memory::SymbolicProgram X{'\2'};
+  memory::SymbolicProgram Y{if_then(a, b, X)};
+
+  EXPECT_EQ(2, Y.assume_map().size());
+  EXPECT_EQ(1, Y.unguarded_events().size());
+  EXPECT_EQ(2, Y.p().length());
+
+  EXPECT_EQ(0, Y.assume_map().at(0));
+  EXPECT_EQ(0, Y.assume_map().at(1));
+  EXPECT_EQ(0, Y.unguarded_events().front());
+
+  EXPECT_TRUE(memory::is_assume_acquire_eq(Y.p().label_function().at(0)));
+  EXPECT_EQ(a, memory::address(Y.p().label_function().at(0)));
+  EXPECT_EQ(b, memory::byte(Y.p().label_function().at(0)));
+
+  EXPECT_EQ('\2', Y.p().label_function().at(1));
+}
+
+TEST(CkaTest, SymbolicProgramSingleIfThenFollowedBy)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Byte b = '\1';
+
+  memory::SymbolicProgram X{'\2'};
+  memory::SymbolicProgram Y{'\3'};
+  memory::SymbolicProgram Z{(if_then(a, b, X) , Y)};
+
+  EXPECT_EQ(3, Z.assume_map().size());
+  EXPECT_EQ(2, Z.unguarded_events().size());
+  EXPECT_EQ(3, Z.p().length());
+
+  EXPECT_EQ(0, Z.assume_map().at(0));
+  EXPECT_EQ(0, Z.assume_map().at(1));
+  EXPECT_EQ(2, Z.assume_map().at(2));
+  EXPECT_EQ(0, Z.unguarded_events().front());
+  EXPECT_EQ(2, Z.unguarded_events().back());
+
+  EXPECT_TRUE(memory::is_assume_acquire_eq(Z.p().label_function().at(0)));
+  EXPECT_EQ(a, memory::address(Z.p().label_function().at(0)));
+  EXPECT_EQ(b, memory::byte(Z.p().label_function().at(0)));
+
+  EXPECT_EQ('\2', Z.p().label_function().at(1));
+  EXPECT_EQ('\3', Z.p().label_function().at(2));
+}
+
+TEST(CkaTest, SymbolicProgramSingleIfThenFollowedByInner)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Byte b = '\1';
+
+  memory::SymbolicProgram X{'\2'};
+  memory::SymbolicProgram Z{(if_then(a, b, X) , X)};
+
+  EXPECT_EQ(3, Z.assume_map().size());
+  EXPECT_EQ(2, Z.unguarded_events().size());
+  EXPECT_EQ(3, Z.p().length());
+
+  EXPECT_EQ(0, Z.assume_map().at(0));
+  EXPECT_EQ(0, Z.assume_map().at(1));
+  EXPECT_EQ(2, Z.assume_map().at(2));
+  EXPECT_EQ(0, Z.unguarded_events().front());
+  EXPECT_EQ(2, Z.unguarded_events().back());
+
+  EXPECT_TRUE(memory::is_assume_acquire_eq(Z.p().label_function().at(0)));
+  EXPECT_EQ(a, memory::address(Z.p().label_function().at(0)));
+  EXPECT_EQ(b, memory::byte(Z.p().label_function().at(0)));
+
+  EXPECT_EQ('\2', Z.p().label_function().at(1));
+  EXPECT_EQ('\2', Z.p().label_function().at(2));
+}
+
+TEST(CkaTest, SymbolicProgramTwoConsecutiveIfThen)
+{
+  constexpr memory::Address a_u = 0U;
+  constexpr memory::Address a_v = 1U;
+
+  constexpr memory::Byte b_u = '\1';
+  constexpr memory::Byte b_v = '\2';
+
+  memory::SymbolicProgram U{'\3'};
+  memory::SymbolicProgram V{'\4'};
+  memory::SymbolicProgram X{if_then(a_u, b_u, U)};
+  memory::SymbolicProgram Y{if_then(a_v, b_v, V)};
+  memory::SymbolicProgram Z{(X , Y)};
+
+  EXPECT_EQ(4, Z.assume_map().size());
+  EXPECT_EQ(2, Z.unguarded_events().size());
+  EXPECT_EQ(4, Z.p().length());
+
+  EXPECT_EQ(0, Z.assume_map().at(0));
+  EXPECT_EQ(0, Z.assume_map().at(1));
+  EXPECT_EQ(2, Z.assume_map().at(2));
+  EXPECT_EQ(2, Z.assume_map().at(3));
+
+  EXPECT_EQ(0, Z.unguarded_events().front());
+  EXPECT_EQ(2, Z.unguarded_events().back());
+
+  EXPECT_TRUE(memory::is_assume_acquire_eq(Z.p().label_function().at(0)));
+  EXPECT_EQ(a_u, memory::address(Z.p().label_function().at(0)));
+  EXPECT_EQ(b_u, memory::byte(Z.p().label_function().at(0)));
+
+  EXPECT_EQ('\3', Z.p().label_function().at(1));
+
+  EXPECT_TRUE(memory::is_assume_acquire_eq(Z.p().label_function().at(2)));
+  EXPECT_EQ(a_v, memory::address(Z.p().label_function().at(2)));
+  EXPECT_EQ(b_v, memory::byte(Z.p().label_function().at(2)));
+
+  EXPECT_EQ('\4', Z.p().label_function().at(3));
+}
+
+TEST(CkaTest, SymbolicProgramNestedIfThen)
+{
+  constexpr memory::Address a_x = 0U;
+  constexpr memory::Address a_y = 1U;
+
+  constexpr memory::Byte b_x = '\1';
+  constexpr memory::Byte b_y = '\2';
+
+  memory::SymbolicProgram X{'\3'};
+  memory::SymbolicProgram Y{if_then(a_x, b_x, X)};
+  memory::SymbolicProgram Z{if_then(a_y, b_y, Y)};
+
+  EXPECT_EQ(3, Z.assume_map().size());
+  EXPECT_EQ(1, Z.unguarded_events().size());
+  EXPECT_EQ(3, Z.p().length());
+
+  EXPECT_EQ(0, Z.assume_map().at(0));
+  EXPECT_EQ(0, Z.assume_map().at(1));
+  EXPECT_EQ(1, Z.assume_map().at(2));
+
+  EXPECT_EQ(0, Z.unguarded_events().front());
+
+  EXPECT_TRUE(memory::is_assume_acquire_eq(Z.p().label_function().at(0)));
+  EXPECT_EQ(a_y, memory::address(Z.p().label_function().at(0)));
+  EXPECT_EQ(b_y, memory::byte(Z.p().label_function().at(0)));
+
+  EXPECT_TRUE(memory::is_assume_acquire_eq(Z.p().label_function().at(1)));
+  EXPECT_EQ(a_x, memory::address(Z.p().label_function().at(1)));
+  EXPECT_EQ(b_x, memory::byte(Z.p().label_function().at(1)));
+
+  EXPECT_EQ('\3', Z.p().label_function().at(2));
+}
+
+TEST(CkaTest, SymbolicProgramNestedConsecutiveIfThen)
+{
+  constexpr memory::Address a_u = 0U;
+  constexpr memory::Address a_v = 1U;
+  constexpr memory::Address a_w = 2U;
+
+  constexpr memory::Byte b_u = '\1';
+  constexpr memory::Byte b_v = '\2';
+  constexpr memory::Byte b_w = '\3';
+
+  memory::SymbolicProgram U{'\3'};
+  memory::SymbolicProgram V{'\4'};
+  memory::SymbolicProgram X{if_then(a_u, b_u, U)};
+  memory::SymbolicProgram Y{if_then(a_v, b_v, V)};
+  memory::SymbolicProgram Z{if_then(a_w, b_w, (X | Y))};
+
+  EXPECT_EQ(5, Z.assume_map().size());
+  EXPECT_EQ(1, Z.unguarded_events().size());
+  EXPECT_EQ(5, Z.p().length());
+
+  EXPECT_EQ(0, Z.assume_map().at(0));
+  EXPECT_EQ(0, Z.assume_map().at(1));
+  EXPECT_EQ(1, Z.assume_map().at(2));
+  EXPECT_EQ(0, Z.assume_map().at(3));
+  EXPECT_EQ(3, Z.assume_map().at(4));
+
+  EXPECT_EQ(0, Z.unguarded_events().front());
+
+  EXPECT_TRUE(memory::is_assume_acquire_eq(Z.p().label_function().at(0)));
+  EXPECT_EQ(a_w, memory::address(Z.p().label_function().at(0)));
+  EXPECT_EQ(b_w, memory::byte(Z.p().label_function().at(0)));
+
+  EXPECT_TRUE(memory::is_assume_acquire_eq(Z.p().label_function().at(1)));
+  EXPECT_EQ(a_u, memory::address(Z.p().label_function().at(1)));
+  EXPECT_EQ(b_u, memory::byte(Z.p().label_function().at(1)));
+
+  EXPECT_EQ('\3', Z.p().label_function().at(2));
+
+  EXPECT_TRUE(memory::is_assume_acquire_eq(Z.p().label_function().at(3)));
+  EXPECT_EQ(a_v, memory::address(Z.p().label_function().at(3)));
+  EXPECT_EQ(b_v, memory::byte(Z.p().label_function().at(3)));
+
+  EXPECT_EQ('\4', Z.p().label_function().at(4));
+}
+
+TEST(CkaTest, SymbolicProgramGuards)
+{
+  constexpr memory::Address a_u = 0U;
+  constexpr memory::Address a_v = 1U;
+  constexpr memory::Address a_w = 2U;
+
+  constexpr memory::Byte b_u = '\1';
+  constexpr memory::Byte b_v = '\2';
+  constexpr memory::Byte b_w = '\3';
+
+  memory::SymbolicProgram P{'\1'};
+  memory::SymbolicProgram Q{'\2'};
+  memory::SymbolicProgram U{'\3'};
+  memory::SymbolicProgram V{'\4'};
+  memory::SymbolicProgram X{if_then(a_u, b_u, U)};
+  memory::SymbolicProgram Y{if_then(a_v, b_v, V)};
+  memory::SymbolicProgram Z{(P , if_then(a_w, b_w, (X | Y)) , Q)};
+
+  EXPECT_FALSE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 0));
+  EXPECT_FALSE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 1));
+
+  EXPECT_TRUE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 2));
+  EXPECT_TRUE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 3));
+  EXPECT_TRUE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 4));
+  EXPECT_TRUE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 5));
+
+  EXPECT_FALSE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 6));
+
+  // 7 and 8 are not in `Z.p()`
+  EXPECT_FALSE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 7));
+  EXPECT_FALSE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 8));
+
+  smt::Bool g2{memory::ReleaseAcquireModel::guard(Z.assume_map(), Z.p(), 2)};
+  smt::Bool g3{memory::ReleaseAcquireModel::guard(Z.assume_map(), Z.p(), 3)};
+  smt::Bool g4{memory::ReleaseAcquireModel::guard(Z.assume_map(), Z.p(), 4)};
+  smt::Bool g5{memory::ReleaseAcquireModel::guard(Z.assume_map(), Z.p(), 5)};
+
+  EXPECT_FALSE(g2.is_null());
+  EXPECT_FALSE(g3.is_null());
+  EXPECT_FALSE(g4.is_null());
+  EXPECT_FALSE(g5.is_null());
+
+  EXPECT_EQ(smt::BINARY_EXPR_KIND, g2.expr_kind());
+  EXPECT_EQ(smt::NARY_EXPR_KIND, g3.expr_kind());
+  EXPECT_EQ(smt::BINARY_EXPR_KIND, g4.expr_kind());
+  EXPECT_EQ(smt::NARY_EXPR_KIND, g5.expr_kind());
+
+  const smt::NaryExpr<smt::LAND>& n3 = static_cast<const smt::NaryExpr<smt::LAND>&>(g3.ref());
+  const smt::NaryExpr<smt::LAND>& n5 = static_cast<const smt::NaryExpr<smt::LAND>&>(g5.ref());
+
+  EXPECT_EQ(2, n3.size());
+  EXPECT_EQ(2, n5.size());
+}
+
+TEST(CkaTest, SymbolicProgramRacyOnlyStores)
+{
+  constexpr memory::Address a = 0U;
+
+  memory::SymbolicProgram P0{memory::none_store_label(a, '\0')};
+  memory::SymbolicProgram P1{memory::none_store_label(a, '\0')};
+
+  memory::SymbolicProgram X{(P0 | P1)};
+  memory::SymbolicProgram Y{(P0 , P1)};
+  memory::SymbolicProgram Z{(P1 , P0)};
+
+  memory::DataRaceDetector drd;
+
+  EXPECT_FALSE(drd.is_racy(P0));
+  EXPECT_FALSE(drd.is_racy(P1));
+
+  EXPECT_TRUE(drd.is_racy(X));
+  EXPECT_FALSE(drd.is_racy(Y));
+  EXPECT_FALSE(drd.is_racy(Z));
+}
+
+TEST(CkaTest, SymbolicProgramNonRacyOnlyReleaseStores)
+{
+  constexpr memory::Address a = 0U;
+
+  memory::SymbolicProgram P0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram P1{memory::release_store_label(a, '\0')};
+
+  memory::SymbolicProgram X{(P0 | P1)};
+  memory::SymbolicProgram Y{(P0 , P1)};
+  memory::SymbolicProgram Z{(P1 , P0)};
+
+  memory::DataRaceDetector drd;
+
+  EXPECT_FALSE(drd.is_racy(P0));
+  EXPECT_FALSE(drd.is_racy(P1));
+
+  EXPECT_FALSE(drd.is_racy(X));
+  EXPECT_FALSE(drd.is_racy(Y));
+  EXPECT_FALSE(drd.is_racy(Z));
+}
+
+/// At least one conflicting event must be a non-atomic write
+TEST(CkaTest, SymbolicProgramNonRacyOnlyLoads)
+{
+  constexpr memory::Address a = 0U;
+
+  memory::SymbolicProgram P0{memory::none_load_label(a)};
+  memory::SymbolicProgram P1{memory::none_load_label(a)};
+
+  memory::SymbolicProgram X{(P0 | P1)};
+  memory::SymbolicProgram Y{(P0 , P1)};
+  memory::SymbolicProgram Z{(P1 , P0)};
+
+  memory::DataRaceDetector drd;
+
+  EXPECT_FALSE(drd.is_racy(P0));
+  EXPECT_FALSE(drd.is_racy(P1));
+
+  EXPECT_FALSE(drd.is_racy(X));
+  EXPECT_FALSE(drd.is_racy(Y));
+  EXPECT_FALSE(drd.is_racy(Z));
+}
+
+TEST(CkaTest, SymbolicProgramRacyNonatomic)
+{
+  constexpr memory::Address a = 0U;
+
+  memory::SymbolicProgram P0{memory::none_store_label(a, '\0')};
+  memory::SymbolicProgram P1{memory::none_load_label(a)};
+
+  memory::SymbolicProgram X{(P0 | P1)};
+  memory::SymbolicProgram Y{(P0 , P1)};
+  memory::SymbolicProgram Z{(P1 , P0)};
+
+  memory::DataRaceDetector drd;
+
+  EXPECT_TRUE(drd.is_racy(X));
+
+  EXPECT_FALSE(drd.is_racy(Y));
+  EXPECT_FALSE(drd.is_racy(Z));
+}
+
+/// Let T1 be "[a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; r1 := [a]_none;"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramRacyMessagePassingWithInit)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_1{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1_2{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T1{(T1_1 , T1_2)};
+
+  memory::SymbolicProgram T2_1{memory::acquire_load_label(b)};
+  memory::SymbolicProgram T2_2{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{(T2_1 , T2_2)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Unlike `SymbolicProgramRacyMessagePassingWithInit`, we do
+/// not model the initialization of the two memory locations.
+/// As expected, this hides the data race because the axiom
+/// for the reading of initial values cannot be satisfied.
+/// The take-away message is: always model the initialization
+/// of all memory locations as illustrated by "T0" above.
+TEST(CkaTest, SymbolicProgramRacyMessagePassingWithoutInit)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T1_1{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1_2{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T1{(T1_1 , T1_2)};
+
+  memory::SymbolicProgram T2_1{memory::acquire_load_label(b)};
+  memory::SymbolicProgram T2_2{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{(T2_1 , T2_2)};
+
+  memory::SymbolicProgram P{(T1 | T2)};
+
+  memory::DataRaceDetector drd;
+
+  // There is a race but it does not satisfy the axiom that every
+  // load happens-before a store to the same memory address.
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_release := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; r1 := [a]_acquire;"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramNonRacyMessagePassingUsingAlwaysReleaseAcquire)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_1{memory::release_store_label(a, '\1')}; //none_store_label still race free, correct?
+  memory::SymbolicProgram T1_2{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T1{(T1_1 , T1_2)};
+
+  memory::SymbolicProgram T2_1{memory::acquire_load_label(b)};
+  memory::SymbolicProgram T2_2{memory::acquire_load_label(a)};
+  memory::SymbolicProgram T2{(T2_1 , T2_2)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramNonRacyMessagePassingUsingBranch)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_1{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1_2{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T1{(T1_1 , T1_2)};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T1' be "[a]_none := 1; [b]_release := 1"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramRacyDespiteBranch)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_1{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1_2{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T1{(T1_1 , T1_2)};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram T3_1{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T3_2{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T3{(T3_1 | T3_2)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Let T1 be "r0 := [b]_acquire; [a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T1' be "r0 := [b]_acquire; [a]_none := 1; [b]_release := 1"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramRacyDespiteBranchAndReleaseAcquireWrap)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_0{memory::acquire_load_label(b)};
+  memory::SymbolicProgram T1_1{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1_2{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T1{(T1_0 , T1_1 , T1_2)};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram T3_0{memory::acquire_load_label(b)};
+  memory::SymbolicProgram T3_1{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T3_2{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T3{(T3_0 | T3_1 | T3_2)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Let T1 be "r0 := [b]_acquire; [a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 0) then r1 := [a]_none; end",
+/// and T1' be "r0 := [b]_acquire; if (r0 == 1) then [a]_none := 2; [b]_release := 2; end"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramRacyDespiteBranchCheckZero)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_0{memory::acquire_load_label(b)};
+  memory::SymbolicProgram T1_1{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1_2{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T1{(T1_0 , T1_1 , T1_2)};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\0', T2_none_load_from_a)};
+
+  memory::SymbolicProgram T3_none_store_to_a{memory::none_store_label(a, '\2')};
+  memory::SymbolicProgram T3_release_store_to_b{memory::release_store_label(b, '\2')};
+  memory::SymbolicProgram T3{if_then(b, '\1',
+    (T3_none_store_to_a , T3_release_store_to_b))};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Let T1 be "r0 := [b]_acquire; [a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T1' be "r0 := [b]_acquire; if (r0 == 1) then [a]_none := 2; [b]_release := 2; end"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramRacyDespiteBranchCheckOne)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_0{memory::acquire_load_label(b)};
+  memory::SymbolicProgram T1_1{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1_2{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T1{(T1_0 , T1_1 , T1_2)};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram T3_none_store_to_a{memory::none_store_label(a, '\2')};
+  memory::SymbolicProgram T3_release_store_to_b{memory::release_store_label(b, '\2')};
+  memory::SymbolicProgram T3{if_then(b, '\1',
+    (T3_none_store_to_a , T3_release_store_to_b))};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Let T1 be "r0 := [b]_acquire; [a]_none := 1; [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T1' be "r0 := [b]_acquire; if (r0 == 1) then [b]_release := 2; end"
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramNonRacyBranchCheckOne)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_0{memory::acquire_load_label(b)};
+  memory::SymbolicProgram T1_1{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1_2{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T1{(T1_0 , T1_1 , T1_2)};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram T3_release_store_to_b{memory::release_store_label(b, '\2')};
+  memory::SymbolicProgram T3{if_then(b, '\1', T3_release_store_to_b)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramInfeasibleDataRace)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1{memory::none_store_label(a, '\1')};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 0) then r1 := [a]_none; end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramFeasibleDataRace)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1{memory::none_store_label(a, '\1')};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\0', T2_none_load_from_a)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end ; r1 := [a]_none",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramFeasibleDataRaceDespiteInfeasibleBranch)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1{memory::none_store_label(a, '\1')};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{(if_then(b, '\1', T2_none_load_from_a) , T2_none_load_from_a)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [b]_acquire; if (r1 == 0) then r2 := [a]_none; end end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceBecauseOutermostBranchInfeasible)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1{memory::none_store_label(a, '\1')};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2_innermost_if{if_then(b, '\0', T2_none_load_from_a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_innermost_if)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 0) then r1 := [b]_acquire; if (r1 == 1) then r2 := [a]_none; end end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceBecauseInnermostBranchInfeasible)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1{memory::none_store_label(a, '\1')};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2_innermost_if{if_then(b, '\1', T2_none_load_from_a)};
+  memory::SymbolicProgram T2{if_then(b, '\0', T2_innermost_if)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1 | [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 0) then r1 := [b]_acquire; if (r1 == 1) then r2 := [a]_none; end end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramFeasibleDataRaceWithNestedBranches)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_0{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1_1{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T1{(T1_0 | T1_1)};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2_innermost_if{if_then(b, '\1', T2_none_load_from_a)};
+  memory::SymbolicProgram T2{if_then(b, '\0', T2_innermost_if)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1 , [b]_release := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 0) then r1 := [b]_acquire; if (r1 == 1) then r2 := [a]_none; end end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramAvoidedDataRaceWithNestedBranches)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_0{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1_1{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T1{(T1_0 , T1_1)};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2_innermost_if{if_then(b, '\1', T2_none_load_from_a)};
+  memory::SymbolicProgram T2{if_then(b, '\0', T2_innermost_if)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 0) then r1 := [b]_acquire; if (r1 == 1) then r2 := [a]_none; end end",
+/// where both memory locations "a" is initially zero, and
+/// "b" is nondeterministically initialized to 0 or 1.
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceDueToContradictoryBranches)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0_2{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1 | T0_2)};
+
+  memory::SymbolicProgram T1{memory::none_store_label(a, '\1')};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2_innermost_if{if_then(b, '\1', T2_none_load_from_a)};
+  memory::SymbolicProgram T2{if_then(b, '\0', T2_innermost_if)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 0) then r1 := [b]_acquire; if (r1 == 1) then r2 := [a]_none; end end",
+/// where both memory locations "a" is initially zero, and
+/// "b" is nondeterministically initialized to 0 or 1.
+TEST(CkaTest, SymbolicProgramFeasibleDataRaceNestedBranches)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0_2{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1 | T0_2)};
+
+  memory::SymbolicProgram T1{memory::none_store_label(a, '\1')};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2_innermost_if{if_then(b, '\1', T2_none_load_from_a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_innermost_if)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T3 be "r0 := [b]_acquire; if (r0 == 2) then [b]_release := 1; end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceDueToTrivialInfeasibleReleaseStore)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1{memory::none_store_label(a, '\1')};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram T3_release_store_to_b{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T3{if_then(b, '\2', T3_release_store_to_b)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "r0 := [b]_acquire; if (r0 == 2) then [a]_none := 1; end",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T3 be "r0 := [b]_acquire; if (r0 == 0) then [b]_release := 1; end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceDueToTrivialInfeasibleNoneStore)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_none_store_to_a{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1{if_then(b, '\2', T1_none_store_to_a)};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram T3_release_store_to_b{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T3{if_then(b, '\0', T3_release_store_to_b)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T3 be "r0 := [b]_acquire; if (r0 == 2) then [b]_release := 1; end",
+/// and T4 be "[b]_release := 2",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceDueToInfeasibleReleaseStore)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1{memory::none_store_label(a, '\1')};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram T3_release_store_to_b{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T3{if_then(b, '\2', T3_release_store_to_b)};
+
+  memory::SymbolicProgram T4{memory::release_store_label(b, '\2')};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3) , T4)};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "r0 := [b]_acquire; if (r0 == 2) then [a]_none := 1; end",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T3 be "r0 := [b]_acquire; if (r0 == 0) then [b]_release := 1; end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceDueToInfeasibleNoneStore)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_none_store_to_a{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1{if_then(b, '\2', T1_none_store_to_a)};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram T3_release_store_to_b{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T3{if_then(b, '\0', T3_release_store_to_b)};
+
+  memory::SymbolicProgram T4{memory::release_store_label(b, '\2')};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3) , T4)};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "r0 := [b]_acquire; if (r0 == 0) then r1 := [a]_none; end",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then [a]_none := 1; end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceInFeasibleNoneLoadButInfeasibleNoneStore)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T1{if_then(b, '\0', T1_none_load_from_a)};
+
+  memory::SymbolicProgram T2_none_store_to_a{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_store_to_a)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "r0 := [b]_acquire; if (r0 == 0) then r1 := [a]_none; end",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [b]_acquire; if (r1 == 0) then [a]_none := 1; end end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceDueToNestedInfeasibleNoneStore)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T1{if_then(b, '\0', T1_none_load_from_a)};
+
+  memory::SymbolicProgram T2_none_store_to_a{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T2_innermost_if{if_then(b, '\0', T2_none_store_to_a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_innermost_if)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T3 be "r0 := [b]_acquire; if (r0 == 2) then [b]_release := 1; end",
+/// and T4 be "[b]_release := 2",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramFeasibleDataRaceWithNestedReleaseStore)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1{memory::none_store_label(a, '\1')};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram T3_release_store_to_b{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T3{if_then(b, '\2', T3_release_store_to_b)};
+
+  memory::SymbolicProgram T4{memory::release_store_label(b, '\2')};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3 | T4))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Let T1 be "r0 := [b]_acquire; if (r0 == 2) then [a]_none := 1; end",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T3 be "r0 := [b]_acquire; if (r0 == 0) then [b]_release := 1; end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramFeasibleDataWithNestedNoneStore)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_none_store_to_a{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1{if_then(b, '\2', T1_none_store_to_a)};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram T3_release_store_to_b{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T3{if_then(b, '\0', T3_release_store_to_b)};
+
+  memory::SymbolicProgram T4{memory::release_store_label(b, '\2')};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3 | T4))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Let T1 be "r0 := [b]_acquire; if (r0 == 1) then [a]_none := 1; end",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T3 be "r0 := [b]_acquire; if (r0 == 0) then [b]_release := 1; end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceSameBranchCondition)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1_none_store_to_a{memory::none_store_label(a, '\1')};
+  memory::SymbolicProgram T1{if_then(b, '\1', T1_none_store_to_a)};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram T3_release_store_to_b{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T3{if_then(b, '\0', T3_release_store_to_b)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; end",
+/// and T3 be "r0 := [b]_acquire; if (r0 == 0) then [b]_release := 1; end",
+/// where both memory locations "a" and "b" are initially zero.
+TEST(CkaTest, SymbolicProgramFeasibleDataRaceAfterGuardedStore)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1)};
+
+  memory::SymbolicProgram T1{memory::none_store_label(a, '\1')};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2{if_then(b, '\1', T2_none_load_from_a)};
+
+  memory::SymbolicProgram T3_release_store_to_b{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T3{if_then(b, '\0', T3_release_store_to_b)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; [c]_release := 1 end",
+/// and T3 be "r0 := [c]_acquire; if (r0 == 1) then [b]_release := 1; end",
+/// where both memory locations "a", "b" and "c" are initially zero.
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceBecauseCausalityIsCyclic)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+  constexpr memory::Address c = 2U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0_2{memory::release_store_label(c, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1 | T0_2)};
+
+  memory::SymbolicProgram T1{memory::none_store_label(a, '\1')};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2_release_store_to_c{memory::release_store_label(c, '\1')};
+  memory::SymbolicProgram T2{if_then(b, '\1', (T2_none_load_from_a , T2_release_store_to_c))};
+
+  memory::SymbolicProgram T3_release_store_to_b{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T3{if_then(c, '\1', T3_release_store_to_b)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+/// Let T1 be "[a]_none := 1",
+/// and T2 be "r0 := [b]_acquire; if (r0 == 1) then r1 := [a]_none; [c]_release := 1 end",
+/// and T3 be "r0 := [c]_acquire; if (r0 == 0) then [b]_release := 1; end",
+/// where both memory locations "a", "b" and "c" are initially zero.
+TEST(CkaTest, SymbolicProgramFeasibleDataRaceDueToAcyclicCausality)
+{
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+  constexpr memory::Address c = 2U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram T0_2{memory::release_store_label(c, '\0')};
+  memory::SymbolicProgram T0{(T0_0 | T0_1 | T0_2)};
+
+  memory::SymbolicProgram T1{memory::none_store_label(a, '\1')};
+
+  memory::SymbolicProgram T2_none_load_from_a{memory::none_load_label(a)};
+  memory::SymbolicProgram T2_release_store_to_c{memory::release_store_label(c, '\1')};
+  memory::SymbolicProgram T2{if_then(b, '\1', (T2_none_load_from_a , T2_release_store_to_c))};
+
+  memory::SymbolicProgram T3_release_store_to_b{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram T3{if_then(c, '\0', T3_release_store_to_b)};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T3))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceNestedContradictoryIfThenDueToModificationOrder)
+{
+  constexpr memory::Address bait = 0U;
+  constexpr memory::Address v0 = 1U;
+  constexpr memory::Address c0 = 2U;
+  constexpr memory::Address c1 = 3U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(v0, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(v0, '\1')};
+
+  memory::SymbolicProgram T0_2{memory::release_store_label(bait, '\0')};
+  memory::SymbolicProgram T0_3{memory::release_store_label(c0, '\0')};
+  memory::SymbolicProgram T0_4{memory::release_store_label(c1, '\0')};
+
+  memory::SymbolicProgram T0{(T0_0 | T0_1 | T0_2 | T0_3 | T0_4)};
+
+  memory::SymbolicProgram T1_release_store_to_c0{memory::release_store_label(c0, '\1')};
+  memory::SymbolicProgram T1{if_then(v0, '\0', T1_release_store_to_c0)};
+
+  memory::SymbolicProgram T2_release_store_to_c1{memory::release_store_label(c1, '\1')};
+  memory::SymbolicProgram T2{if_then(v0, '\1', T2_release_store_to_c1)};
+
+  memory::SymbolicProgram T3_none_store_to_bait{memory::none_store_label(bait, '\0')};
+  memory::SymbolicProgram T3_innermost_if{if_then(c1, '\1', T3_none_store_to_bait)};
+  memory::SymbolicProgram T3{if_then(c0, '\1', T3_innermost_if)};
+
+  memory::SymbolicProgram T4{memory::none_store_label(bait, '\1')};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2) , (T3 | T4))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+TEST(CkaTest, SymbolicProgramFeasibleDataRaceEvenThoughModificationOrder)
+{
+  constexpr memory::Address bait = 0U;
+  constexpr memory::Address v0 = 1U;
+  constexpr memory::Address c0 = 2U;
+  constexpr memory::Address c1 = 3U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(v0, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(v0, '\1')};
+
+  memory::SymbolicProgram T0_2{memory::release_store_label(bait, '\0')};
+  memory::SymbolicProgram T0_3{memory::release_store_label(c0, '\0')};
+  memory::SymbolicProgram T0_4{memory::release_store_label(c1, '\0')};
+
+  memory::SymbolicProgram T0{(T0_0 | T0_1 | T0_2 | T0_3 | T0_4)};
+
+  memory::SymbolicProgram T1_release_store_to_c0{memory::release_store_label(c0, '\1')};
+  memory::SymbolicProgram T1{if_then(v0, '\1', T1_release_store_to_c0)};
+
+  memory::SymbolicProgram T2_release_store_to_c1{memory::release_store_label(c1, '\1')};
+  memory::SymbolicProgram T2{if_then(v0, '\1', T2_release_store_to_c1)};
+
+  memory::SymbolicProgram T3_none_store_to_bait{memory::none_store_label(bait, '\0')};
+  memory::SymbolicProgram T3_innermost_if{if_then(c1, '\1', T3_none_store_to_bait)};
+  memory::SymbolicProgram T3{if_then(c0, '\1', T3_innermost_if)};
+
+  memory::SymbolicProgram T4{memory::none_store_label(bait, '\1')};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2) , (T3 | T4))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceNestedContradictoryIfThenDueToModificationOrderExtra)
+{
+  constexpr memory::Address bait = 0U;
+  constexpr memory::Address v0 = 1U;
+  constexpr memory::Address v1 = 2U;
+  constexpr memory::Address c0 = 3U;
+  constexpr memory::Address c1 = 4U;
+  constexpr memory::Address c2 = 5U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(v0, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(v0, '\1')};
+
+  memory::SymbolicProgram T0_0_prime{memory::release_store_label(v1, '\0')};
+  memory::SymbolicProgram T0_1_prime{memory::release_store_label(v1, '\1')};
+
+  memory::SymbolicProgram T0_2{memory::release_store_label(bait, '\0')};
+  memory::SymbolicProgram T0_3{memory::release_store_label(c0, '\0')};
+  memory::SymbolicProgram T0_4{memory::release_store_label(c1, '\0')};
+  memory::SymbolicProgram T0_5{memory::release_store_label(c2, '\0')};
+
+  memory::SymbolicProgram T0{(T0_0 | T0_1 | T0_0_prime | T0_1_prime | T0_2 | T0_3 | T0_4 | T0_5)};
+
+  memory::SymbolicProgram T1_release_store_to_c0{memory::release_store_label(c0, '\1')};
+  memory::SymbolicProgram T1{if_then(v0, '\0', T1_release_store_to_c0)};
+
+  memory::SymbolicProgram T2_release_store_to_c1{memory::release_store_label(c1, '\1')};
+  memory::SymbolicProgram T2{if_then(v0, '\1', T2_release_store_to_c1)};
+
+  memory::SymbolicProgram T2_prime_release_store_to_c2{memory::release_store_label(c2, '\1')};
+  memory::SymbolicProgram T2_prime{if_then(v1, '\1', T2_prime_release_store_to_c2)};
+
+  memory::SymbolicProgram T3_none_store_to_bait{memory::none_store_label(bait, '\0')};
+  memory::SymbolicProgram T3_innermost_if{if_then(c1, '\1', T3_none_store_to_bait)};
+  memory::SymbolicProgram T3_inner_if{if_then(c0, '\1', T3_innermost_if)};
+  memory::SymbolicProgram T3{if_then(c2, '\1', T3_inner_if)};
+
+  memory::SymbolicProgram T4{memory::none_store_label(bait, '\1')};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T2_prime) , (T3 | T4))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
+}
+
+TEST(CkaTest, SymbolicProgramFeasibleDataRaceEvenThoughModificationOrderExtra)
+{
+  constexpr memory::Address bait = 0U;
+  constexpr memory::Address v0 = 1U;
+  constexpr memory::Address v1 = 2U;
+  constexpr memory::Address c0 = 3U;
+  constexpr memory::Address c1 = 4U;
+  constexpr memory::Address c2 = 5U;
+
+  memory::SymbolicProgram T0_0{memory::release_store_label(v0, '\0')};
+  memory::SymbolicProgram T0_1{memory::release_store_label(v0, '\1')};
+
+  memory::SymbolicProgram T0_0_prime{memory::release_store_label(v1, '\0')};
+  memory::SymbolicProgram T0_1_prime{memory::release_store_label(v1, '\1')};
+
+  memory::SymbolicProgram T0_2{memory::release_store_label(bait, '\0')};
+  memory::SymbolicProgram T0_3{memory::release_store_label(c0, '\0')};
+  memory::SymbolicProgram T0_4{memory::release_store_label(c1, '\0')};
+  memory::SymbolicProgram T0_5{memory::release_store_label(c2, '\0')};
+
+  memory::SymbolicProgram T0{(T0_0 | T0_1 | T0_0_prime | T0_1_prime | T0_2 | T0_3 | T0_4 | T0_5)};
+
+  memory::SymbolicProgram T1_release_store_to_c0{memory::release_store_label(c0, '\1')};
+  memory::SymbolicProgram T1{if_then(v0, '\1', T1_release_store_to_c0)};
+
+  memory::SymbolicProgram T2_release_store_to_c1{memory::release_store_label(c1, '\1')};
+  memory::SymbolicProgram T2{if_then(v0, '\1', T2_release_store_to_c1)};
+
+  memory::SymbolicProgram T2_prime_release_store_to_c2{memory::release_store_label(c2, '\1')};
+  memory::SymbolicProgram T2_prime{if_then(v1, '\1', T2_prime_release_store_to_c2)};
+
+  memory::SymbolicProgram T3_none_store_to_bait{memory::none_store_label(bait, '\0')};
+  memory::SymbolicProgram T3_innermost_if{if_then(c1, '\1', T3_none_store_to_bait)};
+  memory::SymbolicProgram T3_inner_if{if_then(c0, '\1', T3_innermost_if)};
+  memory::SymbolicProgram T3{if_then(c2, '\1', T3_inner_if)};
+
+  memory::SymbolicProgram T4{memory::none_store_label(bait, '\1')};
+
+  memory::SymbolicProgram P{(T0 , (T1 | T2 | T2_prime) , (T3 | T4))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+/// Suppose we want to decide the satisfiability of the following
+/// 3SAT formula where x, y and z are Boolean variables:
+///
+///   (x or ~y or z) and (~x or ~y or ~z) and (~x or ~y or z)
+///
+/// For example, a satisfying assignment is:
+///
+///   x=1, y=0, z=1
+///
+/// In contrast, the following 3SAT formula is unsatisfiable:
+///
+///   (x or ~y or ~z) and (z) and (~z)
+///
+/// More generally, we can encode any 3SAT formula into a symbolic program.
+/// This proves that data race detection is NP-hard.
+TEST(CkaTest, SymbolicProgramFeasibleDataRaceWithReductionFrom3SAT)
+{
+  // verify assumptions
+  {
+    smt::Bool x{smt::any<smt::Bool>("x")};
+    smt::Bool y{smt::any<smt::Bool>("y")};
+    smt::Bool z{smt::any<smt::Bool>("z")};
+
+    smt::Z3Solver solver;
+
+    solver.add((x or not y or z) and (not x or not y or not z) and (not x or not y or z));
+    EXPECT_EQ(smt::sat, solver.check());
+  }
+
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+  constexpr memory::Address c = 2U;
+
+  constexpr memory::Address clause0 = 3U;
+  constexpr memory::Address clause1 = 4U;
+  constexpr memory::Address clause2 = 5U;
+
+  // data race bait
+  constexpr memory::Address bait = 6U;
+
+  memory::SymbolicProgram Init_clause0{memory::release_store_label(clause0, '\0')};
+  memory::SymbolicProgram Init_clause1{memory::release_store_label(clause1, '\0')};
+  memory::SymbolicProgram Init_clause2{memory::release_store_label(clause2, '\0')};
+
+  memory::SymbolicProgram Init_a0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram Init_b0{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram Init_c0{memory::release_store_label(c, '\0')};
+
+  memory::SymbolicProgram Init_a1{memory::release_store_label(a, '\1')};
+  memory::SymbolicProgram Init_b1{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram Init_c1{memory::release_store_label(c, '\1')};
+
+  memory::SymbolicProgram Init_bait{memory::release_store_label(bait, '\0')};
+
+  memory::SymbolicProgram Init{(Init_clause0 | Init_clause1 | Init_clause2
+                             | Init_a0 | Init_b0 | Init_c0 | Init_a1 | Init_b1 | Init_c1
+                             | Init_bait)};
+
+  memory::SymbolicProgram release_store_to_clause0{memory::release_store_label(clause0, '\1')};
+  memory::SymbolicProgram release_store_to_clause1{memory::release_store_label(clause1, '\1')};
+  memory::SymbolicProgram release_store_to_clause2{memory::release_store_label(clause2, '\1')};
+
+  memory::SymbolicProgram Clause0_a{if_then(a, '\1', release_store_to_clause0)};
+  memory::SymbolicProgram Clause0_b{if_then(b, '\0', release_store_to_clause0)};
+  memory::SymbolicProgram Clause0_c{if_then(c, '\1', release_store_to_clause0)};
+
+  memory::SymbolicProgram Clause1_a{if_then(a, '\0', release_store_to_clause1)};
+  memory::SymbolicProgram Clause1_b{if_then(b, '\0', release_store_to_clause1)};
+  memory::SymbolicProgram Clause1_c{if_then(c, '\0', release_store_to_clause1)};
+
+  memory::SymbolicProgram Clause2_a{if_then(a, '\0', release_store_to_clause2)};
+  memory::SymbolicProgram Clause2_b{if_then(b, '\0', release_store_to_clause2)};
+  memory::SymbolicProgram Clause2_c{if_then(c, '\1', release_store_to_clause2)};
+
+  memory::SymbolicProgram Choices{(Clause0_a | Clause0_b | Clause0_c
+                                  | Clause1_a | Clause1_b | Clause1_c
+                                  | Clause2_a | Clause2_b | Clause2_c)};
+
+  memory::SymbolicProgram none_store_to_bait{memory::none_store_label(bait, '\1')};
+
+  // nesting of if-then statements to encode conjunction of clauses
+  memory::SymbolicProgram Checker_clause2{if_then(clause2, '\1', none_store_to_bait)};
+  memory::SymbolicProgram Checker_clause1{if_then(clause1, '\1', Checker_clause2)};
+  memory::SymbolicProgram Checker_clause0{if_then(clause0, '\1', Checker_clause1)};
+  memory::SymbolicProgram Checker{Checker_clause0};
+
+  memory::SymbolicProgram P{(Init , Choices , (Checker | none_store_to_bait))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_TRUE(drd.is_racy(P));
+}
+
+TEST(CkaTest, SymbolicProgramInfeasibleDataRaceWithReductionFrom3SAT)
+{
+  // verify assumptions
+  {
+    smt::Bool x{smt::any<smt::Bool>("x")};
+    smt::Bool y{smt::any<smt::Bool>("y")};
+    smt::Bool z{smt::any<smt::Bool>("z")};
+
+    smt::Z3Solver solver;
+
+    solver.add((x or not y or not z) and z and not z);
+    EXPECT_EQ(smt::unsat, solver.check());
+  }
+
+  constexpr memory::Address a = 0U;
+  constexpr memory::Address b = 1U;
+  constexpr memory::Address c = 2U;
+
+  constexpr memory::Address clause0 = 3U;
+  constexpr memory::Address clause1 = 4U;
+  constexpr memory::Address clause2 = 5U;
+
+  // data race bait
+  constexpr memory::Address bait = 6U;
+
+  memory::SymbolicProgram Init_clause0{memory::release_store_label(clause0, '\0')};
+  memory::SymbolicProgram Init_clause1{memory::release_store_label(clause1, '\0')};
+  memory::SymbolicProgram Init_clause2{memory::release_store_label(clause2, '\0')};
+
+  memory::SymbolicProgram Init_a0{memory::release_store_label(a, '\0')};
+  memory::SymbolicProgram Init_b0{memory::release_store_label(b, '\0')};
+  memory::SymbolicProgram Init_c0{memory::release_store_label(c, '\0')};
+
+  memory::SymbolicProgram Init_a1{memory::release_store_label(a, '\1')};
+  memory::SymbolicProgram Init_b1{memory::release_store_label(b, '\1')};
+  memory::SymbolicProgram Init_c1{memory::release_store_label(c, '\1')};
+
+  memory::SymbolicProgram Init_bait{memory::release_store_label(bait, '\0')};
+
+  memory::SymbolicProgram Init{(Init_clause0 | Init_clause1 | Init_clause2
+                             | Init_a0 | Init_b0 | Init_c0 | Init_a1 | Init_b1 | Init_c1
+                             | Init_bait)};
+
+  memory::SymbolicProgram release_store_to_clause0{memory::release_store_label(clause0, '\1')};
+  memory::SymbolicProgram release_store_to_clause1{memory::release_store_label(clause1, '\1')};
+  memory::SymbolicProgram release_store_to_clause2{memory::release_store_label(clause2, '\1')};
+
+  memory::SymbolicProgram Clause0_a{if_then(a, '\1', release_store_to_clause0)};
+  memory::SymbolicProgram Clause0_b{if_then(b, '\0', release_store_to_clause0)};
+  memory::SymbolicProgram Clause0_c{if_then(c, '\0', release_store_to_clause0)};
+
+  memory::SymbolicProgram Clause1_c{if_then(c, '\1', release_store_to_clause1)};
+
+  memory::SymbolicProgram Clause2_c{if_then(c, '\0', release_store_to_clause2)};
+
+  memory::SymbolicProgram Choices{(Clause0_a | Clause0_b | Clause0_c
+                                  | Clause1_c
+                                  | Clause2_c)};
+
+  memory::SymbolicProgram none_store_to_bait{memory::none_store_label(bait, '\1')};
+
+  // nesting of if-then statements to encode conjunction of clauses
+  memory::SymbolicProgram Checker_clause2{if_then(clause2, '\1', none_store_to_bait)};
+  memory::SymbolicProgram Checker_clause1{if_then(clause1, '\1', Checker_clause2)};
+  memory::SymbolicProgram Checker{if_then(clause0, '\1', Checker_clause1)};
+
+  memory::SymbolicProgram P{(Init , Choices , (Checker | none_store_to_bait))};
+
+  memory::DataRaceDetector drd;
+  EXPECT_FALSE(drd.is_racy(P));
 }

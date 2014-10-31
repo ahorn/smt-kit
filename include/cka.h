@@ -286,7 +286,7 @@ PartialString operator|(const PartialString&, const PartialString&);
 /// All events in `x` happen before those in `y`.
 PartialString operator,(const PartialString&, const PartialString&);
 
-/// Downward-closed set of finite partial strings
+/// Explicitly represent a downward-closed set of finite partial strings
 class Program
 {
 private:
@@ -757,7 +757,7 @@ typedef smt::Int EventSort;
 /// Symbolic partial order base model
 
 /// This model uses partial orders to describe the computation of concurrent
-/// programs. Other models have been developed that rely only on relations.
+/// programs. Other models have been also developed that rely only on relations.
 /// The underpinning principles of our symbolic implementation of relations
 /// would, however, remain the same.
 class PartialOrderModel
@@ -826,6 +826,9 @@ public:
       for (Event e_b{0}; e_b < len; ++e_b)
         for (Event e_c{0}; e_c < len; ++e_c)
         {
+          if (e_a == e_b or e_a == e_c or e_b == e_c)
+            continue;
+
           order_a_b = order(e_a, e_b);
           order_b_c = order(e_b, e_c);
           order_a_c = order(e_a, e_c);
@@ -1150,14 +1153,18 @@ typedef std::vector<Events> PerAddressMap;
 
 namespace internal
 {
+  /// Get load and store events for a certain memory address
   struct Filter
   {
     Filter() = delete;
 
-    /// Extracts stores and loads from `x`
+    /// Extracts certain kinds of stores and loads from `x`
 
     /// \pre: for all events `e`, if `store_predicate(e)` then `is_store(e)`
     /// \pre: for all events `e`, if `load_predicate(e)` then `is_load(e)`
+    ///
+    /// \post: `store_map` contains all events `e` in `x` that satisfy `store_predicate(e)`
+    /// \post: `load_map` contains all events `e` in `x` that satisfy `load_predicate(e)`
     template<class Predicate>
     static Address store_load_filter(
       const PartialString& x,
@@ -1205,71 +1212,190 @@ namespace internal
   };
 }
 
+/// Maps an event `e` to the assume event guarding `e`, or itself if none
+typedef std::vector<Event> AssumeMap;
+
 /// A partial order model of C++14-style release-acquire semantics
 class ReleaseAcquireModel
 {
 private:
+  /// SMT sort representing a read or written `Byte`
+  typedef smt::Int ByteSort;
+
+  /// Sequenced-before relation of program instructions
   const PartialOrderModel& m_po_model;
+
+  /// SMT constant for a value that was read or written by `e`
+  static ByteSort value(const Event e)
+  {
+    static const char* const s_v_prefix = "v!";
+    return smt::any<ByteSort>(s_v_prefix, e);
+  }
 
 public:
   ReleaseAcquireModel(const PartialOrderModel& po_model)
   : m_po_model(po_model) {}
 
-  /// Symbolically encodes a form of release-acquire semantics
+  /// Can `e` only be executed when a certain condition holds?
+  static bool is_guarded(const AssumeMap& assume_map, const Event e)
+  {
+    return e < assume_map.size() and assume_map[e] != e;
+  }
+
+  /// Necessary condition for `event` in `x` to be executable
+
+  /// \pre: `event` in `x` and `is_guarded(assume_map, event)`
+  ///
+  /// The returned Boolean expression is built recursively from
+  /// all the "assume" events that are guarding `event`.
+  ///
+  /// \see_also SymbolicProgram
+  static smt::Bool guard(
+    const AssumeMap& assume_map,
+    const PartialString& x,
+    const Event event)
+  {
+    Event e{event};
+    Event assume_event;
+    Label assume_label;
+    smt::Bools guards;
+
+    do
+    {
+      assert(e < x.length());
+      assert(is_guarded(assume_map, e));
+
+      assume_event = assume_map[e];
+      assume_label = x.label_function().at(assume_event);
+
+      assert(is_assume(assume_label));
+
+      if (is_assume_acquire_eq(assume_label))
+      {
+        guards.push_back(value(assume_event) == byte(assume_label));
+      }
+      else
+      {
+        assert(is_assume_acquire_neq(assume_label));
+        guards.push_back(value(assume_event) != byte(assume_label));
+      }
+
+      e = assume_event;
+    }
+    while (is_guarded(assume_map, e));
+
+    // By pre-condition, there must be at least one guard.
+    assert(not guards.empty());
+
+    if (guards.size() == 1)
+      return guards.front();
+
+    return smt::conjunction(guards);
+  }
+
+  /// Symbolically encodes a form of release-acquire semantics without guards
 
   /// Returns `true` if `conjuncts` is unsatisfiable, `false` if unknown
   template<class Order>
   bool release_acquire(const Order& order, const PartialString& x,
     smt::Bools& conjuncts)
   {
+    static AssumeMap s_empty_assume_map;
+    return release_acquire(order, s_empty_assume_map, x, conjuncts);
+  }
+
+  /// Symbolically encodes guards (if any) and a form of release-acquire semantics
+
+  /// Currently, we are only encoding the communication between memory locations
+  /// that are accessed with release-acquire instructions. Computing the preserved
+  /// program order is orthogonal to the problem we are trying to solve because
+  /// there are different flavours of release-acquire for which the preserved
+  /// program orders would be different but the underpinning principles of our
+  /// implementation would remain the same.
+  ///
+  /// Returns `true` if `conjuncts` is unsatisfiable, `false` if unknown
+  template<class Order>
+  bool release_acquire(const Order& order, const AssumeMap& assume_map,
+    const PartialString& x, smt::Bools& conjuncts)
+  {
     static const char* const s_rf_prefix = "rf!";
 
     Address address;
-    smt::Bool rf_bool;
+    smt::Bools sw_then;
     EventSort rf_event;
+    ByteSort load_value;
     Label label, store_label;
+    smt::Bools order_fr_bools;
+    smt::Bool rf_bool, load_guard;
     PerAddressMap store_map, load_map;
 
     const Address max_address{internal::Filter::store_load_filter(
       x, store_map, load_map, is_release_store, is_acquire_load)};
 
-    // some read-from pair:
+    // some read-from pair for acquire loads and release stores:
     //
-    // for every load e, there exists a store e' to the
-    // same memory address such that e' happens-before e
+    // for every load e, if the guard (if any) of load e holds, then
+    // there exists a store e' to the same memory address such that
+    // e' happens-before e.
+    //
+    // In the case `assume_map` is nonempty, if a load e, which is
+    // an assumption, does not satisfy the above axiom, then we
+    // contradict the assumption of e, thereby blocking all events
+    // that are guarded by it.
     smt::Bools some_rf;
 
-    // for all memory addresses, the "some read-from" axiom
-    // must hold, i.e. conjunction of "some_rf" predicates
+    // for all memory addresses, the "some read-from" axiom must hold,
+    // i.e. we built the conjunction of all `some_rf` predicates
     smt::Bools all_rf;
 
-    // read-from relation:
+    // synchronize-with relation:
     //
-    // for all loads e and stores e', if e and e' access the
-    // same memory and e reads-from e', then e' happens-before e
-    smt::Bools order_rf;
+    // for all loads e and stores e', if e and e' access the same memory
+    // location and e reads-from e', then e' happens-before e and the
+    // guard (if any) of e' must hold, and the value read by e equals
+    // the value written by e'.
+    smt::Bools order_sw;
 
-    // modification order:
+    // modification order (also known as write coherence):
     //
     // atomic stores on the same memory address are totally ordered
     smt::Bools mo;
 
     // from-read relation (optional if we don't check written values):
     //
-    // for all stores s and s' and loads l such that all three
-    // access the same memory location, if l reads-from s and
-    // s happens-before s', then l happens-before s'.
+    // for all stores s and s' and loads l such that all three access the
+    // same memory location, if l reads-from s and s happens-before s' and
+    // the guard (if any) of s' holds, then l happens-before s'.
     smt::Bools order_fr;
+
+    // for all store events e, set value `v!e` equal to the written byte
+    smt::Bools values;
 
     for (address = 0; address <= max_address; ++address)
     {
       const Events& stores = store_map[address];
       const Events& loads = load_map[address];
 
+      for (Event store : stores)
+      {
+        store_label = x.label_function().at(store);
+
+        assert(is_release_store(store_label));
+        values.push_back(value(store) == byte(store_label));
+      }
+
       for (Event load : loads)
       {
         label = x.label_function().at(load);
+        assert(is_acquire_load(label));
+
+        load_value = value(load);
         rf_event = smt::any<EventSort>(s_rf_prefix, load);
+
+        if (is_guarded(assume_map, load))
+          load_guard = guard(assume_map, x, load);
+        else
+          load_guard.reset();
 
         for (Event store_a : stores)
         {
@@ -1284,46 +1410,107 @@ public:
 
           rf_bool = store_a == rf_event;
           some_rf.push_back(rf_bool);
-          order_rf.push_back(smt::implies(rf_bool,
-            order.order(store_a, load)));
+
+          sw_then.clear();
+
+          // `store_a` synchronizes-with `load`
+          sw_then.push_back(order.order(store_a, load));
+
+          // data flows from `store_a` to `load`
+          sw_then.push_back(value(store_a) == load_value);
+
+          if (is_guarded(assume_map, store_a))
+            sw_then.push_back(guard(assume_map, x, store_a));
+
+          // note: `rf_bool` already implies that the guard of the load holds
+          order_sw.push_back(smt::implies(rf_bool, smt::conjunction(sw_then)));
 
           for (Event store_b : stores)
             if (store_a != store_b)
             {
+              order_fr_bools.clear();
+
+              order_fr_bools.push_back(rf_bool);
+              order_fr_bools.push_back(order.order(store_a, store_b));
+
+              if (is_guarded(assume_map, store_b))
+                order_fr_bools.push_back(guard(assume_map, x, store_b));
+
               order_fr.push_back(smt::implies(
-                rf_bool and order.order(store_a, store_b),
+                smt::conjunction(order_fr_bools),
                 order.order(load, store_b)));
             }
         }
 
-        if (some_rf.empty())
+        // "assume" events are used to model conditional
+        // control flow whenever `assume_map` is nonempty
+        if (assume_map.empty() and some_rf.empty())
           return true;
 
-        all_rf.push_back(smt::disjunction(some_rf));
-        some_rf.clear();
+        if (some_rf.empty())
+        {
+          assert(!assume_map.empty());
+
+          // In the case `load_guard` is null but the load is in fact an
+          // "assume" event, then we merely want to block all the events
+          // guarded by it. This blocking is done in the last branch below.
+          if (load_guard.is_null() and !is_assume(label))
+            return true;
+
+          // `load_guard implies false` is equivalent to `not load_guard`
+          if (!load_guard.is_null())
+            all_rf.push_back(not load_guard);
+
+          // If the `load` is an "assume" event, we now need to contradict
+          // its assumption in order to block all events guarded by it.
+          if (is_assume_acquire_eq(label))
+            values.push_back(load_value != byte(label));
+          else if (is_assume_acquire_neq(label))
+            values.push_back(load_value == byte(label));
+        }
+        else
+        {
+          if (!assume_map.empty())
+          {
+            // If the `load` is an assumption and there is no `store` from which
+            // it can read to be satisfied, we must contradict the assumption in
+            // order to block events guarded by it.
+            if (is_assume_acquire_eq(label))
+              some_rf.push_back(load_value != byte(label));
+            else if (is_assume_acquire_neq(label))
+              some_rf.push_back(load_value == byte(label));
+          }
+
+          if (load_guard.is_null())
+            all_rf.push_back(smt::disjunction(some_rf));
+          else
+            all_rf.push_back(smt::implies(load_guard, smt::disjunction(some_rf)));
+
+          some_rf.clear();
+        }
       }
 
       for (Event store_a : stores)
         for (Event store_b : stores)
           if (store_a < store_b)
-          {
-            mo.push_back(order.order(store_a, store_b));
-            mo.push_back(order.order(store_b, store_a));
-          }
+            mo.push_back(order.order(store_a, store_b) or order.order(store_b, store_a));
 
     } // end of address iteration
 
     if (!all_rf.empty())
       conjuncts.push_back(smt::conjunction(all_rf));
 
-    if (!order_rf.empty())
-      conjuncts.push_back(smt::conjunction(order_rf));
+    if (!order_sw.empty())
+      conjuncts.push_back(smt::conjunction(order_sw));
 
     if (!mo.empty())
-      conjuncts.push_back(smt::disjunction(mo));
+      conjuncts.push_back(smt::conjunction(mo));
 
     if (!order_fr.empty())
       conjuncts.push_back(smt::conjunction(order_fr));
+
+    if (!values.empty())
+      conjuncts.push_back(smt::conjunction(values));
 
     return false;
   }
@@ -1380,16 +1567,122 @@ public:
   }
 };
 
+/// Symbolically represents a downward-closed set of finite partial strings
+
+/// The implementation can be understood by thinking of "boxes inside boxes".
+/// For example, consider the following nesting of boxes:
+///
+///      +---------------+
+///      |   +---+ +---+ |
+///      | X | Y | | Z | |
+///      |   +---+ +---+ |
+///      +---------------+
+///
+/// The three boxes `X`, `Y` and `Z` represent symbolic programs. We can think
+/// of `X = if_then(a, b, Y, Z)` where `a` is a memory address and `b` is a byte.
+class SymbolicProgram
+{
+private:
+  friend SymbolicProgram if_then(const Address, const Byte, const SymbolicProgram&);
+
+  /// Enforce program control flow
+
+  /// i)   `m_assume_map.size() == m_p.length()`
+  ///
+  /// ii)  For all events `e` in `m_p`, if `m_assume_map[e] != e`,
+  ///      then `is_assume(m_assume_map[e])`
+  ///
+  /// iii) For all events `e` in `m_p`, `m_assume_map[e] = e` exactly if
+  ///      `e` in `m_unguarded_events`
+  ///
+  /// iv)  `m_unguarded_events.size() <= m_p.length()`; in particular,
+  ///      `m_unguarded_events.empty()` exactly if `m_p.length() == 0`
+  AssumeMap m_assume_map;
+  Events m_unguarded_events;
+  PartialString m_p;
+
+public:
+  /// Create a symbolic program with exactly one unguarded event
+  SymbolicProgram(Label label)
+  : m_assume_map{0},
+    m_unguarded_events{0},
+    m_p{label} {}
+
+  /// Nest two symbolic programs where `p` is composed of `X.p()` and `Y.p()`
+
+  /// \pre: `p.length() == X.p().length() + Y.p().length()`
+  SymbolicProgram(
+    const SymbolicProgram& X,
+    const SymbolicProgram& Y,
+    PartialString&& p)
+  : m_assume_map{X.m_assume_map},
+    m_unguarded_events{X.m_unguarded_events},
+    m_p{std::move(p)}
+  {
+    assert(m_p.length() == (X.m_p.length() + Y.m_p.length()));
+
+    // invariant (i)
+    m_assume_map.resize(m_p.length());
+
+    const Length x_offset{X.m_p.length()};
+    for (Event e{x_offset}, e_y{0}; e_y < Y.m_p.length(); ++e, ++e_y)
+    {
+      assert(e < m_assume_map.size());
+      m_assume_map[e] = x_offset + Y.m_assume_map[e_y];
+
+      // invariant (ii)
+      assert(Y.m_assume_map[e_y] == e_y or
+        is_assume(Y.m_p.label_function().at(Y.m_assume_map[e_y])));
+
+      assert(m_assume_map[e] == e or
+        is_assume(m_p.label_function().at(m_assume_map[e])));
+    }
+
+    Event e;
+    for (Event e_y : Y.m_unguarded_events)
+    {
+      e = x_offset + e_y;
+      m_unguarded_events.push_back(e);
+
+      // invariant (iii)
+      assert(Y.m_assume_map[e_y] == e_y);
+      assert(m_assume_map[e] == e);
+    }
+
+    // invariant (iv)
+    assert(m_unguarded_events.size() <= m_p.length());
+  }
+
+  const AssumeMap& assume_map() const noexcept
+  {
+    return m_assume_map;
+  }
+
+  const Events& unguarded_events() const noexcept
+  {
+    return m_unguarded_events;
+  }
+
+  const PartialString& p() const noexcept
+  {
+    return m_p;
+  }
+};
+
+/// Concurrent composition of two programs
+SymbolicProgram operator|(const SymbolicProgram&, const SymbolicProgram&);
+
+/// Strongly sequential composition of two programs
+SymbolicProgram operator,(const SymbolicProgram&, const SymbolicProgram&);
+
+/// If acquire load on memory address `a` reads `b`, then `P` else skip
+SymbolicProgram if_then(const Address a, const Byte b, const SymbolicProgram& P);
+
 /// Symbolic data race detector
 class DataRaceDetector
 {
 private:
-  /// Maps a memory address to a list of events, sorted in ascending order
-
-  /// \remark we assume that memory addresses are dense
-  typedef std::vector<Events> PerAddressMap;
-
-  // Other SMT solvers include smt::CVC4Solver and smt::MsatSolver
+  // Other SMT solvers include smt::MsatSolver
   smt::Z3Solver m_solver;
 
   // The core of the encoding
@@ -1399,14 +1692,8 @@ private:
   friend class ReleaseAcquireModel;
   ReleaseAcquireModel m_rel_acq_model;
 
-public:
-  DataRaceDetector()
-  : m_solver{smt::QF_UFLIA_LOGIC},
-    m_po_model{},
-    m_rel_acq_model{m_po_model} {}
-
-  /// Is there a data race in `x`?
-  bool is_racy(const PartialString& x)
+  /// Is there a data race in `x` provided its guards (if any) are satisfied?
+  bool is_racy(const AssumeMap& assume_map, const PartialString& x)
   {
     cka::internal::ResetSolver reset_solver{m_solver};
 
@@ -1414,7 +1701,7 @@ public:
     if (m_po_model.strict_partial_order(x, conjuncts))
       return false;
 
-    if (m_rel_acq_model.release_acquire(m_po_model, x, conjuncts))
+    if (m_rel_acq_model.release_acquire(m_po_model, assume_map, x, conjuncts))
       return false;
 
     if (!conjuncts.empty())
@@ -1440,16 +1727,58 @@ public:
       if (stores.empty() and loads.empty())
         continue;
 
+      // 1st_dr_bools: if a store event in the outermost loop has a guard,
+      //   then it is the first element in `dr_bools`
+      smt::Bools dr_bools;
+      dr_bools.reserve(4);
+      std::size_t dr_bools_resize;
+
       for (Event store : stores)
       {
+        dr_bools.clear();
+        dr_bools_resize = 0;
+
+        // once we've added the guard of `store` (if any),
+        // we won't remove it until the next iteration
+        if (ReleaseAcquireModel::is_guarded(assume_map, store))
+        {
+          dr_bools.push_back(ReleaseAcquireModel::guard(assume_map, x, store));
+          dr_bools_resize = 1;
+        }
+
         for (Event load : loads)
-          dr.push_back(not (m_po_model.order(store, load) or
-            m_po_model.order(load, store)));
+        {
+          if (ReleaseAcquireModel::is_guarded(assume_map, load))
+            dr_bools.push_back(ReleaseAcquireModel::guard(assume_map, x, load));
+
+          dr_bools.push_back(not m_po_model.order(store, load));
+          dr_bools.push_back(not m_po_model.order(load, store));
+
+          dr.push_back(smt::conjunction(dr_bools));
+
+          // see 1st_dr_bools
+          dr_bools.resize(dr_bools_resize);
+        }
+
+        // see 1st_dr_bools
+        assert(dr_bools.size() <= dr_bools_resize);
 
         for (Event store_b : stores)
+        {
           if (store < store_b)
-            dr.push_back(not (m_po_model.order(store_b, store) or
-              m_po_model.order(store, store_b)));
+          {
+            if (ReleaseAcquireModel::is_guarded(assume_map, store_b))
+              dr_bools.push_back(ReleaseAcquireModel::guard(assume_map, x, store_b));
+
+            dr_bools.push_back(not m_po_model.order(store_b, store));
+            dr_bools.push_back(not m_po_model.order(store, store_b));
+
+            dr.push_back(smt::conjunction(dr_bools));
+
+            // see 1st_dr_bools
+            dr_bools.resize(dr_bools_resize);
+          }
+        }
       }
     }
 
@@ -1466,8 +1795,26 @@ public:
       std::cout << "Model: " << m_solver.solver().get_model() << std::endl;
 #endif
 
-    // Does there exist a data race in `x`?
     return r == smt::sat;
+  }
+
+public:
+  DataRaceDetector()
+  : m_solver{smt::QF_UFLIA_LOGIC},
+    m_po_model{},
+    m_rel_acq_model{m_po_model} {}
+
+  /// Does there exist a data race in a program without guards?
+  bool is_racy(const PartialString& x)
+  {
+    static AssumeMap s_empty_assume_map;
+    return is_racy(s_empty_assume_map, x);
+  }
+
+  /// Does there exist a feasible data race in a release-acquire program?
+  bool is_racy(const SymbolicProgram& X)
+  {
+    return is_racy(X.assume_map(), X.p());
   }
 };
 
