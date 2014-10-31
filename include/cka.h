@@ -1447,26 +1447,14 @@ public:
         if (assume_map.empty() and some_rf.empty())
           return true;
 
-        if (some_rf.empty())
+        if (some_rf.empty() and !is_assume(label))
         {
           assert(!assume_map.empty());
 
-          // In the case `load_guard` is null but the load is in fact an
-          // "assume" event, then we merely want to block all the events
-          // guarded by it. This blocking is done in the last branch below.
-          if (load_guard.is_null() and !is_assume(label))
+          if (load_guard.is_null())
             return true;
 
-          // `load_guard implies false` is equivalent to `not load_guard`
-          if (!load_guard.is_null())
-            all_rf.push_back(not load_guard);
-
-          // If the `load` is an "assume" event, we now need to contradict
-          // its assumption in order to block all events guarded by it.
-          if (is_assume_acquire_eq(label))
-            values.push_back(load_value != byte(label));
-          else if (is_assume_acquire_neq(label))
-            values.push_back(load_value == byte(label));
+          all_rf.push_back(not load_guard);
         }
         else
         {
@@ -1480,6 +1468,15 @@ public:
             else if (is_assume_acquire_neq(label))
               some_rf.push_back(load_value == byte(label));
           }
+
+          // Proof by contradiction. Suppose `some_rf` is empty and we
+          // violate the assertion. Thus `is_assume(label)` by the outer
+          // if-statement check. Hence `assume_map` is empty; otherwise,
+          // the above if-statement would have made `some_rf` nonempty.
+          // But then we returned true due to the higher up if-statement
+          // where we handle "assume" events, never even reaching this
+          // assert statement, a contradiction.
+          assert(!some_rf.empty());
 
           if (load_guard.is_null())
             all_rf.push_back(smt::disjunction(some_rf));
