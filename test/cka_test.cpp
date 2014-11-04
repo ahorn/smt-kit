@@ -3166,24 +3166,26 @@ TEST(CkaTest, SymbolicProgramGuards)
   memory::SymbolicProgram Y{if_then(a_v, b_v, V)};
   memory::SymbolicProgram Z{(P , if_then(a_w, b_w, (X | Y)) , Q)};
 
-  EXPECT_FALSE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 0));
-  EXPECT_FALSE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 1));
+  memory::ReleaseAcquireModel<smt::Int, smt::Int> rel_acq_model;
 
-  EXPECT_TRUE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 2));
-  EXPECT_TRUE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 3));
-  EXPECT_TRUE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 4));
-  EXPECT_TRUE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 5));
+  EXPECT_FALSE(rel_acq_model.is_guarded(Z.assume_map(), 0));
+  EXPECT_FALSE(rel_acq_model.is_guarded(Z.assume_map(), 1));
 
-  EXPECT_FALSE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 6));
+  EXPECT_TRUE(rel_acq_model.is_guarded(Z.assume_map(), 2));
+  EXPECT_TRUE(rel_acq_model.is_guarded(Z.assume_map(), 3));
+  EXPECT_TRUE(rel_acq_model.is_guarded(Z.assume_map(), 4));
+  EXPECT_TRUE(rel_acq_model.is_guarded(Z.assume_map(), 5));
+
+  EXPECT_FALSE(rel_acq_model.is_guarded(Z.assume_map(), 6));
 
   // 7 and 8 are not in `Z.p()`
-  EXPECT_FALSE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 7));
-  EXPECT_FALSE(memory::ReleaseAcquireModel::is_guarded(Z.assume_map(), 8));
+  EXPECT_FALSE(rel_acq_model.is_guarded(Z.assume_map(), 7));
+  EXPECT_FALSE(rel_acq_model.is_guarded(Z.assume_map(), 8));
 
-  smt::Bool g2{memory::ReleaseAcquireModel::guard(Z.assume_map(), Z.p(), 2)};
-  smt::Bool g3{memory::ReleaseAcquireModel::guard(Z.assume_map(), Z.p(), 3)};
-  smt::Bool g4{memory::ReleaseAcquireModel::guard(Z.assume_map(), Z.p(), 4)};
-  smt::Bool g5{memory::ReleaseAcquireModel::guard(Z.assume_map(), Z.p(), 5)};
+  smt::Bool g2{rel_acq_model.guard(Z.assume_map(), Z.p(), 2)};
+  smt::Bool g3{rel_acq_model.guard(Z.assume_map(), Z.p(), 3)};
+  smt::Bool g4{rel_acq_model.guard(Z.assume_map(), Z.p(), 4)};
+  smt::Bool g5{rel_acq_model.guard(Z.assume_map(), Z.p(), 5)};
 
   EXPECT_FALSE(g2.is_null());
   EXPECT_FALSE(g3.is_null());

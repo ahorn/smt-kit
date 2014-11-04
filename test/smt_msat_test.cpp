@@ -173,6 +173,24 @@ TEST(SmtMsatTest, PositiveIntLiteral)
   EXPECT_EQ("42", std::string(str));
 }
 
+TEST(SmtMsatTest, PositiveRealLiteral)
+{
+  MsatSolver s;
+
+  const Real e0 = literal<Real>(42L);
+
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
+
+  const msat_env env = s.env();
+  const msat_term t0 = s.term();
+  EXPECT_FALSE(MSAT_ERROR_TERM(t0));
+
+  EXPECT_TRUE(msat_term_is_number(env, t0));
+
+  char *str = msat_term_repr(t0);
+  EXPECT_EQ("42", std::string(str));
+}
+
 TEST(SmtMsatTest, NegativeIntLiteral)
 {
   MsatSolver s;
@@ -189,6 +207,24 @@ TEST(SmtMsatTest, NegativeIntLiteral)
 
   const msat_type type = msat_term_get_type(t0);
   EXPECT_TRUE(msat_is_integer_type(env, type));
+
+  char *str = msat_term_repr(t0);
+  EXPECT_EQ("-42", std::string(str));
+}
+
+TEST(SmtMsatTest, NegativeRealLiteral)
+{
+  MsatSolver s;
+
+  const Real e0 = literal<Real>(-42L);
+
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
+
+  const msat_env env = s.env();
+  const msat_term t0 = s.term();
+  EXPECT_FALSE(MSAT_ERROR_TERM(t0));
+
+  EXPECT_TRUE(msat_term_is_number(env, t0));
 
   char *str = msat_term_repr(t0);
   EXPECT_EQ("-42", std::string(str));
@@ -381,6 +417,84 @@ TEST(SmtMsatTest, IntDeclExpr)
     int_type = msat_get_integer_type(env);
     EXPECT_FALSE(MSAT_ERROR_TYPE(int_type));
     x_decl = msat_declare_function(env, "x", int_type);
+    EXPECT_FALSE(MSAT_ERROR_DECL(x_decl));
+    x_term = msat_make_constant(env, x_decl);
+    EXPECT_FALSE(MSAT_ERROR_TERM(x_term));
+    eq_term = msat_make_equal(env, x_term, t0);
+    EXPECT_FALSE(MSAT_ERROR_TERM(eq_term));
+    neq_term = msat_make_not(env, eq_term);
+    EXPECT_FALSE(MSAT_ERROR_TERM(neq_term));
+    EXPECT_EQ(0, msat_assert_formula(env, neq_term));
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+}
+
+TEST(SmtMsatTest, RealDeclExpr)
+{
+  MsatSolver s;
+
+  const Real e0 = any<Real>("x");
+
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e0).encode(s));
+
+  const msat_env env = s.env();
+  const msat_term t0 = s.term();
+  EXPECT_TRUE(msat_term_is_constant(env, t0));
+
+  const msat_type type = msat_term_get_type(t0);
+  EXPECT_TRUE(msat_is_rational_type(env, type));
+
+  EXPECT_EQ(sat, s.check());
+  s.push();
+  {
+    s.add(42 == e0);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    s.add(42 != e0);
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  // s.check() may return sat if there are no assertions
+  s.add(literal<Bool>(true));
+
+  msat_type rational_type;
+  msat_decl x_decl;
+  msat_term x_term, eq_term, neq_term;
+  s.push();
+  {
+    rational_type = msat_get_rational_type(env);
+    EXPECT_FALSE(MSAT_ERROR_TYPE(rational_type));
+    x_decl = msat_declare_function(env, "x", rational_type);
+    EXPECT_FALSE(MSAT_ERROR_DECL(x_decl));
+    x_term = msat_make_constant(env, x_decl);
+    EXPECT_FALSE(MSAT_ERROR_TERM(x_term));
+    eq_term = msat_make_equal(env, x_term, t0);
+    EXPECT_FALSE(MSAT_ERROR_TERM(eq_term));
+    EXPECT_EQ(0, msat_assert_formula(env, eq_term));
+    EXPECT_EQ(sat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    neq_term = msat_make_not(env, eq_term);
+    EXPECT_FALSE(MSAT_ERROR_TERM(neq_term));
+    EXPECT_EQ(0, msat_assert_formula(env, neq_term));
+    EXPECT_EQ(unsat, s.check());
+  }
+  s.pop();
+
+  s.push();
+  {
+    rational_type = msat_get_rational_type(env);
+    EXPECT_FALSE(MSAT_ERROR_TYPE(rational_type));
+    x_decl = msat_declare_function(env, "x", rational_type);
     EXPECT_FALSE(MSAT_ERROR_DECL(x_decl));
     x_term = msat_make_constant(env, x_decl);
     EXPECT_FALSE(MSAT_ERROR_TERM(x_term));
@@ -885,8 +999,29 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorGEQ)
   EXPECT_EQ("(`not` (`bvult_64` 42_64 x))", std::string(str));
 }
 
-#define SMT_MSAT_TEST_MATH_BINARY_OP(op, opcode, opname)                \
-  TEST(SmtMsatTest, MathBinaryOperatorq##opcode)                        \
+#define SMT_MSAT_TEST_MATH_BINARY_OP_REAL(op, opcode, opname)           \
+  TEST(SmtMsatTest, MathBinaryOperatorReal##opcode)                     \
+  {                                                                     \
+    MsatSolver s;                                                       \
+                                                                        \
+    const Real e0 = any<Real>("x");                                     \
+    const Real e1(42 op e0);                                            \
+                                                                        \
+    EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));               \
+                                                                        \
+    const msat_env env = s.env();                                       \
+    const msat_term t0 = s.term();                                      \
+    EXPECT_TRUE(msat_term_is_##opname(env, t0));                        \
+                                                                        \
+    const msat_type type = msat_term_get_type(t0);                      \
+    EXPECT_TRUE(msat_is_rational_type(env, type));                      \
+                                                                        \
+    char *str = msat_term_repr(t0);                                     \
+    EXPECT_EQ("(`" #op "_rat` 42 x)", std::string(str));                \
+  }                                                                     \
+
+#define SMT_MSAT_TEST_MATH_BINARY_OP_INT(op, opcode, opname)            \
+  TEST(SmtMsatTest, MathBinaryOperatorInt##opcode)                      \
   {                                                                     \
     MsatSolver s;                                                       \
                                                                         \
@@ -907,10 +1042,13 @@ TEST(SmtMsatTest, BvUnsignedBinaryOperatorGEQ)
   }                                                                     \
 
 // most other integer operators are unsupported by MathSAT5
-SMT_MSAT_TEST_MATH_BINARY_OP(+, ADD, plus)
-SMT_MSAT_TEST_MATH_BINARY_OP(*, MUL, times)
+SMT_MSAT_TEST_MATH_BINARY_OP_INT(+, ADD, plus)
+SMT_MSAT_TEST_MATH_BINARY_OP_INT(*, MUL, times)
 
-TEST(SmtMsatTest, MathBinaryOperatorEQL)
+SMT_MSAT_TEST_MATH_BINARY_OP_REAL(+, ADD, plus)
+SMT_MSAT_TEST_MATH_BINARY_OP_REAL(*, MUL, times)
+
+TEST(SmtMsatTest, MathBinaryOperatorIntEQL)
 {
   MsatSolver s;
 
@@ -930,7 +1068,7 @@ TEST(SmtMsatTest, MathBinaryOperatorEQL)
   EXPECT_EQ("(`=_int` x 42)", std::string(str));
 }
 
-TEST(SmtMsatTest, MathBinaryOperatorLSS)
+TEST(SmtMsatTest, MathBinaryOperatorIntLSS)
 {
   MsatSolver s;
 
@@ -950,7 +1088,7 @@ TEST(SmtMsatTest, MathBinaryOperatorLSS)
   EXPECT_EQ("(`and` (`<=_int` 42 x) (`not` (`=_int` x 42)))", std::string(str));
 }
 
-TEST(SmtMsatTest, MathBinaryOperatorGTR)
+TEST(SmtMsatTest, MathBinaryOperatorIntGTR)
 {
   MsatSolver s;
 
@@ -970,7 +1108,7 @@ TEST(SmtMsatTest, MathBinaryOperatorGTR)
   EXPECT_EQ("(`and` (`<=_int` x 42) (`not` (`=_int` x 42)))", std::string(str));
 }
 
-TEST(SmtMsatTest, MathBinaryOperatorNEQ)
+TEST(SmtMsatTest, MathBinaryOperatorIntNEQ)
 {
   MsatSolver s;
 
@@ -990,7 +1128,7 @@ TEST(SmtMsatTest, MathBinaryOperatorNEQ)
   EXPECT_EQ("(`not` (`=_int` x 42))", std::string(str));
 }
 
-TEST(SmtMsatTest, MathBinaryOperatorLEQ)
+TEST(SmtMsatTest, MathBinaryOperatorIntLEQ)
 {
   MsatSolver s;
 
@@ -1010,7 +1148,7 @@ TEST(SmtMsatTest, MathBinaryOperatorLEQ)
   EXPECT_EQ("(`<=_int` 42 x)", std::string(str));
 }
 
-TEST(SmtMsatTest, MathBinaryOperatorGEQ)
+TEST(SmtMsatTest, MathBinaryOperatorIntGEQ)
 {
   MsatSolver s;
 
@@ -1028,6 +1166,126 @@ TEST(SmtMsatTest, MathBinaryOperatorGEQ)
 
   char *str = msat_term_repr(t0);
   EXPECT_EQ("(`<=_int` x 42)", std::string(str));
+}
+
+TEST(SmtMsatTest, MathBinaryOperatorRealEQL)
+{
+  MsatSolver s;
+
+  const Real e0 = any<Real>("x");
+  const Bool e1(42 == e0);
+
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
+
+  const msat_env env = s.env();
+  const msat_term t0 = s.term();
+  EXPECT_TRUE(msat_term_is_equal(env, t0));
+
+  const msat_type type = msat_term_get_type(t0);
+  EXPECT_TRUE(msat_is_bool_type(env, type));
+
+  char *str = msat_term_repr(t0);
+  EXPECT_EQ("(`=_rat` x 42)", std::string(str));
+}
+
+TEST(SmtMsatTest, MathBinaryOperatorRealLSS)
+{
+  MsatSolver s;
+
+  const Real e0 = any<Real>("x");
+  const Bool e1(42 < e0);
+
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
+
+  const msat_env env = s.env();
+  const msat_term t0 = s.term();
+  EXPECT_TRUE(msat_term_is_and(env, t0));
+
+  const msat_type type = msat_term_get_type(t0);
+  EXPECT_TRUE(msat_is_bool_type(env, type));
+
+  char *str = msat_term_repr(t0);
+  EXPECT_EQ("(`and` (`<=_rat` 42 x) (`not` (`=_rat` x 42)))", std::string(str));
+}
+
+TEST(SmtMsatTest, MathBinaryOperatorRealGTR)
+{
+  MsatSolver s;
+
+  const Real e0 = any<Real>("x");
+  const Bool e1(42 > e0);
+
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
+
+  const msat_env env = s.env();
+  const msat_term t0 = s.term();
+  EXPECT_TRUE(msat_term_is_and(env, t0));
+
+  const msat_type type = msat_term_get_type(t0);
+  EXPECT_TRUE(msat_is_bool_type(env, type));
+
+  char *str = msat_term_repr(t0);
+  EXPECT_EQ("(`and` (`<=_rat` x 42) (`not` (`=_rat` x 42)))", std::string(str));
+}
+
+TEST(SmtMsatTest, MathBinaryOperatorRealNEQ)
+{
+  MsatSolver s;
+
+  const Real e0 = any<Real>("x");
+  const Bool e1(42 != e0);
+
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
+
+  const msat_env env = s.env();
+  const msat_term t0 = s.term();
+  EXPECT_TRUE(msat_term_is_not(env, t0));
+
+  const msat_type type = msat_term_get_type(t0);
+  EXPECT_TRUE(msat_is_bool_type(env, type));
+
+  char *str = msat_term_repr(t0);
+  EXPECT_EQ("(`not` (`=_rat` x 42))", std::string(str));
+}
+
+TEST(SmtMsatTest, MathBinaryOperatorRealLEQ)
+{
+  MsatSolver s;
+
+  const Real e0 = any<Real>("x");
+  const Bool e1(42 <= e0);
+
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
+
+  const msat_env env = s.env();
+  const msat_term t0 = s.term();
+  EXPECT_TRUE(msat_term_is_leq(env, t0));
+
+  const msat_type type = msat_term_get_type(t0);
+  EXPECT_TRUE(msat_is_bool_type(env, type));
+
+  char *str = msat_term_repr(t0);
+  EXPECT_EQ("(`<=_rat` 42 x)", std::string(str));
+}
+
+TEST(SmtMsatTest, MathBinaryOperatorRealGEQ)
+{
+  MsatSolver s;
+
+  const Real e0 = any<Real>("x");
+  const Bool e1(42 >= e0);
+
+  EXPECT_EQ(OK, static_cast<SharedExpr>(e1).encode(s));
+
+  const msat_env env = s.env();
+  const msat_term t0 = s.term();
+  EXPECT_TRUE(msat_term_is_leq(env, t0));
+
+  const msat_type type = msat_term_get_type(t0);
+  EXPECT_TRUE(msat_is_bool_type(env, type));
+
+  char *str = msat_term_repr(t0);
+  EXPECT_EQ("(`<=_rat` x 42)", std::string(str));
 }
 
 TEST(SmtMsatTest, BoolUnaryOperatorLNOT)

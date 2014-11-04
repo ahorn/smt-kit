@@ -974,7 +974,7 @@ public:
   using internal::ProgramChecker<Refinement>::check;
 
   Refinement()
-  : m_solver(smt::QF_UFLIA_LOGIC),
+  : m_solver{smt::QF_UFLIA_LOGIC},
     m_event_func{"event"},
     m_label_func_x{"label_x"},
     m_po_model{},
@@ -1216,15 +1216,15 @@ namespace internal
 typedef std::vector<Event> AssumeMap;
 
 /// A partial order model of C++14-style release-acquire semantics
+
+/// Template arguments:
+///
+///   ByteSort - SMT sort representing a read or written `Byte`
+///   StoreSort - SMT sort representing a store event from which a load reads
+template<class ByteSort, class StoreSort>
 class ReleaseAcquireModel
 {
 private:
-  /// SMT sort representing a read or written `Byte`
-  typedef smt::Int ByteSort;
-
-  /// Sequenced-before relation of program instructions
-  const PartialOrderModel& m_po_model;
-
   /// SMT constant for a value that was read or written by `e`
   static ByteSort value(const Event e)
   {
@@ -1233,9 +1233,6 @@ private:
   }
 
 public:
-  ReleaseAcquireModel(const PartialOrderModel& po_model)
-  : m_po_model(po_model) {}
-
   /// Can `e` only be executed when a certain condition holds?
   static bool is_guarded(const AssumeMap& assume_map, const Event e)
   {
@@ -1322,7 +1319,7 @@ public:
 
     Address address;
     smt::Bools sw_then;
-    EventSort rf_event;
+    StoreSort rf_event;
     ByteSort load_value;
     Label label, store_label;
     smt::Bools order_fr_bools;
@@ -1390,7 +1387,7 @@ public:
         assert(is_acquire_load(label));
 
         load_value = value(load);
-        rf_event = smt::any<EventSort>(s_rf_prefix, load);
+        rf_event = smt::any<StoreSort>(s_rf_prefix, load);
 
         if (is_guarded(assume_map, load))
           load_guard = guard(assume_map, x, load);
@@ -1521,11 +1518,11 @@ class Refinement
   public cka::internal::Refinement
 {
 private:
-  friend class ReleaseAcquireModel;
+  template<class ByteSort, class StoreSort> friend class ReleaseAcquireModel;
 
   /// Increase precision of the generic partial string refinement checker
   cka::Refinement m_refinement;
-  ReleaseAcquireModel m_rel_acq_model;
+  ReleaseAcquireModel<smt::Int, smt::Int> m_rel_acq_model;
 
   /// Encode happens-before relation with monotonic bijective morphism
 
@@ -1544,7 +1541,7 @@ public:
 
   Refinement()
   : m_refinement{},
-    m_rel_acq_model(m_refinement.m_po_model) {}
+    m_rel_acq_model() {}
 
   /// Does `x` refine `y` when `y` satisfies the memory axioms?
   bool check(const cka::PartialString& x, const PartialString& y)
@@ -1675,6 +1672,37 @@ SymbolicProgram operator,(const SymbolicProgram&, const SymbolicProgram&);
 /// If acquire load on memory address `a` reads `b`, then `P` else skip
 SymbolicProgram if_then(const Address a, const Byte b, const SymbolicProgram& P);
 
+/// Encodes sequenced-before relation as an linear real arithmetic formula
+class TotalOrderModel
+{
+public:
+  TotalOrderModel() {}
+
+  /// Adds the symbolic ordering constraint that `a` enables `b`
+  smt::Bool order(Event a, Event b) const
+  {
+    static const char* const s_t_prefix = "t!";
+
+    smt::Real a_time{smt::any<smt::Real>(s_t_prefix, a)};
+    smt::Real b_time{smt::any<smt::Real>(s_t_prefix, b)};
+
+    return a_time < b_time;
+  }
+
+  bool strict_partial_order(const PartialString& p, smt::Bools& conjuncts)
+  {
+    // in the worst case, encoding is cubic in the number of events in `p`
+    const Length len{p.length()};
+    conjuncts.reserve(conjuncts.size() + p.strict_partial_order().size());
+
+    // transitive reduction of `p`
+    for (const PartialString::EventPair& pair : p.strict_partial_order())
+      conjuncts.push_back(order(pair.first, pair.second));
+
+    return false;
+  }
+};
+
 /// Symbolic data race detector
 class DataRaceDetector
 {
@@ -1683,11 +1711,18 @@ private:
   smt::Z3Solver m_solver;
 
   // The core of the encoding
-  PartialOrderModel m_po_model;
+#ifdef _CKA_REAL_
+  TotalOrderModel m_order_model;
+#else
+  PartialOrderModel m_order_model;
+#endif
 
   // Memory axioms
-  friend class ReleaseAcquireModel;
-  ReleaseAcquireModel m_rel_acq_model;
+#ifdef _CKA_REAL_
+  ReleaseAcquireModel<smt::Real, smt::Real> m_rel_acq_model;
+#else
+  ReleaseAcquireModel<smt::Int, smt::Int> m_rel_acq_model;
+#endif
 
   /// Is there a data race in `x` provided its guards (if any) are satisfied?
   bool is_racy(const AssumeMap& assume_map, const PartialString& x)
@@ -1695,10 +1730,10 @@ private:
     cka::internal::ResetSolver reset_solver{m_solver};
 
     smt::Bools conjuncts;
-    if (m_po_model.strict_partial_order(x, conjuncts))
+    if (m_order_model.strict_partial_order(x, conjuncts))
       return false;
 
-    if (m_rel_acq_model.release_acquire(m_po_model, assume_map, x, conjuncts))
+    if (m_rel_acq_model.release_acquire(m_order_model, assume_map, x, conjuncts))
       return false;
 
     if (!conjuncts.empty())
@@ -1737,19 +1772,19 @@ private:
 
         // once we've added the guard of `store` (if any),
         // we won't remove it until the next iteration
-        if (ReleaseAcquireModel::is_guarded(assume_map, store))
+        if (m_rel_acq_model.is_guarded(assume_map, store))
         {
-          dr_bools.push_back(ReleaseAcquireModel::guard(assume_map, x, store));
+          dr_bools.push_back(m_rel_acq_model.guard(assume_map, x, store));
           dr_bools_resize = 1;
         }
 
         for (Event load : loads)
         {
-          if (ReleaseAcquireModel::is_guarded(assume_map, load))
-            dr_bools.push_back(ReleaseAcquireModel::guard(assume_map, x, load));
+          if (m_rel_acq_model.is_guarded(assume_map, load))
+            dr_bools.push_back(m_rel_acq_model.guard(assume_map, x, load));
 
-          dr_bools.push_back(not m_po_model.order(store, load));
-          dr_bools.push_back(not m_po_model.order(load, store));
+          dr_bools.push_back(not m_order_model.order(store, load));
+          dr_bools.push_back(not m_order_model.order(load, store));
 
           dr.push_back(smt::conjunction(dr_bools));
 
@@ -1764,11 +1799,11 @@ private:
         {
           if (store < store_b)
           {
-            if (ReleaseAcquireModel::is_guarded(assume_map, store_b))
-              dr_bools.push_back(ReleaseAcquireModel::guard(assume_map, x, store_b));
+            if (m_rel_acq_model.is_guarded(assume_map, store_b))
+              dr_bools.push_back(m_rel_acq_model.guard(assume_map, x, store_b));
 
-            dr_bools.push_back(not m_po_model.order(store_b, store));
-            dr_bools.push_back(not m_po_model.order(store, store_b));
+            dr_bools.push_back(not m_order_model.order(store_b, store));
+            dr_bools.push_back(not m_order_model.order(store, store_b));
 
             dr.push_back(smt::conjunction(dr_bools));
 
@@ -1797,9 +1832,13 @@ private:
 
 public:
   DataRaceDetector()
+#ifdef _CKA_REAL_
+  : m_solver{smt::QF_LRA_LOGIC},
+#else
   : m_solver{smt::QF_UFLIA_LOGIC},
-    m_po_model{},
-    m_rel_acq_model{m_po_model} {}
+#endif
+    m_order_model{},
+    m_rel_acq_model{} {}
 
   /// Does there exist a data race in a program without guards?
   bool is_racy(const PartialString& x)

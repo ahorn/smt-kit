@@ -96,7 +96,7 @@ SMT_Z3_CAST_ENCODE_BUILTIN_LITERAL(unsigned long)
     } else if (sort.is_int()) {
       z3_sort = m_z3_context.int_sort();
     } else if (sort.is_real()) {
-      z3_sort = m_z3_context.int_sort();
+      z3_sort = m_z3_context.real_sort();
     } else if (sort.is_bv()) {
       z3_sort = m_z3_context.bv_sort(sort.bv_size());
     } else if (sort.is_array()) {

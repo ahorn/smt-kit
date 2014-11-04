@@ -57,7 +57,7 @@ private:
     assert(!sort.is_bool());
 
     const char * const literal_str = literal_rep.c_str(); 
-    if (sort.is_int()) {
+    if (sort.is_int() or sort.is_real()) {
       cache_term(expr, msat_make_number(m_env, literal_str));
     } else if (sort.is_bv()) {
       constexpr size_t base = 10;
@@ -146,6 +146,8 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       type = msat_get_bool_type(m_env);
     } else if (sort.is_int()) {
       type = msat_get_integer_type(m_env);
+    } else if (sort.is_real()) {
+      type = msat_get_rational_type(m_env);
     } else if (sort.is_bv()) {
       type = msat_get_bv_type(m_env, sort.bv_size());
     } else if (sort.is_func()) {
@@ -638,7 +640,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
     if (sort.is_bv())
       cache_term(expr, msat_make_bv_plus(m_env, lterm, rterm));
-    else if (sort.is_int())
+    else if (sort.is_int() or sort.is_real())
       cache_term(expr, msat_make_plus(m_env, lterm, rterm));
     else
       return UNSUPPORT_ERROR;
@@ -670,7 +672,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
 
     if (sort.is_bv())
       cache_term(expr, msat_make_bv_times(m_env, lterm, rterm));
-    else if (sort.is_int())
+    else if (sort.is_int() or sort.is_real())
       cache_term(expr, msat_make_times(m_env, lterm, rterm));
     else
       return UNSUPPORT_ERROR;
@@ -772,7 +774,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       else
         cache_term(expr, msat_make_bv_ult(m_env, lterm, rterm));
     }
-    else if (larg.sort().is_int())
+    else if (larg.sort().is_int() or larg.sort().is_real())
     {
       const msat_term leq_term = msat_make_leq(m_env, lterm, rterm);
       assert(!MSAT_ERROR_TERM(leq_term));
@@ -818,7 +820,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       else
         cache_term(expr, msat_make_bv_ult(m_env, rterm, lterm));
     }
-    else if (larg.sort().is_int())
+    else if (larg.sort().is_int() or larg.sort().is_real())
     {
       const msat_term geq_term = msat_make_leq(m_env, rterm, lterm);
       assert(!MSAT_ERROR_TERM(geq_term));
@@ -893,7 +895,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       else
         cache_term(expr, msat_make_bv_uleq(m_env, lterm, rterm));
     }
-    else if (larg.sort().is_int())
+    else if (larg.sort().is_int() or larg.sort().is_real())
     {
       cache_term(expr, msat_make_leq(m_env, lterm, rterm));
     }
@@ -929,7 +931,7 @@ SMT_MSAT_CAST_ENCODE_BUILTIN_LITERAL(unsigned long long)
       else
         cache_term(expr, msat_make_bv_uleq(m_env, rterm, lterm));
     }
-    else if (larg.sort().is_int())
+    else if (larg.sort().is_int() or larg.sort().is_real())
     {
       cache_term(expr, msat_make_leq(m_env, rterm, lterm));
     }
