@@ -1,0 +1,137 @@
+<?xml version="1.0"?>
+<!DOCTYPE specification SYSTEM "seed.dtd">
+
+<!-- Context-free grammar for the syntax of star-free CKA expressions -->
+<specification>
+  <start idref="StarFree"/>
+
+  <union id="StarFree">
+    <child idref="NoneLoad"/>
+    <child idref="AcquireLoad"/>
+    <child idref="NoneStoreA"/>
+    <child idref="NoneStoreB"/>
+    <child idref="NoneStoreC"/>
+    <child idref="ReleaseStoreA"/>
+    <child idref="ReleaseStoreB"/>
+    <child idref="ReleaseStoreC"/>
+    <child idref="SequentialComposition"/>
+    <child idref="ConcurrentComposition"/>
+    <child idref="IfThenA0"/>
+    <child idref="IfThenA1"/>
+    <child idref="IfThenA2"/>
+    <child idref="IfThenB0"/>
+    <child idref="IfThenB1"/>
+    <child idref="IfThenB2"/>
+    <child idref="IfThenC0"/>
+    <child idref="IfThenC1"/>
+    <child idref="IfThenC2"/>
+  </union>
+
+  <constants id="Address">
+    <symbol value="s_address_a"/>
+    <symbol value="s_address_b"/>
+    <symbol value="s_address_c"/>
+  </constants>
+
+  <constants id="Byte">
+    <symbol value="'\0'"/>
+    <symbol value="'\1'"/>
+    <symbol value="'\2'"/>
+  </constants>
+
+  <unary id="IfThenA0">
+    <symbol value="if_then_a_0"/>
+    <child idref="StarFree"/>
+  </unary>
+
+  <unary id="IfThenA1">
+    <symbol value="if_then_a_1"/>
+    <child idref="StarFree"/>
+  </unary>
+
+  <unary id="IfThenA2">
+    <symbol value="if_then_a_2"/>
+    <child idref="StarFree"/>
+  </unary>
+
+  <unary id="IfThenB0">
+    <symbol value="if_then_b_0"/>
+    <child idref="StarFree"/>
+  </unary>
+
+  <unary id="IfThenB1">
+    <symbol value="if_then_b_1"/>
+    <child idref="StarFree"/>
+  </unary>
+
+  <unary id="IfThenB2">
+    <symbol value="if_then_b_2"/>
+    <child idref="StarFree"/>
+  </unary>
+
+  <unary id="IfThenC0">
+    <symbol value="if_then_c_0"/>
+    <child idref="StarFree"/>
+  </unary>
+
+  <unary id="IfThenC1">
+    <symbol value="if_then_c_1"/>
+    <child idref="StarFree"/>
+  </unary>
+
+  <unary id="IfThenC2">
+    <symbol value="if_then_c_2"/>
+    <child idref="StarFree"/>
+  </unary>
+
+  <unary id="NoneLoad">
+    <symbol value="none_load"/>
+    <child idref="Address"/>
+  </unary>
+
+  <unary id="AcquireLoad">
+    <symbol value="acquire_load"/>
+    <child idref="Address"/>
+  </unary>
+
+  <unary id="NoneStoreA">
+    <symbol value="none_store_a"/>
+    <child idref="Byte"/>
+  </unary>
+
+  <unary id="NoneStoreB">
+    <symbol value="none_store_b"/>
+    <child idref="Byte"/>
+  </unary>
+
+  <unary id="NoneStoreC">
+    <symbol value="none_store_c"/>
+    <child idref="Byte"/>
+  </unary>
+
+  <unary id="ReleaseStoreA">
+    <symbol value="release_store_a"/>
+    <child idref="Byte"/>
+  </unary>
+
+  <unary id="ReleaseStoreB">
+    <symbol value="release_store_b"/>
+    <child idref="Byte"/>
+  </unary>
+
+  <unary id="ReleaseStoreC">
+    <symbol value="release_store_c"/>
+    <child idref="Byte"/>
+  </unary>
+
+  <binary_sym id="ConcurrentComposition">
+    <symbol value="|"/>
+    <child idref="StarFree"/>
+  </binary_sym>
+
+  <binary_sym id="SequentialComposition">
+    <symbol value=","/>
+    <child idref="StarFree"/>
+  </binary_sym>
+
+</specification>

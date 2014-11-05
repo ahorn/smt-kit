@@ -251,11 +251,181 @@ void cka_benchmark()
   file << "\\end{table}" << std::endl;
   file.close();
 }
-#endif
 
 TEST(CkaPerformanceTest, Benchmark)
 {
-#ifdef _CKA_PERFORMANCE_TEST_
   cka_benchmark();
-#endif
 }
+#endif
+
+#ifdef _DRD_PERFORMANCE_TEST_
+/// Since the Seed tool does not supports neither binary nor ternary
+/// function applications, we explicitly enumerate the arguments to
+// the functions in the `memory` namespace.
+static constexpr memory::Address s_address_a = 0U;
+static constexpr memory::Address s_address_b = 1U;
+static constexpr memory::Address s_address_c = 2U;
+
+typedef memory::SymbolicProgram SymbolicProgram;
+
+#define IF_THEN_DEF(address, byte)                                          \
+static SymbolicProgram if_then_##address##_##byte(const SymbolicProgram& P) \
+{                                                                           \
+  return if_then(s_address_##a, '\0' + (char) (byte), P);                   \
+}
+
+IF_THEN_DEF(a, 0)
+IF_THEN_DEF(b, 0)
+IF_THEN_DEF(c, 0)
+
+IF_THEN_DEF(a, 1)
+IF_THEN_DEF(b, 1)
+IF_THEN_DEF(c, 1)
+
+IF_THEN_DEF(a, 2)
+IF_THEN_DEF(b, 2)
+IF_THEN_DEF(c, 2)
+
+SymbolicProgram none_load(const memory::Address address)
+{
+  return {memory::none_load_label(address)};
+}
+
+SymbolicProgram acquire_load(const memory::Address address)
+{
+  return {memory::acquire_load_label(address)};
+}
+
+#define STORE_DEF(mode, address)                                            \
+SymbolicProgram mode##_store_##address(const memory::Byte byte)             \
+{                                                                           \
+  return {memory::mode##_store_label(s_address_##address, byte)};           \
+}
+
+STORE_DEF(none, a)
+STORE_DEF(none, b)
+STORE_DEF(none, c)
+
+STORE_DEF(release, a)
+STORE_DEF(release, b)
+STORE_DEF(release, c)
+
+typedef std::vector<memory::SymbolicProgram> SymbolicPrograms;
+
+/* Experimental results with random data set
+
+   MathSAT5 results if _CKA_REAL_ is disabled:
+
+   Benchmark & Number of instructions & Racy & Time (s) \\ \midrule
+   0 & 37 & 0 & 111\\
+   1 & 37 & 0 & 105\\
+   2 & 39 & 0 & 161\\
+   3 & 41 & 0 & 236\\
+   4 & 39 & 0 & 164\\
+   5 & 39 & 0 & 166\\
+   6 & 41 & 0 & 241\\
+   7 & 37 & 0 & 111\\
+   8 & 35 & 0 & 69\\
+   9 & 43 & 0 & 329\\
+
+   Yices 2 results if _CKA_REAL_ is disabled:
+
+   0 & 37 & 0 & 87\\
+   1 & 37 & 0 & 83\\
+   2 & 39 & 0 & 127\\
+   3 & 41 & 0 & 178\\
+   4 & 39 & 0 & 119\\
+   5 & 39 & 0 & 129\\
+   6 & 41 & 0 & 185\\
+   7 & 37 & 0 & 80\\
+   8 & 35 & 0 & 53\\
+   9 & 43 & 0 & 271\\
+
+   Z3 results if _CKA_REAL_ is disabled:
+
+   0 & 37 & 0 & 97\\
+   1 & 37 & 0 & 94\\
+   2 & 39 & 0 & 139\\
+   3 & 41 & 0 & 197\\
+   4 & 39 & 0 & 138\\
+   5 & 39 & 0 & 136\\
+   6 & 41 & 0 & 202\\
+   7 & 37 & 0 & 92\\
+   8 & 35 & 0 & 62\\
+   9 & 43 & 0 & 308\\
+
+   In the case of MathSAT5, Yices 2 and Z3,
+   if _CKA_REAL_ is enabled we get the following:
+
+   0 & 37 & 0 & 0\\
+   1 & 37 & 0 & 0\\
+   2 & 39 & 0 & 0\\
+   3 & 41 & 0 & 0\\
+   4 & 39 & 0 & 0\\
+   5 & 39 & 0 & 0\\
+   6 & 41 & 0 & 0\\
+   7 & 37 & 0 & 0\\
+   8 & 35 & 0 & 0\\
+   9 & 43 & 0 & 0\\
+*/
+void drd_benchmark()
+{
+  memory::DataRaceDetector drd;
+
+  auto start = std::chrono::system_clock::now();
+  auto end = std::chrono::system_clock::now();
+  std::chrono::seconds seconds;
+
+  std::ofstream file("drd_benchmark_results.tex");
+
+  file << "\\begin{table}" << std::endl;
+  file << "\\begin{center}" << std::endl;
+  file << "\\begin{tabular}{r|r|r|r}" << std::endl;
+  file << "\\toprule" << std::endl;
+  file << "Benchmark & Number of instructions & Racy & Time (s) \\\\ \\midrule" << std::endl;
+
+  SymbolicPrograms benchmarks = {
+    /* 0 */ { if_then_a_2(if_then_c_2(if_then_c_2(if_then_b_2(if_then_a_1(if_then_b_1((if_then_b_1(none_load(s_address_b)) | if_then_b_2(if_then_c_1(if_then_a_1(if_then_b_1(if_then_a_0((if_then_c_2(if_then_b_1((if_then_c_2(none_store_c('\2')) | if_then_c_0((if_then_c_0(release_store_c('\2')) , if_then_b_0(if_then_c_0(release_store_c('\1')))))))) | if_then_a_2(if_then_c_0(if_then_c_0(if_then_c_0(if_then_a_2(if_then_a_2((none_store_c('\0') | if_then_c_2(if_then_a_0(if_then_b_2((if_then_a_1(none_load(s_address_a)) , if_then_a_0(none_load(s_address_c)))))))))))))))))))))))))) },
+    /* 1 */ { (if_then_b_2(if_then_a_2(if_then_c_1(if_then_c_2(if_then_b_0(if_then_a_0(acquire_load(s_address_b))))))) | if_then_b_1(if_then_a_1(if_then_a_0((release_store_c('\1') , if_then_c_2(if_then_b_1(if_then_c_0(if_then_c_2(if_then_b_0(if_then_b_2((if_then_c_1(if_then_b_2(if_then_c_2((acquire_load(s_address_b) , if_then_b_1(if_then_b_2(if_then_a_1(release_store_b('\1')))))))) | if_then_b_2(if_then_a_2(if_then_c_1((none_store_b('\0') , (if_then_b_1(if_then_a_0(release_store_a('\2'))) , if_then_a_0(if_then_a_2(if_then_c_2(if_then_c_1(release_store_a('\0')))))))))))))))))))))) },
+    /* 2 */ { if_then_b_1(if_then_b_0(if_then_c_0(if_then_a_2(if_then_b_2(if_then_b_2(if_then_a_2(if_then_c_2(if_then_b_1(if_then_b_1(if_then_c_0(if_then_c_2(if_then_c_2(if_then_c_1(if_then_b_1(if_then_c_2(if_then_a_0((acquire_load(s_address_b) | if_then_b_2(if_then_b_0((release_store_c('\0') | if_then_c_1(if_then_b_0(if_then_a_1(if_then_a_1((if_then_a_0(if_then_c_2(if_then_b_1(if_then_b_1(release_store_a('\1'))))) , (release_store_b('\0') , if_then_c_1(if_then_a_2(if_then_a_0((if_then_a_1(release_store_b('\2')) | if_then_a_0(if_then_c_2(release_store_b('\2')))))))))))))))))))))))))))))))))) },
+    /* 3 */ { if_then_b_2(if_then_b_2(if_then_a_1(if_then_c_2(if_then_c_2((if_then_b_0(if_then_b_2(if_then_a_0(if_then_b_0(release_store_b('\0'))))) | if_then_a_2(if_then_a_1(if_then_a_2((if_then_a_0(release_store_c('\1')) , if_then_b_0(if_then_c_2(if_then_b_0(if_then_b_0(if_then_b_2(if_then_b_0(if_then_c_0((none_store_a('\0') , if_then_c_2(if_then_b_1((if_then_c_1(if_then_b_1(if_then_c_1(if_then_b_1(if_then_b_1(if_then_a_0(none_store_c('\0'))))))) , if_then_a_1(if_then_a_0(if_then_c_0(if_then_b_1(if_then_c_0(if_then_c_0(if_then_b_0(if_then_c_2(release_store_c('\1')))))))))))))))))))))))))))))) },
+    /* 4 */ { if_then_a_1(if_then_b_2(if_then_a_2(if_then_a_1(if_then_a_0(if_then_b_1(if_then_b_0(if_then_b_2(if_then_c_0(if_then_a_0(if_then_c_0(if_then_a_0((if_then_b_1(release_store_c('\1')) | if_then_b_1(if_then_a_2(if_then_a_1(if_then_b_0(if_then_b_2((if_then_c_1(if_then_c_0(if_then_c_1(if_then_a_2(if_then_c_0(none_load(s_address_b)))))) | (release_store_a('\1') , if_then_c_2(if_then_c_2((if_then_c_2(if_then_b_0(if_then_b_1(if_then_b_1(none_load(s_address_b))))) , if_then_a_0(if_then_a_0((if_then_c_0(none_store_a('\1')) | if_then_b_2(acquire_load(s_address_a)))))))))))))))))))))))))))) },
+    /* 5 */ { if_then_b_0((if_then_c_2(if_then_b_0(if_then_c_0(release_store_b('\1')))) , if_then_a_2((if_then_c_2(if_then_a_0((acquire_load(s_address_b) , if_then_a_0((if_then_b_1(if_then_c_0(none_store_b('\0'))) | if_then_b_1(if_then_a_0(if_then_b_1(if_then_b_1(none_store_b('\0')))))))))) | if_then_c_0(if_then_c_2(if_then_c_1(if_then_a_2(if_then_a_1(if_then_b_0(if_then_c_0(if_then_b_1((if_then_c_2(if_then_c_0(if_then_b_0(if_then_b_0(none_load(s_address_a))))) , if_then_c_1(if_then_b_2(if_then_c_1(if_then_a_2(if_then_a_1(if_then_a_0(if_then_b_1(release_store_a('\2'))))))))))))))))))))) },
+    /* 6 */ { (if_then_a_0(if_then_a_1(if_then_b_2(if_then_c_0(if_then_b_1(if_then_a_1(none_store_c('\1'))))))) | if_then_b_1(if_then_b_2(if_then_a_2(if_then_c_2(if_then_a_1((if_then_c_0(if_then_a_1(if_then_c_1(if_then_c_1(if_then_a_1(if_then_b_0(if_then_a_0(if_then_c_2(if_then_b_1(if_then_c_0(if_then_b_1(if_then_b_1(release_store_b('\2'))))))))))))) , (if_then_c_0(if_then_a_2(if_then_b_2(if_then_b_2(none_store_c('\0'))))) , if_then_c_1((if_then_b_2(if_then_a_1(if_then_c_0(none_store_a('\0')))) , if_then_c_1(if_then_a_1(if_then_c_0(if_then_b_0(if_then_c_2(none_store_a('\2')))))))))))))))) },
+    /* 7 */ { if_then_c_0(if_then_c_1(if_then_c_2((if_then_a_0(if_then_c_0(if_then_c_0(if_then_b_2(if_then_a_2((if_then_b_0(none_store_c('\1')) , (release_store_c('\0') , if_then_a_2(none_load(s_address_b))))))))) | if_then_b_1(if_then_c_0(if_then_b_1(if_then_c_1(if_then_c_0(if_then_c_2(if_then_a_1((release_store_c('\2') | if_then_a_0(if_then_a_0(if_then_b_1(if_then_b_1(if_then_c_1(if_then_a_2((none_store_a('\1') | if_then_a_1((if_then_a_0(if_then_a_2(none_store_b('\2'))) , if_then_c_2(if_then_c_2(if_then_a_1(if_then_c_1(none_store_a('\1')))))))))))))))))))))))))) },
+    /* 8 */ { (if_then_c_2(release_store_b('\0')) | (if_then_a_0(if_then_a_2(if_then_a_1(if_then_b_0(if_then_c_1(release_store_a('\1')))))) | if_then_c_1(if_then_b_2(if_then_c_0(if_then_c_1(if_then_c_1(if_then_b_0(if_then_a_2(if_then_b_0(if_then_b_2((if_then_b_0(if_then_c_0((if_then_c_1(if_then_b_2(release_store_c('\0'))) | (none_store_c('\0') | if_then_a_1(none_store_b('\0')))))) , if_then_b_0(if_then_a_2(if_then_a_1((release_store_c('\2') | if_then_a_1(if_then_a_0(if_then_b_2((none_store_b('\0') , if_then_c_2(none_store_b('\0')))))))))))))))))))))) },
+    /* 9 */ { if_then_b_0((if_then_c_1(if_then_c_2(if_then_b_0(if_then_c_2(if_then_a_2(if_then_c_0(if_then_b_1(if_then_b_1(if_then_a_2(if_then_a_2(if_then_b_0((release_store_a('\0') | if_then_c_0(if_then_a_1(if_then_b_0(if_then_b_0(if_then_b_1(if_then_b_1(if_then_a_1(release_store_b('\1')))))))))))))))))))) | if_then_c_0(if_then_c_0(if_then_b_1(if_then_a_0(if_then_a_0(if_then_a_1(if_then_b_1(if_then_a_2(if_then_b_1(if_then_c_1(if_then_a_2(if_then_a_1(if_then_a_0(if_then_b_0(if_then_b_1(if_then_c_2(if_then_b_1(if_then_c_0(if_then_b_0((none_store_a('\0') , if_then_a_1(none_store_a('\2')))))))))))))))))))))))) }
+  };
+
+  bool racy;
+  for (std::size_t n = 0; n < benchmarks.size(); ++n)
+  {
+    file << n << " & ";
+    file << benchmarks[n].p().length() << " & ";
+
+    start = std::chrono::system_clock::now();
+    racy = drd.is_racy(benchmarks[n]);
+    end = std::chrono::system_clock::now();
+
+    seconds = std::chrono::duration_cast<std::chrono::seconds>(end - start);
+    file << racy << " & ";
+
+    file << seconds.count() << "\\\\" << std::endl;
+  }
+
+  file << "\\bottomrule" << std::endl;
+  file << "\\end{tabular}" << std::endl;
+  file << "\\caption{Data race detection benchmarks}" << std::endl;
+  file << "\\label{table:drd-benchmarks}" << std::endl;
+  file << "\\end{center}" << std::endl;
+  file << "\\end{table}" << std::endl;
+  file.close();
+}
+
+TEST(CkaPerformanceTest, DataRaceDetection)
+{
+  drd_benchmark();
+
+ EXPECT_TRUE(false);
+}
+#endif
