@@ -13,6 +13,9 @@
 #include <cassert>
 #include <algorithm>
 
+/// Use real numbers whenever possible
+#define _CKA_REAL_
+
 #ifdef _CKA_DEBUG_
 #include <iostream>
 #endif
@@ -754,13 +757,38 @@ namespace internal
 /// SMT sort for events
 typedef smt::Int EventSort;
 
+/// Symbolically encodes sequenced-before and happens-before relations
+class OrderModel
+{
+private:
+  virtual smt::Bool _order(Event a, Event b) const = 0;
+  virtual bool _strict_partial_order(const PartialString&, smt::Bools&) const = 0;
+
+public:
+  virtual ~OrderModel() {}
+
+  /// Returns the symbolic ordering constraint that `a` enables `b`
+  smt::Bool order(Event a, Event b) const
+  {
+    return _order(a, b);
+  }
+
+  /// Encodes an irreflexive, transitive and asymmetric relation into `conjuncts`
+
+  /// Returns `true` if newly added conjuncts are unsatisfiable, `false` if unknown
+  bool strict_partial_order(const PartialString& x, smt::Bools& conjuncts) const
+  {
+    return _strict_partial_order(x, conjuncts);
+  }
+};
+
 /// Symbolic partial order base model
 
 /// This model uses partial orders to describe the computation of concurrent
 /// programs. Other models have been also developed that rely only on relations.
 /// The underpinning principles of our symbolic implementation of relations
 /// would, however, remain the same.
-class PartialOrderModel
+class PartialOrderModel : public OrderModel
 {
 private:
   // Binary predicate to symbolically encode strict partial order
@@ -769,30 +797,14 @@ private:
 
   OrderPred m_order_pred;
 
-public:
-  PartialOrderModel()
-  : m_order_pred{"order_x"} {}
-
-  /// \internal binary predicate to enforce the ordering between events
-
-  /// \see order(Event, Event)
-  const OrderPred& order_pred() const
-  {
-    return m_order_pred;
-  }
-
-  /// Adds the symbolic ordering constraint that `a` enables `b`
-  smt::Bool order(Event a, Event b) const
+  smt::Bool _order(Event a, Event b) const override
   {
     EventSort a_literal{smt::literal<EventSort>(a)};
     EventSort b_literal{smt::literal<EventSort>(b)};
     return smt::apply(m_order_pred, std::move(a_literal), std::move(b_literal));
   }
 
-  /// Symbolically encodes an irreflexive, transitive and asymmetric relation
-
-  /// Returns `true` if `conjuncts` is unsatisfiable, `false` if unknown
-  bool strict_partial_order(const PartialString& p, smt::Bools& conjuncts)
+  bool _strict_partial_order(const PartialString& p, smt::Bools& conjuncts) const override
   {
     // in the worst case, encoding is cubic in the number of events in `p`
     const Length len{p.length()};
@@ -837,6 +849,19 @@ public:
         }
 
     return false;
+  }
+
+public:
+  PartialOrderModel()
+  : OrderModel(),
+    m_order_pred{"order_x"} {}
+
+  /// \internal binary predicate to enforce the ordering between events
+
+  /// \see order(Event, Event)
+  const OrderPred& order_pred() const
+  {
+    return m_order_pred;
   }
 
   /// Symbolically encode the incomparable events in `p`
@@ -1673,13 +1698,10 @@ SymbolicProgram operator,(const SymbolicProgram&, const SymbolicProgram&);
 SymbolicProgram if_then(const Address a, const Byte b, const SymbolicProgram& P);
 
 /// Encodes sequenced-before relation as an linear real arithmetic formula
-class TotalOrderModel
+class TotalOrderModel : public OrderModel
 {
-public:
-  TotalOrderModel() {}
-
-  /// Adds the symbolic ordering constraint that `a` enables `b`
-  smt::Bool order(Event a, Event b) const
+private:
+  smt::Bool _order(Event a, Event b) const override
   {
     static const char* const s_t_prefix = "t!";
 
@@ -1689,7 +1711,7 @@ public:
     return a_time < b_time;
   }
 
-  bool strict_partial_order(const PartialString& p, smt::Bools& conjuncts)
+  bool _strict_partial_order(const PartialString& p, smt::Bools& conjuncts) const override
   {
     // in the worst case, encoding is cubic in the number of events in `p`
     const Length len{p.length()};
@@ -1712,10 +1734,11 @@ private:
 
   // The core of the encoding
 #ifdef _CKA_REAL_
-  TotalOrderModel m_order_model;
+  TotalOrderModel
 #else
-  PartialOrderModel m_order_model;
+  PartialOrderModel
 #endif
+    m_order_model;
 
   // Memory axioms
 #ifdef _CKA_REAL_
