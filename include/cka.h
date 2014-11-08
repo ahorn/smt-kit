@@ -1872,7 +1872,7 @@ public:
     m_order_model{},
     m_rel_acq_model{} {}
 
-  /// Does there exist a data race in a program without guards?
+  /// \internal
   bool is_racy(const PartialString& x)
   {
     static AssumeMap s_empty_assume_map;
