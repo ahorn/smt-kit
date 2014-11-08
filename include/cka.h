@@ -757,21 +757,30 @@ namespace internal
 /// SMT sort for events
 typedef smt::Int EventSort;
 
-/// Symbolically encodes sequenced-before and happens-before relations
-class OrderModel
+/// Interface to symbolically encode happens-before relation
+class HappensBefore
 {
 private:
-  virtual smt::Bool _order(Event a, Event b) const = 0;
+  virtual smt::Bool _happens_before(Event a, Event b) const = 0;
+
+public:
+  virtual ~HappensBefore() {}
+
+  /// Returns the symbolic ordering constraint that `a` enables `b`
+  smt::Bool happens_before(Event a, Event b) const
+  {
+    return _happens_before(a, b);
+  }
+};
+
+/// Interface to symbolically encode happens-before and sequenced-before relation
+class OrderModel : public HappensBefore
+{
+private:
   virtual bool _strict_partial_order(const PartialString&, smt::Bools&) const = 0;
 
 public:
   virtual ~OrderModel() {}
-
-  /// Returns the symbolic ordering constraint that `a` enables `b`
-  smt::Bool order(Event a, Event b) const
-  {
-    return _order(a, b);
-  }
 
   /// Encodes an irreflexive, transitive and asymmetric relation into `conjuncts`
 
@@ -797,7 +806,7 @@ private:
 
   OrderPred m_order_pred;
 
-  smt::Bool _order(Event a, Event b) const override
+  smt::Bool _happens_before(Event a, Event b) const override
   {
     EventSort a_literal{smt::literal<EventSort>(a)};
     EventSort b_literal{smt::literal<EventSort>(b)};
@@ -812,11 +821,11 @@ private:
 
     // transitive reduction of `p`
     for (const PartialString::EventPair& pair : p.strict_partial_order())
-      conjuncts.push_back(order(pair.first, pair.second));
+      conjuncts.push_back(_happens_before(pair.first, pair.second));
 
     // irreflexivity
     for (Event e{0}; e < len; ++e)
-      conjuncts.push_back(not order(e, e));
+      conjuncts.push_back(not _happens_before(e, e));
 
     // asymmetry
     smt::Bool order_a_b;
@@ -825,8 +834,8 @@ private:
       for (Event e_a{0}; e_a < len; ++e_a)
         for (Event e_b{e_a + 1U}; e_b < len; ++e_b)
         {
-          order_a_b = order(e_a, e_b);
-          order_b_a = order(e_b, e_a);
+          order_a_b = _happens_before(e_a, e_b);
+          order_b_a = _happens_before(e_b, e_a);
 
           conjuncts.push_back(smt::implies(order_a_b, not order_b_a));
         }
@@ -841,9 +850,9 @@ private:
           if (e_a == e_b or e_a == e_c or e_b == e_c)
             continue;
 
-          order_a_b = order(e_a, e_b);
-          order_b_c = order(e_b, e_c);
-          order_a_c = order(e_a, e_c);
+          order_a_b = _happens_before(e_a, e_b);
+          order_b_c = _happens_before(e_b, e_c);
+          order_a_c = _happens_before(e_a, e_c);
 
           conjuncts.push_back(smt::implies(order_a_b and order_b_c, order_a_c));
         }
@@ -856,9 +865,9 @@ public:
   : OrderModel(),
     m_order_pred{"order_x"} {}
 
-  /// \internal binary predicate to enforce the ordering between events
+  /// \internal binary predicate on events to enforce the happens-before relation
 
-  /// \see order(Event, Event)
+  /// \see happens_before(Event, Event)
   const OrderPred& order_pred() const
   {
     return m_order_pred;
@@ -872,8 +881,8 @@ public:
     conjuncts.reserve(conjuncts.size() + (2U * p.incomparables().size()));
     for (const PartialString::EventPair& pair : p.incomparables())
     {
-      conjuncts.push_back(not order(pair.first, pair.second));
-      conjuncts.push_back(not order(pair.second, pair.first));
+      conjuncts.push_back(not _happens_before(pair.first, pair.second));
+      conjuncts.push_back(not _happens_before(pair.second, pair.first));
     }
 
     return false;
@@ -1318,8 +1327,7 @@ public:
   /// Symbolically encodes a form of release-acquire semantics without guards
 
   /// Returns `true` if `conjuncts` is unsatisfiable, `false` if unknown
-  template<class Order>
-  bool release_acquire(const Order& order, const PartialString& x,
+  bool release_acquire(const HappensBefore& order, const PartialString& x,
     smt::Bools& conjuncts)
   {
     static AssumeMap s_empty_assume_map;
@@ -1336,8 +1344,7 @@ public:
   /// implementation would remain the same.
   ///
   /// Returns `true` if `conjuncts` is unsatisfiable, `false` if unknown
-  template<class Order>
-  bool release_acquire(const Order& order, const AssumeMap& assume_map,
+  bool release_acquire(const HappensBefore& order, const AssumeMap& assume_map,
     const PartialString& x, smt::Bools& conjuncts)
   {
     static const char* const s_rf_prefix = "rf!";
@@ -1436,7 +1443,7 @@ public:
           sw_then.clear();
 
           // `store_a` synchronizes-with `load`
-          sw_then.push_back(order.order(store_a, load));
+          sw_then.push_back(order.happens_before(store_a, load));
 
           // data flows from `store_a` to `load`
           sw_then.push_back(value(store_a) == load_value);
@@ -1453,14 +1460,14 @@ public:
               order_fr_bools.clear();
 
               order_fr_bools.push_back(rf_bool);
-              order_fr_bools.push_back(order.order(store_a, store_b));
+              order_fr_bools.push_back(order.happens_before(store_a, store_b));
 
               if (is_guarded(assume_map, store_b))
                 order_fr_bools.push_back(guard(assume_map, x, store_b));
 
               order_fr.push_back(smt::implies(
                 smt::conjunction(order_fr_bools),
-                order.order(load, store_b)));
+                order.happens_before(load, store_b)));
             }
         }
 
@@ -1512,7 +1519,8 @@ public:
       for (Event store_a : stores)
         for (Event store_b : stores)
           if (store_a < store_b)
-            mo.push_back(order.order(store_a, store_b) or order.order(store_b, store_a));
+            mo.push_back(order.happens_before(store_a, store_b) or
+              order.happens_before(store_b, store_a));
 
     } // end of address iteration
 
@@ -1540,7 +1548,8 @@ public:
 /// Memory addresses are assumed to be consecutive, starting at zero.
 class Refinement
 : public cka::internal::ProgramChecker<Refinement>,
-  public cka::internal::Refinement
+  public cka::internal::Refinement,
+  public HappensBefore
 {
 private:
   template<class ByteSort, class StoreSort> friend class ReleaseAcquireModel;
@@ -1551,9 +1560,9 @@ private:
 
   /// Encode happens-before relation with monotonic bijective morphism
 
-  /// \remark not the same as `PartialOrderModel::order`, the difference
-  ///   is that we first map the events with `m_refinement.m_event_func`
-  smt::Bool order(Event a, Event b) const
+  /// \remark not the same as `PartialOrderModel::happens_before` because
+  ///   we first map the events with `m_refinement.m_event_func`
+  smt::Bool _happens_before(Event a, Event b) const override
   {
     EventSort e_a{smt::apply(m_refinement.m_event_func, a)};
     EventSort e_b{smt::apply(m_refinement.m_event_func, b)};
@@ -1701,7 +1710,7 @@ SymbolicProgram if_then(const Address a, const Byte b, const SymbolicProgram& P)
 class TotalOrderModel : public OrderModel
 {
 private:
-  smt::Bool _order(Event a, Event b) const override
+  smt::Bool _happens_before(Event a, Event b) const override
   {
     static const char* const s_t_prefix = "t!";
 
@@ -1719,7 +1728,7 @@ private:
 
     // transitive reduction of `p`
     for (const PartialString::EventPair& pair : p.strict_partial_order())
-      conjuncts.push_back(order(pair.first, pair.second));
+      conjuncts.push_back(_happens_before(pair.first, pair.second));
 
     return false;
   }
@@ -1806,8 +1815,8 @@ private:
           if (m_rel_acq_model.is_guarded(assume_map, load))
             dr_bools.push_back(m_rel_acq_model.guard(assume_map, x, load));
 
-          dr_bools.push_back(not m_order_model.order(store, load));
-          dr_bools.push_back(not m_order_model.order(load, store));
+          dr_bools.push_back(not m_order_model.happens_before(store, load));
+          dr_bools.push_back(not m_order_model.happens_before(load, store));
 
           dr.push_back(smt::conjunction(dr_bools));
 
@@ -1825,8 +1834,8 @@ private:
             if (m_rel_acq_model.is_guarded(assume_map, store_b))
               dr_bools.push_back(m_rel_acq_model.guard(assume_map, x, store_b));
 
-            dr_bools.push_back(not m_order_model.order(store_b, store));
-            dr_bools.push_back(not m_order_model.order(store, store_b));
+            dr_bools.push_back(not m_order_model.happens_before(store_b, store));
+            dr_bools.push_back(not m_order_model.happens_before(store, store_b));
 
             dr.push_back(smt::conjunction(dr_bools));
 
