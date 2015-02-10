@@ -4,37 +4,12 @@
 // Include <gtest/gtest.h> _after_ <smt>
 #include "gtest/gtest.h"
 
-// Only access global solver through a function that has a static local object!
-smt::Solver& global_solver()
-{
-  static smt::MsatSolver s_msat_solver;
-  return s_msat_solver;
-}
-
-TEST(SmtFunctionalTest, Reset)
-{
-  global_solver().reset();
-}
-
 TEST(SmtFunctionalTest, DeMorgan)
 {
   const smt::Bool x = smt::any<smt::Bool>("x");
   const smt::Bool y = smt::any<smt::Bool>("y");
   const smt::Bool lhs = !(x && y);
   const smt::Bool rhs = !x || !y;
-
-  smt::Z3Solver z3_solver;
-  z3_solver.add(lhs != rhs);
-  EXPECT_EQ(smt::unsat, z3_solver.check());
-
-  // Should always explicitly specify the logic!
-  smt::MsatSolver msat_solver(smt::QF_BV_LOGIC);
-  msat_solver.add(lhs != rhs);
-  EXPECT_EQ(smt::unsat, msat_solver.check());
-
-  smt::StpSolver stp_solver(smt::QF_BV_LOGIC);
-  stp_solver.add(lhs != rhs);
-  EXPECT_EQ(smt::unsat, stp_solver.check());
 
   smt::CVC4Solver cvc4_solver(smt::QF_AUFBV_LOGIC);
   cvc4_solver.add(lhs != rhs);
@@ -50,18 +25,6 @@ TEST(SmtFunctionalTest, SeparateDecls)
   const smt::Bool lhs = !(x && y);
   const smt::Bool rhs = !x || !y;
 
-  smt::Z3Solver z3_solver;
-  z3_solver.add(lhs != rhs);
-  EXPECT_EQ(smt::unsat, z3_solver.check());
-
-  smt::MsatSolver msat_solver;
-  msat_solver.add(lhs != rhs);
-  EXPECT_EQ(smt::unsat, msat_solver.check());
-
-  smt::StpSolver stp_solver;
-  stp_solver.add(lhs != rhs);
-  EXPECT_EQ(smt::unsat, stp_solver.check());
-
   smt::CVC4Solver cvc4_solver;
   cvc4_solver.add(lhs != rhs);
   EXPECT_EQ(smt::unsat, cvc4_solver.check());
@@ -73,54 +36,6 @@ TEST(SmtFunctionalTest, BitVectors)
   const smt::Bv<unsigned long> y = smt::any<smt::Bv<unsigned long>>("y");
   const smt::Bv<unsigned long> z = smt::any<smt::Bv<unsigned long>>("z");
   const smt::Bool equality = (x == y) && ((x & ~y) == z);
-
-  smt::Z3Solver z3_solver;
-  z3_solver.add(equality);
-
-  z3_solver.push();
-  {
-    z3_solver.add(z != 0L);
-    EXPECT_EQ(smt::unsat, z3_solver.check());
-  }
-  z3_solver.pop();
-  z3_solver.push();
-  {
-    z3_solver.add(z == 0L);
-    EXPECT_EQ(smt::sat, z3_solver.check());
-  }
-  z3_solver.pop();
-
-  smt::MsatSolver msat_solver;
-  msat_solver.add(equality);
-
-  msat_solver.push();
-  {
-    msat_solver.add(z != 0L);
-    EXPECT_EQ(smt::unsat, msat_solver.check());
-  }
-  msat_solver.pop();
-  msat_solver.push();
-  {
-    msat_solver.add(z == 0L);
-    EXPECT_EQ(smt::sat, msat_solver.check());
-  }
-  msat_solver.pop();
-
-  smt::StpSolver stp_solver;
-  stp_solver.add(equality);
-
-  stp_solver.push();
-  {
-    stp_solver.add(z != 0L);
-    EXPECT_EQ(smt::unsat, stp_solver.check());
-  }
-  stp_solver.pop();
-  stp_solver.push();
-  {
-    stp_solver.add(z == 0L);
-    EXPECT_EQ(smt::sat, stp_solver.check());
-  }
-  stp_solver.pop();
 
   smt::CVC4Solver cvc4_solver;
   cvc4_solver.add(equality);
@@ -144,18 +59,6 @@ TEST(SmtFunctionalTest, UnsafeExpr)
   const smt::UnsafeDecl unsafe_decl("x", smt::bv_sort(true, sizeof(int) * 8));
   const smt::SharedExpr x = smt::constant(unsafe_decl);
   const smt::SharedExpr equality = (x & smt::literal<smt::Bv<int>>(3)) != x;
-
-  smt::Z3Solver z3_solver;
-  z3_solver.unsafe_add(equality);
-  EXPECT_EQ(smt::sat, z3_solver.check());
-
-  smt::MsatSolver msat_solver;
-  msat_solver.unsafe_add(equality);
-  EXPECT_EQ(smt::sat, msat_solver.check());
-
-  smt::StpSolver stp_solver;
-  stp_solver.unsafe_add(equality);
-  EXPECT_EQ(smt::sat, stp_solver.check());
 
   smt::CVC4Solver cvc4_solver;
   cvc4_solver.unsafe_add(equality);
@@ -197,14 +100,6 @@ TEST(SmtFunctionalTest, Array)
 
   new_array = smt::store(array, index, value);
 
-  smt::Z3Solver z3_solver;
-  z3_solver.add(smt::select(new_array, index) != value);
-  EXPECT_EQ(smt::unsat, z3_solver.check());
-
-  smt::MsatSolver msat_solver;
-  msat_solver.add(smt::select(new_array, index) != value);
-  EXPECT_EQ(smt::unsat, msat_solver.check());
-
   smt::CVC4Solver cvc4_solver;
   cvc4_solver.add(smt::select(new_array, index) != value);
   EXPECT_EQ(smt::unsat, cvc4_solver.check());
@@ -225,18 +120,6 @@ TEST(SmtFunctionalTest, BvArray)
 
   new_array = smt::store(array, index, value);
 
-  smt::Z3Solver z3_solver;
-  z3_solver.add(smt::select(new_array, index) != value);
-  EXPECT_EQ(smt::unsat, z3_solver.check());
-
-  smt::MsatSolver msat_solver;
-  msat_solver.add(smt::select(new_array, index) != value);
-  EXPECT_EQ(smt::unsat, msat_solver.check());
-
-  smt::StpSolver stp_solver;
-  stp_solver.add(smt::select(new_array, index) != value);
-  EXPECT_EQ(smt::unsat, stp_solver.check());
-
   smt::CVC4Solver cvc4_solver;
   cvc4_solver.add(smt::select(new_array, index) != value);
   EXPECT_EQ(smt::unsat, cvc4_solver.check());
@@ -249,14 +132,6 @@ TEST(SmtFunctionalTest, Function)
   const smt::Bool formula =
     smt::apply(func_decl, 3) == 7 && x == smt::apply(func_decl, 3);
 
-  smt::Z3Solver z3_solver;
-  z3_solver.add(formula && x != smt::literal<smt::Int>(7));
-  EXPECT_EQ(smt::unsat, z3_solver.check());
-
-  smt::MsatSolver msat_solver;
-  msat_solver.add(formula && x != 7);
-  EXPECT_EQ(smt::unsat, msat_solver.check());
-
   smt::CVC4Solver cvc4_solver;
   cvc4_solver.add(formula && x != 7);
   EXPECT_EQ(smt::unsat, cvc4_solver.check());
@@ -267,40 +142,6 @@ TEST(SmtFunctionalTest, Stats)
   const smt::Decl<smt::Func<smt::Int, smt::Int>> func_decl("f");
   const smt::Int x = smt::any<smt::Int>("x");
   const smt::Bool formula = x < 3 && x == smt::apply(func_decl, 3);
-
-  smt::Z3Solver z3_solver;
-  z3_solver.add(formula);
-
-  EXPECT_EQ(2, z3_solver.stats().constants);
-  EXPECT_EQ(1, z3_solver.stats().func_apps);
-  EXPECT_EQ(0, z3_solver.stats().array_selects);
-  EXPECT_EQ(0, z3_solver.stats().array_stores);
-  EXPECT_EQ(0, z3_solver.stats().unary_ops);
-  EXPECT_EQ(3, z3_solver.stats().binary_ops);
-  EXPECT_EQ(0, z3_solver.stats().nary_ops);
-  EXPECT_EQ(1, z3_solver.stats().equalities);
-  EXPECT_EQ(0, z3_solver.stats().disequalities);
-  EXPECT_EQ(1, z3_solver.stats().inequalities);
-  EXPECT_EQ(0, z3_solver.stats().implications);
-  EXPECT_EQ(1, z3_solver.stats().conjunctions);
-  EXPECT_EQ(0, z3_solver.stats().disjunctions);
-
-  smt::MsatSolver msat_solver;
-  msat_solver.add(formula);
-
-  EXPECT_EQ(2, msat_solver.stats().constants);
-  EXPECT_EQ(1, msat_solver.stats().func_apps);
-  EXPECT_EQ(0, msat_solver.stats().array_selects);
-  EXPECT_EQ(0, msat_solver.stats().array_stores);
-  EXPECT_EQ(0, msat_solver.stats().unary_ops);
-  EXPECT_EQ(3, msat_solver.stats().binary_ops);
-  EXPECT_EQ(0, msat_solver.stats().nary_ops);
-  EXPECT_EQ(1, msat_solver.stats().equalities);
-  EXPECT_EQ(0, msat_solver.stats().disequalities);
-  EXPECT_EQ(1, msat_solver.stats().inequalities);
-  EXPECT_EQ(0, msat_solver.stats().implications);
-  EXPECT_EQ(1, msat_solver.stats().conjunctions);
-  EXPECT_EQ(0, msat_solver.stats().disjunctions);
 
   smt::CVC4Solver cvc4_solver;
   cvc4_solver.add(formula);

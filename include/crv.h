@@ -1183,7 +1183,7 @@ private:
   }
 
 public:
-  smt::Z3Solver m_solver;
+  smt::CVC4Solver m_solver;
   std::unordered_map<EventIdentifier, Time> m_time_map;
 
 #ifdef _SUP_READ_FROM_

@@ -43,14 +43,12 @@ To build SMT Kit on a (mostly) POSIX-compliant operating system,
 execute the following commands from the `smt-kit` directory:
 
     $ ./autogen.sh
-    $ ./configure
+    $ ./configure CXX=g++
     $ make
     $ make test
     $ make install
 
-If `./configure` fails, you may have to set environment variables. For example,
-to compile on OS X with clang++ use the command `./configure CXX=clang++`.
-But see also the troubleshooting section below.
+If `./configure` fails, you may have to set environment variables.
 
 If `make test` fails, you can still install, but it is likely that some
 features of this library will not work correctly on your system.

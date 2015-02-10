@@ -18,8 +18,6 @@
 namespace crv
 {
 
-#define _BV_THEORY_ 1
-
 namespace internal
 {
   /// Evaluate built-in arithmetic and boolean expressions
@@ -1601,7 +1599,7 @@ public:
 private:
   typedef smt::NonReentrantTimer<ElapsedTime> Timer;
 
-  smt::Z3Solver m_solver;
+  smt::CVC4Solver m_solver;
 
 #ifdef _NSE_ENABLE_GUARDS_
   smt::Bools m_guards;
@@ -2043,7 +2041,7 @@ public:
 private:
   typedef smt::NonReentrantTimer<ElapsedTime> Timer;
 
-  smt::Z3Solver m_solver;
+  smt::CVC4Solver m_solver;
   Dfs m_dfs;
   Stats m_stats;
 

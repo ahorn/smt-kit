@@ -12,7 +12,6 @@ First download the CVC4 source code and create a build directory as follows:
 
   git clone https://github.com/CVC4/CVC4.git
   cd CVC4
-  git checkout tags/1.4
   ./autogen.sh
   mkdir target
 
@@ -26,9 +25,9 @@ tools already installed, we successfully built CVC4 with these commands:
               --with-antlr-dir=`pwd`/antlr-3.4 \
               ANTLR=`pwd`/antlr-3.4/bin/antlr3 \
               LDFLAGS=-L/opt/local/lib \
-              CXX=clang++ \
-              CXXFLAGS='-I/opt/local/include -stdlib=libstdc++' \
-              CPPFLAGS='-I/opt/local/include -stdlib=libstdc++'
+              CXX=g++ \
+              CXXFLAGS='-I/opt/local/include' \
+              CPPFLAGS='-I/opt/local/include'
   make
   make check
   make install

@@ -55,29 +55,15 @@ lib_LTLIBRARIES = lib/libsmt.la
 lib_libsmt_la_SOURCES = \
   src/smt.cpp \
   src/nse_sequential.cpp \
-  src/cka.cpp \
   src/crv.cpp
 
 pkginclude_HEADERS = \
   include/smt \
   include/smt.h \
-  include/cka.h \
-  include/smt_z3.h \
-  include/smt_msat.h \
-  include/smt_stp.h \
   include/smt_cvc4.h \
   include/nse_sequential.h \
   include/nse_report.h \
   include/crv.h
-
-# Build rules for functional and unit tests.
-# Recall the Automake naming conventions:
-#
-# TESTS -- Programs run automatically by "make check"
-# check_PROGRAMS -- Programs built by "make check" but not necessarily run
-
-# See README in Z3 source code for installation instructions
-tests_library_path = $(srcdir)/solvers/z3/build
 
 TESTS_ENVIRONMENT = \
   LIBPATH=$(tests_library_path):$$LIBPATH \
@@ -95,11 +81,6 @@ check_PROGRAMS = test/smt
 
 test_smt_SOURCES = \
   test/smt_test.cpp \
-  test/cka_test.cpp \
-  test/cka_performance_test.cpp \
-  test/smt_z3_test.cpp \
-  test/smt_msat_test.cpp \
-  test/smt_stp_test.cpp \
   test/smt_cvc4_test.cpp \
   test/smt_functional_test.cpp \
   test/nse_sequential_test.cpp \

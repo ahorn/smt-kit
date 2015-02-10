@@ -132,6 +132,8 @@ SMT_CVC4_STRING_ENCODE_LITERAL(unsigned long long)
       type = m_expr_manager.booleanType();
     } else if (sort.is_int()) {
       type = m_expr_manager.integerType();
+    } else if (sort.is_real()) {
+      type = m_expr_manager.realType();
     } else if (sort.is_bv()) {
       type = m_expr_manager.mkBitVectorType(sort.bv_size());
     } else if (sort.is_func()) {
