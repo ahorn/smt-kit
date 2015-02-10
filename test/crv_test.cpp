@@ -907,6 +907,9 @@ TEST(CrvTest, Fib5)
   EXPECT_EQ(smt::unsat, encoder.check(144 < i || 144 < j, tracer(), checker));
   EXPECT_EQ(smt::sat, encoder.check(
     144 < i || 144 == i || 144 < j || 144 == j, tracer(), checker));
+
+  // Vacuously false so we generate test-suite.log
+  EXPECT_TRUE(false);
 }
 
 #endif
