@@ -92,7 +92,7 @@ to make the required source-to-source transformations easier.
 
 [performance-tests]: https://github.com/ahorn/smt-kit/blob/master/test/crv_performance_test.cpp
 [clang-crv]: https://github.com/ahorn/clang-crv
-[klee]: http://klee.github.io/klee/
+[klee]: https://klee.github.io/
 [cbmc]: http://www.cprover.org/cbmc/
 
 ## Troubleshooting
